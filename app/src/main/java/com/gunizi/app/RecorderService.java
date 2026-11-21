@@ -25,6 +25,7 @@ public final class RecorderService extends Service {
 
     public static volatile boolean running=false;
     public static volatile boolean recording=false;
+    public static volatile int ramHeldSeconds=0;
     public static volatile String stateText="Hazır";
     public static volatile String lastEvent="Henüz kayıt oluşturulmadı";
     private static final String CHANNEL="gunizi_recording";
@@ -32,6 +33,7 @@ public final class RecorderService extends Service {
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private final AtomicBoolean captureActive=new AtomicBoolean(false);
     public static int ramMinutes(){return memoryBytes()/32000/60;}
+    public static int ramMaxSeconds(){return memoryBytes()/32000;}
     private static int memoryBytes() {
         long heap=Runtime.getRuntime().maxMemory();
         return (int)Math.min(256L*1024*1024,Math.max(32L*1024*1024,(long)(heap*0.60)));
@@ -48,6 +50,7 @@ public final class RecorderService extends Service {
         @Override public void run(){
             if(!running)return;
             applySchedule();
+            getSystemService(NotificationManager.class).notify(103,notification());
             handler.postDelayed(this,15000);
         }
     };
@@ -105,7 +108,8 @@ public final class RecorderService extends Service {
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("Günİzi • "+(Prefs.MODE_CONTINUOUS.equals(prefs.mode())?"Sürekli dinleme":"Mesai kaydı"))
             .setContentText(Prefs.MODE_CONTINUOUS.equals(prefs.mode())
-                ?"Yaklaşık "+(ring.capacitySeconds()/60)+" dakika RAM belleği etkin"
+                ?"RAM: "+(ramHeldSeconds/3600)+" sa "+((ramHeldSeconds/60)%60)+
+                    " dk / "+(ring.capacitySeconds()/60)+" dk kapasite"
                 :"Saat "+prefs.timeString(true)+"–"+prefs.timeString(false)+" • Otomatik kayıt")
             .setSubText("Sesler cihazın içinde tutulur")
             .setCategory(Notification.CATEGORY_SERVICE).setPriority(Notification.PRIORITY_LOW)
@@ -240,7 +244,7 @@ public final class RecorderService extends Service {
                 while(captureActive.get()){
                     try{
                         int n=source.read(buf,0,buf.length);
-                        if(n>0)ring.write(buf,0,n);
+                        if(n>0){ring.write(buf,0,n);ramHeldSeconds=ring.size()/32000;}
                         else if(n<0){stateText="Mikrofondan ses okunamadı";break;}
                     }catch(Exception e){Log.e("GunIzi","RAM record",e);break;}
                 }

@@ -21,6 +21,7 @@ public final class MainActivity extends Activity {
     private Prefs prefs;
     private LinearLayout layout;
     private TextView status,detail,folderText,modeDetail;
+    private RamGaugeView ramGauge;
     private Button serviceButton;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable refresh=new Runnable(){
@@ -65,6 +66,8 @@ public final class MainActivity extends Activity {
 
         LinearLayout st=card("Kayıt durumu",null);
         status=text("Hazır",21,CYAN,true);st.addView(status);
+        ramGauge=new RamGaugeView(this);
+        st.addView(ramGauge,new LinearLayout.LayoutParams(-1,dp(210)));
         space(st,7);detail=text("Kayıt hizmeti başlatılmadı.",13,MUTED,false);st.addView(detail);
         space(st,12);
         serviceButton=button("Kayıt hizmetini etkinleştir",CYAN);st.addView(serviceButton);
@@ -244,9 +247,16 @@ public final class MainActivity extends Activity {
         detail.setText(RecorderService.lastEvent);
         if(serviceButton!=null)serviceButton.setText(RecorderService.running?
             "Kayıt hizmetini durdur":"Kayıt hizmetini etkinleştir");
+        if(ramGauge!=null){
+            ramGauge.setVisibility(Prefs.MODE_CONTINUOUS.equals(prefs.mode())?View.VISIBLE:View.GONE);
+            ramGauge.update(RecorderService.ramHeldSeconds,RecorderService.ramMaxSeconds());
+        }
         if(modeDetail!=null)modeDetail.setText(Prefs.MODE_WORK.equals(prefs.mode())?
             "Mesai: "+prefs.timeString(true)+"–"+prefs.timeString(false)+" · Otomatik kaydetme":
-            RecorderService.ramMinutes()+" dakikalık döngüsel RAM · Elle WAV kaydetme");
+            "RAM: "+String.format(java.util.Locale.forLanguageTag("tr-TR"),
+                "%02d:%02d:%02d",RecorderService.ramHeldSeconds/3600,
+                (RecorderService.ramHeldSeconds/60)%60,RecorderService.ramHeldSeconds%60)+
+                " / kapasite "+RecorderService.ramMinutes()+" dakika");
     }
     private void message(String text){Toast.makeText(this,text,Toast.LENGTH_LONG).show();}
 }
