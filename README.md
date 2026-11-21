@@ -1,28 +1,59 @@
-# Günİzi Android
+# Günİzi Android • v0.2 (deneysel)
 
-Günİzi, çevrimdışı ses kaydı için hazırlanan deneysel Android uygulamasıdır.
+Türkçe, çevrimdışı odaklı Android ses kayıt uygulaması. Gecko'nun RAM'de döngüsel ses belleği yaklaşımı temel alınarak **ayrı bir prototip** olarak geliştirilmiştir.
 
-## Şu anki durum
+## İki çalışma modu
 
-Bu depo **ilk prototiptir**. Android cihazda test edilmeden kullanılmamalıdır. Yerel yapay zeka ile gün özeti **henüz uygulanmadı**.
+**Sürekli Kayıt (Gecko tarzı):**
+- 16 kHz, mono, 16 bit ses, parçalı ve döngüsel RAM tamponunda tutulur.
+- Hedef 256 MiB = yaklaşık **2 saat 19 dakika** geriye dönük ses. Düşük Java heap sınırı varsa %60 ile sınırlanır; gerçek kapasite uygulamada gösterilir.
+- Kullanıcı istediğinde geçmişi seçtiği klasöre WAV olarak aktarır. 2 saatten uzun WAV dosyası **yaklaşık 270 MB** olabilir.
+- RAM belleği kalıcı arşiv değildir; sistem kapatırsa kaybolabilir.
+- Her 24 saati otomatik kalıcı kaydetmez. 24 saatlik **günlük özet yalnızca elde kayıt varsa** mümkündür.
 
-- **Mesai Kaydı:** Kullanıcının belirlediği hafta günleri ve saatleri içinde Opus/OGG ses kaydı tutma, seçilen Android klasörüne aktarma.
-- **Sürekli Kayıt:** Gecko'dan esinlenen 15 dakikalık döngüsel RAM tamponu; son 15 dakikayı WAV olarak kaydetme.
-- **Gizlilik:** Ses buluta gönderilmez. Başarıyla tamamlanmış mesai kayıtları için geçici şifreli yedek oluşturulur. Etkin kayıt dosyası henüz şifreli değildir.
-- **Pil:** Mod karşılaştırması sadece açıklayıcıdır; gerçek cihazda ölçüm yapılmadı.
+**Mesai Kaydı:**
+- Çalışma günleri, başlangıç / bitiş saatleri ve klasör bir kez seçilir.
+- Android izin veriyorsa, **kullanıcı tarafından önceden başlatılmış mikrofon servisi açıkken** kayıt otomatik başlar ve biter.
+- Gün sonunda 16 kbps mono Opus/OGG dosyası seçilen klasöre aktarılır.
+- Tamamlanmış OGG için Android Keystore / AES-GCM ile şifreli koruma ve kurtarma işlemi yapılır. **Aktif dosyanın ve son 5 dakikanın sürekli şifreli koruması henüz yok**.
 
-## Önemli Android kısıtlaması
+## Yerel Türkçe konuşma tanıma ve günlük özet
 
-Android 14 ve sonrasında mikrofon erişimli foreground servislerinin arka plandan otomatik başlatılması kısıtlıdır. Mesai Modu'nun seçilen saatte başlaması için servisin önceden uygulama açıkken başlatılmış ve sistem tarafından durdurulmamış olması gerekir. Kesintisiz çalışması **garanti edilmez**.
+- **Vosk small-tr-0.3** (~35 MB sıkıştırılmış, Apache 2.0) Türkçe modelini kullanıcı **bir defa açıkça** indirir: <https://alphacephei.com/vosk/models>.
+- Model kurulduktan sonra ses kaydı, döküm ve özet **cihazdan dışarı aktarılmadan** işlenir.
+- Mesai kaydı tamamlandığında, şarj ve pil koşulları uygunsa Android WorkManager günlük rapor oluşturmak üzere işi sıraya alır.
+- Günİzi > Yerel yapay zeka ekranında seçilmiş başka bir ses kaydı da raporlanabilir.
+- Raporda **özet + 30 dakikalık akış + takip edilebilecek ifadeler + eksiksiz algılanmış konuşma dökümü** .txt dosyasına yazılır.
+- Özetleme şu anda **alıntı temelli / çıkarımsal**; **üretken dil modeli (LLM) içermez**. Konuşmayı yazıya çeviren bölüm gerçek yerel makine öğrenmesi modelidir.
+- Modelin Türkçe özel isimlerde, birden fazla kişinin konuşmasında ve gürültüde hata yapması mümkündür; kayıttan çıkarılmayan bilgileri üretmeye çalışmaz.
+- Saatler ses dosyasının başlangıcına göre yazılır. Konuşma olmayan aralıklar veya eksik ses yakalama durumları kayıtta görünmeyebilir.
 
-## APK derleme
+## Pil tüketimi karşılaştırması
 
-GitHub Actions > Android Debug APK > Run workflow seçeneğiyle debug APK üretilebilir; varsayılan dalda yapılan kod değişikliği de iş akışını tetikler. APK sonucu Actions çalışmasının **Artifacts** bölümünde yer alır.
+- Ana ekrandaki **Pil ve Performans** alanından iki modun kayıt süreleri ve teorik ses boyutları karşılaştırılabilir.
+- Kaydırıcılı pil hesabı **varsayımsaldır**. Uygulamaya ait gerçek enerji ölçümü olarak sunulmaz.
+- Gerçek tüketim hedef cihazda kontrollü testlerle belirlenmelidir.
+- Şarjda özetleme varsayılanı, gün içinde ağır yapay zeka işinin pil tüketmesini azaltmayı amaçlar.
 
-## Güvenlik ve izinler
+## İzinler ve güvenlik
 
-Başkalarının konuşmalarını ancak gerekli bilgilendirme ve izinlerle kaydedin. Bu prototipi hukuki veya kritik kayıtların tek kopyası olarak kullanmayın.
+- **Mikrofon:** çalışma için gerekli; kullanıcı uygulama açıkken izin verir ve kayıt hizmetini başlatır.
+- **Bildirim:** mikrofon hizmetini ve kayıt/özetleme durumunu görmek için; Android 13+ ayarı.
+- **Kayıt klasörü:** Android'in klasör seçicisiyle tek seferlik ve kalıcı SAF erişimi.
+- **İnternet:** yalnızca kullanıcının başlattığı Türkçe model indirmesi; ses ve döküm sunucuya gönderilmez.
+- **İsteğe bağlı Samsung pil ayarı:** uygulama sistem pil optimizasyon ayarlarına yönlendirebilir. Herhangi bir izni sessizce vermez.
+- Android 14+ arka plandan mikrofon foreground service başlatma kısıtlaması **aşılamaz**. Servis sistem tarafından kapatıldığında otomatik başlangıç garanti edilmez.
+- Aynı anda Gecko ve Günİzi mikrofon kullanıyorsa ses erişimi rekabeti yaşanabilir. Test sırasında tek uygulama önerilir.
+- Diğer kişilerin konuşmalarını kaydetmeden önce ilgili kişileri bilgilendirin ve gerekli izinleri alın.
 
-## Lisans ve köken
+## APK
 
-Bu depo, Gecko'nun kodundan birebir kopya olmadan, ses tamponu yaklaşımından esinlenen ayrı bir prototip olarak hazırlanmıştır.
+GitHub Actions > **Android Debug APK** > son başarılı işlem > **Artifacts** > `GunIzi-debug-apk`.
+
+Bu **debug/test APK**'sıdır; cihaz üstünde uzun süreli ve hukuki kritik kayıtlarda güvenilirlik doğrulanmadı. Özel telefon ve Android sürümlerine bağlı sorunlar olabilir.
+
+## Kaynak ve krediler
+
+- Gecko: <https://github.com/anantdark/Gecko>
+- Vosk: <https://alphacephei.com/vosk/>
+- Android background microphone foreground service kısıtlamaları: <https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start>
