@@ -134,7 +134,7 @@ public final class MainActivity extends Activity {
             else message("Kurtarmak için hizmeti başlat.");
         });
 
-        LinearLayout ram=card("Gecko tarzı RAM kaydı","Son '+RecorderService.ramMinutes()+' dakikalık ses RAM'de tutulur.");
+        LinearLayout ram=card("Gecko tarzı RAM kaydı","Son "+RecorderService.ramMinutes()+" dakikalık ses RAM'de tutulur.");
         Button save=button("RAM geçmişini WAV olarak kaydet",PURPLE);ram.addView(save);
         save.setOnClickListener(v->{
             if(!RecorderService.running || !Prefs.MODE_CONTINUOUS.equals(prefs.mode())){
