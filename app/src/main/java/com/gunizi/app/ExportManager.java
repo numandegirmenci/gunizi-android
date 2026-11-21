@@ -51,6 +51,18 @@ final class ExportManager {
             if(!success)try{DocumentsContract.deleteDocument(c.getContentResolver(),out);}catch(Exception ignored){}
         }
     }
+    static Uri writeText(Context c,Uri folder,String text,String name)throws IOException{
+        if(folder==null)throw new IOException("Rapor klasörü seçilmedi");
+        Uri parent=DocumentsContract.buildDocumentUriUsingTree(folder,DocumentsContract.getTreeDocumentId(folder));
+        Uri out=DocumentsContract.createDocument(c.getContentResolver(),parent,"text/plain",name);
+        if(out==null)throw new IOException("Rapor dosyası açılamadı");
+        boolean ok=false;
+        try(OutputStream stream=c.getContentResolver().openOutputStream(out,"w")){
+            if(stream==null)throw new IOException("Rapor dosyasına yazılamadı");
+            stream.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            stream.flush();ok=true;return out;
+        }finally{if(!ok)try{DocumentsContract.deleteDocument(c.getContentResolver(),out);}catch(Exception ignored){}}
+    }
     private static void writeWavHeader(OutputStream out,int bytes,int hz,int ch,int bits)throws IOException{
         ByteArrayOutputStream b=new ByteArrayOutputStream(44);
         b.write(new byte[]{'R','I','F','F'});le32(b,36L+bytes);

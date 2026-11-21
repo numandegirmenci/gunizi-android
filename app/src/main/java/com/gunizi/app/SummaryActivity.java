@@ -73,18 +73,21 @@ public final class SummaryActivity extends Activity {
         String last=p.getString("summaryLast","");
         if(!err.isEmpty())status.setText("Son rapor hatası: "+err);
         else if(!last.isEmpty())status.setText(last);
-        WorkManager.getInstance(this).getWorkInfosByTagLiveData("gunizi-local-summary")
-            .observe(this,list->{
-                if(list==null||list.isEmpty())return;
-                WorkInfo newest=list.get(list.size()-1);
-                if(newest.getState()==WorkInfo.State.RUNNING||
-                    newest.getState()==WorkInfo.State.ENQUEUED){
-                    String stage=newest.getProgress().getString("stage");
-                    status.setText(newest.getState()==WorkInfo.State.ENQUEUED?
+        new Thread(()->{
+            try{
+                List<WorkInfo> items=WorkManager.getInstance(this)
+                    .getWorkInfosByTag("gunizi-local-summary").get();
+                if(items==null||items.isEmpty())return;
+                WorkInfo current=items.get(items.size()-1);
+                if(current.getState()==WorkInfo.State.RUNNING||
+                   current.getState()==WorkInfo.State.ENQUEUED){
+                    String stage=current.getProgress().getString("stage");
+                    runOnUiThread(()->status.setText(current.getState()==WorkInfo.State.ENQUEUED?
                         "Günlük özet uygun pil/şarj koşullarında hazırlanacak":
-                        stage==null?"Yerel model işliyor…":stage);
+                        stage==null?"Yerel model işliyor…":stage));
                 }
-            });
+            }catch(Exception ignored){}
+        },"GunIzi-SummaryStatus").start();
     }
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);

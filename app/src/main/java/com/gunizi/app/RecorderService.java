@@ -31,6 +31,7 @@ public final class RecorderService extends Service {
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private final AtomicBoolean captureActive=new AtomicBoolean(false);
+    public static int ramMinutes(){return memoryBytes()/32000/60;}
     private static int memoryBytes() {
         long heap=Runtime.getRuntime().maxMemory();
         return (int)Math.min(256L*1024*1024,Math.max(32L*1024*1024,(long)(heap*0.60)));
@@ -194,8 +195,13 @@ public final class RecorderService extends Service {
                 // Completed sessions only. Unfinished active audio is not encrypted.
                 File encrypted=CryptoVault.encrypt(getApplicationContext(),f);
                 try{
-                    ExportManager.writeFile(getApplicationContext(),prefs.folder(),f,f.getName(),"audio/ogg");
-                    lastEvent="Kaydedildi: "+f.getName();
+                    android.net.Uri saved=ExportManager.writeFile(
+                        getApplicationContext(),prefs.folder(),f,f.getName(),"audio/ogg");
+                    if(OfflineModelManager.ready(getApplicationContext()))
+                        DailySummaryWorker.queue(getApplicationContext(),saved,f.getName(),true);
+                    lastEvent="Kaydedildi: "+f.getName()+
+                        (OfflineModelManager.ready(getApplicationContext())?
+                          " • Şarjdayken yerel özet hazırlanacak":"");
                     stateText="Mesai kaydı kaydedildi";
                     encrypted.delete();
                     f.delete();
