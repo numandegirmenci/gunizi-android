@@ -27,13 +27,24 @@ final class PcmRingBuffer {
         size=Math.min(capacity,size+count);
     }
     /** Stream the memory directly; no 256 MB duplicate snapshot. Capture may pause while exporting. */
-    synchronized void stream(OutputStream out)throws IOException{
-        int oldest=(position-size+capacity)%capacity,pending=size;
+    void stream(OutputStream out)throws IOException{
+        final int initial,bytes;
+        synchronized(this){
+            bytes=size;
+            initial=(position-size+capacity)%capacity;
+        }
+        // Copy only 64 KiB at a time under lock so microphone reads are not blocked by slow storage.
+        byte[] scratch=new byte[64*1024];
+        int oldest=initial,pending=bytes;
         while(pending>0){
             int idx=oldest/CHUNK,within=oldest%CHUNK;
-            int n=Math.min(pending,Math.min(CHUNK-within,capacity-oldest));
-            if(chunks[idx]==null)throw new IOException("Ses tamponu eksik");
-            out.write(chunks[idx],within,n);
+            int n=Math.min(scratch.length,Math.min(pending,
+                Math.min(CHUNK-within,capacity-oldest)));
+            synchronized(this){
+                if(chunks[idx]==null)throw new IOException("Ses tamponu eksik");
+                System.arraycopy(chunks[idx],within,scratch,0,n);
+            }
+            out.write(scratch,0,n);
             oldest=(oldest+n)%capacity;pending-=n;
         }
     }
