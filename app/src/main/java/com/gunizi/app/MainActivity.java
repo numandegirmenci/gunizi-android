@@ -8,6 +8,7 @@ import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.provider.Settings;
 import android.os.*;
 import android.view.*;
 import android.widget.*;
@@ -73,7 +74,7 @@ public final class MainActivity extends Activity {
         RadioGroup options=new RadioGroup(this);options.setOrientation(RadioGroup.VERTICAL);
         RadioButton work=new RadioButton(this),continuous=new RadioButton(this);
         work.setText("Mesai Kaydı  ·  Seçilen saatlerde");
-        continuous.setText("Sürekli Kayıt  ·  Son 15 dakika RAM'de");
+        continuous.setText("Sürekli Kayıt  ·  Gecko gibi RAM geçmişi");
         for(RadioButton r:new RadioButton[]{work,continuous}){
             r.setId(View.generateViewId());r.setTextColor(WHITE);r.setTextSize(14);
             r.setButtonTintList(ColorStateList.valueOf(CYAN));options.addView(r);
@@ -133,8 +134,8 @@ public final class MainActivity extends Activity {
             else message("Kurtarmak için hizmeti başlat.");
         });
 
-        LinearLayout ram=card("Gecko tarzı RAM kaydı","Sürekli Kayıt modunda son 15 dakikayı elle kaydedebilirsin.");
-        Button save=button("Son 15 dakikayı WAV olarak kaydet",PURPLE);ram.addView(save);
+        LinearLayout ram=card("Gecko tarzı RAM kaydı","Son '+RecorderService.ramMinutes()+' dakikalık ses RAM'de tutulur.");
+        Button save=button("RAM geçmişini WAV olarak kaydet",PURPLE);ram.addView(save);
         save.setOnClickListener(v->{
             if(!RecorderService.running || !Prefs.MODE_CONTINUOUS.equals(prefs.mode())){
                 message("Önce Sürekli Kayıt modunu aç.");return;
@@ -144,8 +145,46 @@ public final class MainActivity extends Activity {
 
         LinearLayout battery=card("Pil ve performans","Gerçek pil tüketimi henüz ölçülmedi.");
         battery.addView(text("Mesai Kaydı: 08.00–17.30 örneğinde 9,5 saat. Sürekli Kayıt: 24 saat. Sürekli mod 2,53 kat daha uzun kayıt süresi anlamına gelir; pil tüketimi aynı oranda artmak zorunda değildir.",13,MUTED,false));
-        LinearLayout ai=card("Yerel yapay zeka özeti","Henüz bu prototipte yok.");
-        ai.addView(text("Türkçe çevrimdışı konuşma çözümleme ve günlük özetleme modeli sonraki geliştirme aşamasıdır.",13,MUTED,false));
+        LinearLayout ai=card("Yerel yapay zeka ve günlük rapor",
+            "Tüm ses dosyasını cihazda yazıya çevirir, zamanlı özet ve tam döküm oluşturur.");
+        ai.addView(text("Türkçe modeli bir kez indir. Mesai kayıtların şarjdayken otomatik özetlenir.",13,MUTED,false));
+        space(ai,10);
+        Button summary=button("Yerel yapay zeka / Günlük rapor",PURPLE);
+        ai.addView(summary);
+        summary.setOnClickListener(v->startActivity(new Intent(this,SummaryActivity.class)));
+
+        LinearLayout permissions=card("İzinler ve arka plan",
+            "Uygulamanın istediği izinleri sen kontrol edersin.");
+        TextView permissionLabel=text("",13,MUTED,false);
+        permissions.addView(permissionLabel);
+        permissionLabel.setText(
+            "Mikrofon: "+(checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED?"izinli":"izin gerekli")+
+            "\nBildirim: "+(Build.VERSION.SDK_INT<33||
+              checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED?"izinli":"izin gerekli")+
+            "\nKlasör: "+(prefs.folder()!=null?"seçildi":"seçilmedi"));
+        space(permissions,10);
+        Button grantMic=button("Mikrofon iznini ver",0xff293752);
+        permissions.addView(grantMic);
+        grantMic.setOnClickListener(v->{
+            if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)
+                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},MIC);
+            else message("Mikrofon izni zaten verilmiş.");
+        });
+        Button grantNotifications=button("Bildirim iznini ver",0xff293752);
+        permissions.addView(grantNotifications);
+        grantNotifications.setOnClickListener(v->{
+            if(Build.VERSION.SDK_INT>=33&&
+               checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFY);
+            else message("Bildirim izni zaten verilmiş.");
+        });
+        Button battery=button("Samsung pil ve arka plan ayarları (isteğe bağlı)",0xff293752);
+        permissions.addView(battery);
+        battery.setOnClickListener(v->{
+            try{startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));}
+            catch(Exception e){startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:"+getPackageName())));}
+        });
         layout.addView(text("Android 14+ mikrofon kısıtı: Hizmeti uygulama açıkken başlatmalısın. Sistem servisi durdurursa otomatik kayıt kesilebilir.",12,MUTED,false));
         refreshStatus();
     }
@@ -172,10 +211,6 @@ public final class MainActivity extends Activity {
         if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},MIC);return;
         }
-        if(Build.VERSION.SDK_INT>=33 &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){
-            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFY);return;
-        }
         if(prefs.folder()==null){message("Önce kayıt klasörünü seç.");return;}
         if(Prefs.MODE_WORK.equals(prefs.mode())&&(!prefs.validRange()||prefs.days()==0)){
             message("Geçerli gün ve saat belirle.");return;
@@ -187,9 +222,12 @@ public final class MainActivity extends Activity {
     }
     @Override public void onRequestPermissionsResult(int request,String[] names,int[] results){
         super.onRequestPermissionsResult(request,names,results);
-        if((request==MIC||request==NOTIFY)&&results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)
+        if(request==MIC&&results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)
             start();
-        else message("Gerekli izin verilmedi.");
+        else if(request==NOTIFY)
+            message(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED?
+                "Bildirimlere izin verildi.":"Bildirim izni verilmedi; kayıt bildirimi görünmeyebilir.");
+        else message("Mikrofon izni gerekli.");
     }
     private void stop(){send(RecorderService.ACTION_STOP);handler.postDelayed(this::refreshStatus,700);}
     private void send(String action){
@@ -204,7 +242,7 @@ public final class MainActivity extends Activity {
             "Kayıt hizmetini durdur":"Kayıt hizmetini etkinleştir");
         if(modeDetail!=null)modeDetail.setText(Prefs.MODE_WORK.equals(prefs.mode())?
             "Mesai: "+prefs.timeString(true)+"–"+prefs.timeString(false)+" · Otomatik kaydetme":
-            "15 dakikalık döngüsel RAM · Elle WAV kaydetme");
+            RecorderService.ramMinutes()+" dakikalık döngüsel RAM · Elle WAV kaydetme");
     }
     private void message(String text){Toast.makeText(this,text,Toast.LENGTH_LONG).show();}
 }
