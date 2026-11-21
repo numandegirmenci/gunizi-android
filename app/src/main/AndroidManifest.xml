@@ -18,6 +18,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".SummaryActivity" android:exported="false" />
+        <activity android:name=".BatteryInfoActivity" android:exported="false" />
         <service android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync|mediaProcessing" tools:node="merge" />
         <service android:name=".RecorderService" android:exported="false"

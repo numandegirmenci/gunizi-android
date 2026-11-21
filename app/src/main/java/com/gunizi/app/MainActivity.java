@@ -145,6 +145,10 @@ public final class MainActivity extends Activity {
 
         LinearLayout battery=card("Pil ve performans","Gerçek pil tüketimi henüz ölçülmedi.");
         battery.addView(text("Mesai Kaydı: 08.00–17.30 örneğinde 9,5 saat. Sürekli Kayıt: 24 saat. Sürekli mod 2,53 kat daha uzun kayıt süresi anlamına gelir; pil tüketimi aynı oranda artmak zorunda değildir.",13,MUTED,false));
+        Button compareBattery=button("İki modun pil tüketimini ayrıntılı karşılaştır",0xff293752);
+        battery.addView(compareBattery);
+        compareBattery.setOnClickListener(v->startActivity(new Intent(this,BatteryInfoActivity.class)));
+
         LinearLayout ai=card("Yerel yapay zeka ve günlük rapor",
             "Tüm ses dosyasını cihazda yazıya çevirir, zamanlı özet ve tam döküm oluşturur.");
         ai.addView(text("Türkçe modeli bir kez indir. Mesai kayıtların şarjdayken otomatik özetlenir.",13,MUTED,false));
