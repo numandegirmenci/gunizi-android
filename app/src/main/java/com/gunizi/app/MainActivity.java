@@ -178,9 +178,9 @@ public final class MainActivity extends Activity {
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFY);
             else message("Bildirim izni zaten verilmiş.");
         });
-        Button battery=button("Samsung pil ve arka plan ayarları (isteğe bağlı)",0xff293752);
-        permissions.addView(battery);
-        battery.setOnClickListener(v->{
+        Button batterySettingsButton=button("Samsung pil ve arka plan ayarları (isteğe bağlı)",0xff293752);
+        permissions.addView(batterySettingsButton);
+        batterySettingsButton.setOnClickListener(v->{
             try{startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));}
             catch(Exception e){startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.parse("package:"+getPackageName())));}
