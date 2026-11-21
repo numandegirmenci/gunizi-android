@@ -31,7 +31,11 @@ public final class RecorderService extends Service {
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private final AtomicBoolean captureActive=new AtomicBoolean(false);
-    private final PcmRingBuffer ring=new PcmRingBuffer(16000*2*60*15);
+    private static int memoryBytes() {
+        long heap=Runtime.getRuntime().maxMemory();
+        return (int)Math.min(256L*1024*1024,Math.max(32L*1024*1024,(long)(heap*0.60)));
+    }
+    private final PcmRingBuffer ring=new PcmRingBuffer(memoryBytes());
     private AudioRecord audioRecord;
     private Thread captureThread;
     private MediaRecorder recorder;
@@ -51,8 +55,11 @@ public final class RecorderService extends Service {
         super.onCreate();
         prefs=new Prefs(this);
         NotificationManager mgr=getSystemService(NotificationManager.class);
-        mgr.createNotificationChannel(new NotificationChannel(
-            CHANNEL,"Günİzi kayıt servisi",NotificationManager.IMPORTANCE_LOW));
+        NotificationChannel channel=new NotificationChannel(CHANNEL,
+            "Günİzi kayıt servisi",NotificationManager.IMPORTANCE_LOW);
+        channel.setShowBadge(false);
+        channel.setDescription("Aktif mikrofon ve kayıt durumu");
+        mgr.createNotificationChannel(channel);
     }
 
     @Override public int onStartCommand(Intent intent,int flags,int startId){
@@ -82,6 +89,7 @@ public final class RecorderService extends Service {
             }
             handler.post(monitor);
         } else applySchedule();
+        getSystemService(NotificationManager.class).notify(103,notification());
         return START_STICKY;
     }
 
@@ -92,13 +100,23 @@ public final class RecorderService extends Service {
         PendingIntent stopPi=PendingIntent.getService(this,3,
             new Intent(this,RecorderService.class).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
-        return new Notification.Builder(this,CHANNEL)
+        Notification.Builder builder=new Notification.Builder(this,CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("Günİzi")
-            .setContentText("Kayıt hizmeti açık • Bildirimden durdurabilirsin")
+            .setContentTitle("Günİzi • "+(Prefs.MODE_CONTINUOUS.equals(prefs.mode())?"Sürekli dinleme":"Mesai kaydı"))
+            .setContentText(Prefs.MODE_CONTINUOUS.equals(prefs.mode())
+                ?"Yaklaşık "+(ring.capacitySeconds()/60)+" dakika RAM belleği etkin"
+                :"Saat "+prefs.timeString(true)+"–"+prefs.timeString(false)+" • Otomatik kayıt")
+            .setSubText("Sesler cihazın içinde tutulur")
+            .setCategory(Notification.CATEGORY_SERVICE).setPriority(Notification.PRIORITY_LOW)
             .setContentIntent(openPi).setOngoing(true)
-            .addAction(android.R.drawable.ic_media_pause,"Durdur",stopPi)
-            .build();
+            .addAction(android.R.drawable.ic_media_pause,"Durdur",stopPi);
+        if(Prefs.MODE_CONTINUOUS.equals(prefs.mode())){
+            PendingIntent savePi=PendingIntent.getService(this,4,
+                new Intent(this,RecorderService.class).setAction(ACTION_SAVE_LAST),
+                PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
+            builder.addAction(android.R.drawable.ic_menu_save,"Geçmişi kaydet",savePi);
+        }
+        return builder.build();
     }
 
     private void applySchedule(){
@@ -209,7 +227,7 @@ public final class RecorderService extends Service {
             audioRecord=a;
             captureActive.set(true);
             recording=true;
-            stateText="Sürekli kayıt • Son 15 dakika RAM'de";
+            stateText="Sürekli kayıt • Son "+(ring.capacitySeconds()/60)+" dakika RAM'de";
             final AudioRecord source=a;
             captureThread=new Thread(()->{
                 byte[] buf=new byte[2560];
@@ -248,16 +266,16 @@ public final class RecorderService extends Service {
         if(!Prefs.MODE_CONTINUOUS.equals(prefs.mode())){
             lastEvent="Önce Sürekli Kayıt modunu seç";return;
         }
-        byte[] pcm=ring.snapshot();
-        if(pcm.length==0){lastEvent="RAM tamponu henüz boş";return;}
+        if(ring.size()==0){lastEvent="RAM tamponu henüz boş";return;}
         stateText="RAM kaydı dışa aktarılıyor";
         io.execute(()->{
             try{
                 String stamp=LocalDateTime.now(Prefs.ZONE)
                     .format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HHmmss"));
-                ExportManager.writeWav(getApplicationContext(),prefs.folder(),pcm,
-                    "GunIzi_Son15dk_"+stamp+".wav");
-                lastEvent="Son "+(pcm.length/32000/60)+" dakika kaydedildi";
+                int seconds=ring.size()/32000;
+                ExportManager.writeWav(getApplicationContext(),prefs.folder(),ring,
+                    "GunIzi_Gecmis_"+stamp+".wav");
+                lastEvent="Son "+(seconds/60)+" dakika kaydedildi";
                 stateText="Sürekli kayıt açık";
             }catch(Exception e){
                 lastEvent="Kaydedilemedi: "+e.getMessage();

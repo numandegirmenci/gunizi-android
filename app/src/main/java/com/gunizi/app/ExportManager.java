@@ -37,6 +37,20 @@ final class ExportManager {
             if(!success)try{DocumentsContract.deleteDocument(c.getContentResolver(),out);}catch(Exception ignored){}
         }
     }
+    static Uri writeWav(Context c,Uri folder,PcmRingBuffer pcm,String name)throws IOException{
+        if(folder==null)throw new IOException("Kayıt klasörü seçilmedi");
+        Uri parent=DocumentsContract.buildDocumentUriUsingTree(folder,DocumentsContract.getTreeDocumentId(folder));
+        Uri out=DocumentsContract.createDocument(c.getContentResolver(),parent,"audio/wav",name);
+        if(out==null)throw new IOException("WAV oluşturulamadı");
+        boolean success=false;
+        try(OutputStream os=c.getContentResolver().openOutputStream(out,"w")){
+            if(os==null)throw new IOException("Dosya akışı açılamadı");
+            writeWavHeader(os,pcm.size(),16000,1,16);
+            pcm.stream(os);os.flush();success=true;return out;
+        }finally{
+            if(!success)try{DocumentsContract.deleteDocument(c.getContentResolver(),out);}catch(Exception ignored){}
+        }
+    }
     private static void writeWavHeader(OutputStream out,int bytes,int hz,int ch,int bits)throws IOException{
         ByteArrayOutputStream b=new ByteArrayOutputStream(44);
         b.write(new byte[]{'R','I','F','F'});le32(b,36L+bytes);
