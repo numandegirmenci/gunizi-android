@@ -1,4 +1,4 @@
-name: Inspect Günİzi UX APK build
+name: Inspect Günİzi v0.12.0 build
 
 on:
   push:
@@ -19,11 +19,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          RESULT="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build-v0112-ux-test.yml/runs?per_page=5" \
+          RESULT="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/publish-gunizi-v0120.yml/runs?per_page=5" \
             --jq '.workflow_runs | map(select(.head_branch == "main")) | first | "\(.id) \(.status) \(.conclusion) \(.head_sha) \(.html_url)"')"
           test -n "$RESULT"
           echo "$RESULT"
           CONTENT="$(printf '%s\n' "$RESULT" | base64 -w 0)"
-          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/docs/UX_TEST_BUILD_RUN.txt" \
-            -f message="Record UX test workflow run for troubleshooting" \
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/docs/GUNIZI_0120_BUILD_RUN.txt" \
+            -f message="Record Günİzi 0.12 release run status" \
             -f content="$CONTENT"
