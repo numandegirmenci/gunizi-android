@@ -29,7 +29,13 @@ final class CryptoVault {
         return kg.generateKey();
     }
     static File encrypt(Context context,File source)throws Exception{
-        File dir=new File(context.getNoBackupFilesDir(),"encrypted_pending");
+        return encryptIn(context,source,"encrypted_pending");
+    }
+    static File encryptEphemeral(Context context,File source)throws Exception{
+        return encryptIn(context,source,"encrypted_rolling_history");
+    }
+    private static File encryptIn(Context context,File source,String folder)throws Exception{
+        File dir=new File(context.getNoBackupFilesDir(),folder);
         if(!dir.exists()&&!dir.mkdirs())throw new IOException("Yedek klasörü oluşturulamadı");
         File target=new File(dir,source.getName()+".giz");
         Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
