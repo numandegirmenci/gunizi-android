@@ -244,6 +244,10 @@ public final class MainActivity extends Activity {
         Button open=button("Yerel yapay zeka ve raporlar",true);
         overview.addView(open);
         open.setOnClickListener(v->startActivity(new Intent(this,SummaryActivity.class)));
+        gap(overview,7);
+        Button topicTable=button("Konu konu rapor tablosu",false);
+        overview.addView(topicTable);
+        topicTable.setOnClickListener(v->startActivity(new Intent(this,ReportTableActivity.class)));
         LinearLayout info=card("Gerçekten çevrimdışı");
         muted(info,"Sesler veya konuşma dökümleri sunucuya gönderilmez. "
             +"Yalnızca modellerin ilk indirmesi için internet gerekir. "

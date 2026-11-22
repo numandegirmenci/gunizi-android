@@ -63,6 +63,26 @@ final class ExportManager {
             stream.flush();ok=true;return out;
         }finally{if(!ok)try{DocumentsContract.deleteDocument(c.getContentResolver(),out);}catch(Exception ignored){}}
     }
+    static Uri writeHtml(Context c,Uri folder,String body,String name)throws IOException {
+        return writeDocument(c,folder,body,name,"text/html");
+    }
+    static Uri writeCsv(Context c,Uri folder,String body,String name)throws IOException {
+        return writeDocument(c,folder,body,name,"text/csv");
+    }
+    private static Uri writeDocument(Context c,Uri folder,String body,String name,String type)throws IOException {
+        if(folder==null)throw new IOException("Rapor klasörü seçilmedi");
+        Uri parent=DocumentsContract.buildDocumentUriUsingTree(folder,DocumentsContract.getTreeDocumentId(folder));
+        Uri out=DocumentsContract.createDocument(c.getContentResolver(),parent,type,name);
+        if(out==null)throw new IOException("Rapor tablosu oluşturulamadı");
+        boolean success=false;
+        try(OutputStream os=c.getContentResolver().openOutputStream(out,"w")){
+            if(os==null)throw new IOException("Rapor tablosu yazılamadı");
+            os.write(body.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            os.flush();success=true;return out;
+        }finally {
+            if(!success)try{DocumentsContract.deleteDocument(c.getContentResolver(),out);}catch(Exception ignored){}
+        }
+    }
     private static void writeWavHeader(OutputStream out,int bytes,int hz,int ch,int bits)throws IOException{
         ByteArrayOutputStream b=new ByteArrayOutputStream(44);
         b.write(new byte[]{'R','I','F','F'});le32(b,36L+bytes);

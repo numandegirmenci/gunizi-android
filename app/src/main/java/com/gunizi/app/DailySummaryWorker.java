@@ -14,7 +14,7 @@ import androidx.work.*;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Full recording transcription with a local Turkish Vosk model.
+ * Full recording transcription with local Whisper and Qwen3.
  * Auto mode runs when charging; manual mode begins when the user requests it.
  * Never uploads recorded audio or its transcript.
  */
@@ -89,10 +89,16 @@ public final class DailySummaryWorker extends Worker {
                 "GunIzi_Dokum_"+fileBase+".txt");
             String summary=FullDaySummarizer.summarize(c,transcript,listener);
             String report="GÜNİZİ • YEREL QWEN3 GÜNLÜK RAPORU\\n"+
-                "Kaynak ses: "+fileName+"\\nModel: Whisper small + Qwen3-1.7B Q4_K_M\\n"+
+                "Kaynak ses: "+fileName+"\\nModel: Whisper small + seçilen Qwen3\\n"+
                 "Not: Otomatik tanıma ve özet hatalı olabilir; önemli bilgileri sesle karşılaştır.\\n\\n"+
                 summary+"\\n\\n----- TAM KONUŞMA DÖKÜMÜ -----\\n"+transcript;
             ExportManager.writeText(c,new Prefs(c).folder(),report,"GunIzi_Ozet_"+fileBase+".txt");
+            java.util.List<TopicReportRenderer.Entry> topics=TopicReportRenderer.parse(summary);
+            String html=TopicReportRenderer.html(topics,fileName);
+            TopicReportRenderer.saveInternal(c,html,fileBase);
+            ExportManager.writeHtml(c,new Prefs(c).folder(),html,"GunIzi_KonuTablosu_"+fileBase+".html");
+            ExportManager.writeCsv(c,new Prefs(c).folder(),TopicReportRenderer.csv(topics),
+                "GunIzi_KonuTablosu_"+fileBase+".csv");
             transcriptCache.delete();
             c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
                 .putString("summaryLast","Günlük rapor hazır: "+fileName)

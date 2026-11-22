@@ -138,7 +138,9 @@ public final class SummaryActivity extends Activity {
             startActivityForResult(i,PICK);
         });
         status=text(analyze,"Rapor kuyruğu kontrol ediliyor…",13,false);
-        Button refresh=button(analyze,"İşlem durumunu yenile");
+        Button topics=button(analyze,"Konu konu özet tablosunu aç");
+        topics.setOnClickListener(v->startActivity(new Intent(this,ReportTableActivity.class)));
+                Button refresh=button(analyze,"İşlem durumunu yenile");
         refresh.setOnClickListener(v->refreshStatus());
         text(analyze,"Uzun seslerin çözülmesi ve Qwen3 özetlemesi saatler sürebilir. "
             +"Aşırı ısınma veya pil sorunu oluşursa işlemi durdurabilirsin.",12,false);
