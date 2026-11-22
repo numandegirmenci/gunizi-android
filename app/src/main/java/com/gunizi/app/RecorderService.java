@@ -280,8 +280,14 @@ public final class RecorderService extends Service {
         try{current.stop();valid=true;}
         catch(Exception e){Log.e("GunIzi","History segment stop",e);}
         finally{try{current.reset();}catch(Exception ignored){}current.release();}
-        if(valid&&historyStore!=null)historyStore.add(file,start,end);
-        else if(file!=null)file.delete();
+        if(valid&&historyStore!=null){
+            try{historyStore.add(file,start,end);}
+            catch(java.io.IOException ex){
+                android.util.Log.e("GunIzi","History encrypt",ex);
+                lastEvent="Geçmişin bir bölümü şifrelenemedi ve saklanmadı";
+                stateText="Geçici ses güvenliği hatası";
+            }
+        }else if(file!=null)file.delete();
     }
     private void stopHistory(boolean deleteTemporary){
         if(!historyActive)return;
