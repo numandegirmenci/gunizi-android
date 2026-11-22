@@ -24,6 +24,13 @@ public final class ReportTableActivity extends Activity {
         title.setTextColor(Color.WHITE);root.addView(title);
         Button close=new Button(this);close.setText("Geri");close.setAllCaps(false);
         close.setOnClickListener(v->finish());root.addView(close);
+        Button note=new Button(this);note.setText("Raporu Notlarıma Ekle");
+        note.setAllCaps(false);root.addView(note);
+        note.setOnClickListener(v->{
+            android.content.Intent intent=new android.content.Intent(this,UserNotesActivity.class);
+            intent.putExtra("openLatestReport",true);
+            startActivity(intent);
+        });
         viewer=new WebView(this);
         viewer.setBackgroundColor(0xff090e1b);
         WebSettings w=viewer.getSettings();

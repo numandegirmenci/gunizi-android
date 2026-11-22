@@ -113,11 +113,13 @@ public final class UserNotesActivity extends Activity {
     }
     private void exportFile(){
         if(body.length()==0){state.setText("Önce not içeriğini doldur.");return;}
+        String titleText=title.getText().toString();
+        String bodyText=body.getText().toString();
         new Thread(()->{
             String result;
             try{
                 if(new Prefs(this).folder()==null)throw new java.io.IOException("Önce Ayarlar'dan kayıt klasörü seç.");
-                String text=title.getText().toString()+"\n\n"+body.getText().toString();
+                String text=titleText+"\n\n"+bodyText;
                 ExportManager.writeText(this,new Prefs(this).folder(),text,
                     "GunIzi_Not_"+System.currentTimeMillis()+".txt");
                 result="Not TXT olarak klasöre kaydedildi.";

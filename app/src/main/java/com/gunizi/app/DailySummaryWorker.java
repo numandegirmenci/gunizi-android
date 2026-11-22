@@ -42,7 +42,8 @@ public final class DailySummaryWorker extends Worker {
     }
     static void queue(Context c,Uri uri,String name,boolean charging){
         if(uri==null||!AiModelStore.ready(c,AiModelStore.WHISPER)||!AiModelStore.ready(c,new Prefs(c).aiModel()))return;
-        Data data=new Data.Builder().putString(URI,uri.toString()).putString(NAME,name).build();
+        Data data=new Data.Builder().putString(URI,uri.toString()).putString(NAME,name)
+            .putString("analysisFocus",new AnalysisPreferences(c).focus()).build();
         Constraints.Builder constraints=new Constraints.Builder().setRequiresBatteryNotLow(true);
         if(charging)constraints.setRequiresCharging(true);
         OneTimeWorkRequest task=new OneTimeWorkRequest.Builder(DailySummaryWorker.class)
@@ -87,7 +88,9 @@ public final class DailySummaryWorker extends Worker {
             ExportManager.writeText(c,new Prefs(c).folder(),
                 "GÜNİZİ • TAM TÜRKÇE KONUŞMA DÖKÜMÜ\\n"+transcript,
                 "GunIzi_Dokum_"+fileBase+".txt");
-            String summary=FullDaySummarizer.summarize(c,transcript,listener);
+            String focus=getInputData().getString("analysisFocus");
+            if(focus==null||focus.trim().isEmpty())focus=AnalysisPreferences.DEFAULT;
+            String summary=FullDaySummarizer.summarize(c,transcript,focus,listener);
             String report="GÜNİZİ • YEREL QWEN3 GÜNLÜK RAPORU\\n"+
                 "Kaynak ses: "+fileName+"\\nModel: Whisper small + seçilen Qwen3\\n"+
                 "Not: Otomatik tanıma ve özet hatalı olabilir; önemli bilgileri sesle karşılaştır.\\n\\n"+
@@ -96,6 +99,10 @@ public final class DailySummaryWorker extends Worker {
             java.util.List<TopicReportRenderer.Entry> topics=TopicReportRenderer.parse(summary);
             String html=TopicReportRenderer.html(topics,fileName);
             TopicReportRenderer.saveInternal(c,html,fileBase);
+            UserNotesStore.latestReport(c,
+                "Günİzi • "+fileName+" • Günlük özet",
+                "ANALİZ TERCİHİ: "+focus+"\n\n"+summary+
+                "\n\nNot: Otomatik çıkarımlar önemli kararlar için kontrol edilmelidir.");
             ExportManager.writeHtml(c,new Prefs(c).folder(),html,"GunIzi_KonuTablosu_"+fileBase+".html");
             ExportManager.writeCsv(c,new Prefs(c).folder(),TopicReportRenderer.csv(topics),
                 "GunIzi_KonuTablosu_"+fileBase+".csv");
