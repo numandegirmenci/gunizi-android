@@ -27,6 +27,7 @@ object CallVaultWhisperEngine {
         require(AiModelStore.ready(context,modelId)) { "Whisper modeli eksik veya doğrulanmamış" }
         val prefs=context.getSharedPreferences("gunizi",Context.MODE_PRIVATE)
         val useVad=prefs.getBoolean("aiSileroVad",true)
+        val jobId=prefs.getString("analysisWorkId","") ?: ""
         val size=try { context.contentResolver.openAssetFileDescriptor(audio,"r")?.use {
             it.length } ?: 0L }catch(_:Exception){0L}
         val key=hash(audio.toString()+"|"+size+"|"+modelId+"|cv-native-v1|vad="+useVad)
@@ -34,7 +35,7 @@ object CallVaultWhisperEngine {
         check(cache.exists()||cache.mkdirs()) { "Konuşma kontrol noktası açılamadı" }
 
         AiStageMetrics.enter(context,AiStageMetrics.MODEL_LOADING)
-        progress.update(0,"CallVault whisper.cpp • Model belleğe alınıyor")
+        progress.update(0,"Konuşma modeli belleğe alınıyor")
         val started=SystemClock.elapsedRealtime()
         val ptr=WhisperNative.initContext(
             AiModelStore.speechFile(context,modelId).absolutePath,
@@ -42,7 +43,7 @@ object CallVaultWhisperEngine {
         if(ptr==0L)throw IllegalStateException(
             "whisper.cpp modeli açılamadı. Model biçimini ve boş RAM'i kontrol et.")
         prefs.edit().putLong("lastWhisperLoadMs",SystemClock.elapsedRealtime()-started)
-            .putString("analysisRuntime","CallVault whisper.cpp").apply()
+            .putString("analysisRuntime","Yerel konuşma motoru").apply()
         val result=StringBuilder()
         var index=0
         try{
@@ -114,7 +115,9 @@ object CallVaultWhisperEngine {
                             WhisperNative.segmentEndMs(ptr,it),
                             WhisperNative.segmentText(ptr,it).trim())
                     }
-                    val corrected=SpeechGapSnap.apply(raw,kept)
+                    // A VAD-confirmed empty region is not speech; do not accept ASR hallucinations.
+                    val corrected=if(vad!=null && kept.isEmpty())
+                        emptyList<TranscriptSegment>() else SpeechGapSnap.apply(raw,kept)
                     val text=corrected.filter{it.text.isNotBlank()}.joinToString("") {
                         "["+time(startMs+it.startMs)+"–"+time(startMs+it.endMs)+"] "+
                         it.text+"\n"
@@ -126,6 +129,7 @@ object CallVaultWhisperEngine {
                 }
                 if(current!="[[GUNIZI_SESSIZ_BOLUM]]"){
                     result.append(current)
+                    LiveTranscriptStore.append(context,jobId,current)
                     prefs.edit().putString("analysisPreview",
                         current.replace("\n"," ").takeLast(430)).apply()
                 }
