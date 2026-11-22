@@ -4,259 +4,317 @@ import android.Manifest;
 import android.app.*;
 import android.content.*;
 import android.content.pm.PackageManager;
-import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
-import android.provider.Settings;
 import android.os.*;
+import android.provider.Settings;
 import android.view.*;
 import android.widget.*;
+import java.util.Locale;
 
-/** Turkish, one-time setup; two modes and an honest AI status. */
+/**
+ * Compact Turkish interface. Four independent tabs, never one endless settings column.
+ * The microphone never starts automatically in On-Demand mode.
+ */
 public final class MainActivity extends Activity {
-    private static final int FOLDER=101, MIC=102, NOTIFY=103;
-    private static final int BG=0xff0b1020,PANEL=0xff151e31,WHITE=0xfff5f8ff,
-        MUTED=0xffa3b2c6,CYAN=0xff23d3d9,PURPLE=0xff8964ff;
+    private static final int FOLDER=101,MIC=102,NOTIFY=103;
+    private static final int BG=0xff090e1b,PANEL=0xff172031,WHITE=0xfff0f7ff,
+        MUTED=0xffa2b4c9,CYAN=0xff38d4ca,PURPLE=0xff8360ed,EDGE=0xff263348;
     private Prefs prefs;
-    private LinearLayout layout;
-    private TextView status,detail,folderText,modeDetail;
-    private RamGaugeView ramGauge;
-    private Button serviceButton;
+    private LinearLayout page,nav;
+    private TextView status,substatus,folderLabel;
+    private Button action;
+    private int tab=0;
     private final Handler handler=new Handler(Looper.getMainLooper());
-    private final Runnable refresh=new Runnable(){
-        @Override public void run(){refreshStatus();handler.postDelayed(this,3000);}
+    private final Runnable heartbeat=new Runnable(){
+        @Override public void run(){refresh();handler.postDelayed(this,1000);}
     };
 
-    @Override public void onCreate(Bundle state){
-        super.onCreate(state);prefs=new Prefs(this);build();
+    @Override public void onCreate(Bundle b){
+        super.onCreate(b);prefs=new Prefs(this);show(0);
     }
-    @Override protected void onResume(){super.onResume();handler.post(refresh);}
-    @Override protected void onPause(){handler.removeCallbacks(refresh);super.onPause();}
-    private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
-    private TextView text(String str,int size,int color,boolean bold){
-        TextView t=new TextView(this);t.setText(str);t.setTextSize(size);
-        t.setTextColor(color);if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return t;
+    @Override protected void onResume(){super.onResume();handler.post(heartbeat);}
+    @Override protected void onPause(){handler.removeCallbacks(heartbeat);super.onPause();}
+    private int dp(int n){return (int)(getResources().getDisplayMetrics().density*n+0.5f);}
+    private TextView label(String content,int size,int color,boolean bold){
+        TextView t=new TextView(this);t.setText(content);t.setTextSize(size);t.setTextColor(color);
+        if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return t;
     }
-    private void space(LinearLayout l,int v){l.addView(new View(this),new LinearLayout.LayoutParams(1,dp(v)));}
-    private GradientDrawable bg(int color){
-        GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(15));return d;
+    private GradientDrawable drawable(int color){
+        GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(16));return d;
     }
-    private LinearLayout card(String heading,String sub){
-        LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);
-        p.setPadding(dp(17),dp(16),dp(17),dp(16));p.setBackground(bg(PANEL));
-        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);params.bottomMargin=dp(13);
-        layout.addView(p,params);
-        p.addView(text(heading,18,WHITE,true));
-        if(sub!=null){space(p,5);p.addView(text(sub,13,MUTED,false));}
-        space(p,12);return p;
+    private LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
+    private void gap(LinearLayout l,int n){View v=new View(this);l.addView(v,new LinearLayout.LayoutParams(1,dp(n)));}
+    private LinearLayout card(String title){
+        LinearLayout box=column();box.setPadding(dp(16),dp(14),dp(16),dp(15));box.setBackground(drawable(PANEL));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(12);page.addView(box,p);
+        if(title!=null){box.addView(label(title,16,WHITE,true));gap(box,10);}
+        return box;
     }
-    private Button button(String title,int color){
-        Button b=new Button(this);b.setText(title);b.setAllCaps(false);b.setTextColor(color==CYAN?BG:WHITE);
-        b.setBackground(bg(color));b.setTextSize(14);b.setMinHeight(dp(48));return b;
+    private void muted(LinearLayout box,String text){box.addView(label(text,13,MUTED,false));}
+    private Button button(String value,boolean accent){
+        Button b=new Button(this);b.setText(value);b.setAllCaps(false);b.setTextSize(14);
+        b.setTextColor(accent?BG:WHITE);b.setBackground(drawable(accent?CYAN:EDGE));
+        b.setMinHeight(dp(48));return b;
     }
-    private void build(){
-        ScrollView sc=new ScrollView(this);sc.setBackgroundColor(BG);
-        layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(dp(20),dp(24),dp(20),dp(35));
-        sc.addView(layout);setContentView(sc);
-        layout.addView(text("◉  Günİzi",30,WHITE,true));
-        layout.addView(text("Gününü kaydet, istediğinde hatırla.",14,MUTED,false));
-        space(layout,20);
-
-        LinearLayout st=card("Kayıt durumu",null);
-        status=text("Hazır",21,CYAN,true);st.addView(status);
-        ramGauge=new RamGaugeView(this);
-        st.addView(ramGauge,new LinearLayout.LayoutParams(-1,dp(210)));
-        space(st,7);detail=text("Kayıt hizmeti başlatılmadı.",13,MUTED,false);st.addView(detail);
-        space(st,12);
-        serviceButton=button("Kayıt hizmetini etkinleştir",CYAN);st.addView(serviceButton);
-        serviceButton.setOnClickListener(v->{if(RecorderService.running)stop();else start();});
-
-        LinearLayout mo=card("Çalışma biçimi","Birini seç. Mesai modunda saat ve günler geçerli.");
-        RadioGroup options=new RadioGroup(this);options.setOrientation(RadioGroup.VERTICAL);
-        RadioButton work=new RadioButton(this),continuous=new RadioButton(this);
-        work.setText("Mesai Kaydı  ·  Seçilen saatlerde");
-        continuous.setText("Sürekli Kayıt  ·  Gecko gibi RAM geçmişi");
-        for(RadioButton r:new RadioButton[]{work,continuous}){
-            r.setId(View.generateViewId());r.setTextColor(WHITE);r.setTextSize(14);
-            r.setButtonTintList(ColorStateList.valueOf(CYAN));options.addView(r);
+    private LinearLayout row(){LinearLayout r=new LinearLayout(this);r.setOrientation(LinearLayout.HORIZONTAL);return r;}
+    private void show(int selected){
+        tab=selected;
+        LinearLayout shell=column();shell.setBackgroundColor(BG);
+        shell.setPadding(dp(17),dp(19),dp(17),dp(9));
+        LinearLayout header=row();header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView logo=label("◉ Günİzi",26,WHITE,true);header.addView(logo,new LinearLayout.LayoutParams(0,-2,1f));
+        TextView caption=label("ÖZEL • ÇEVRİMDIŞI",10,CYAN,true);
+        header.addView(caption);shell.addView(header);gap(shell,13);
+        ScrollView sc=new ScrollView(this);
+        sc.setFillViewport(false);sc.setVerticalScrollBarEnabled(false);
+        page=column();page.setPadding(dp(1),dp(3),dp(1),dp(8));sc.addView(page);
+        shell.addView(sc,new LinearLayout.LayoutParams(-1,0,1f));
+        gap(shell,7);
+        nav=row();
+        String[] tabs={"Kayıt","Mesai","Rapor","Ayarlar"};
+        for(int i=0;i<tabs.length;i++){
+            final int target=i;
+            Button b=button(tabs[i],false);b.setTextSize(12);
+            b.setTextColor(tab==i?CYAN:MUTED);
+            b.setBackground(drawable(tab==i?0xff243d47:PANEL));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(47),1);
+            p.rightMargin=i<tabs.length-1?dp(5):0;nav.addView(b,p);
+            b.setOnClickListener(v->show(target));
         }
-        options.check(Prefs.MODE_WORK.equals(prefs.mode())?work.getId():continuous.getId());
-        options.setOnCheckedChangeListener((group,id)->{
-            prefs.mode(id==work.getId()?Prefs.MODE_WORK:Prefs.MODE_CONTINUOUS);
-            if(RecorderService.running)send(RecorderService.ACTION_REFRESH);
-            refreshStatus();
-        });
-        mo.addView(options);space(mo,8);
-        modeDetail=text("",12,MUTED,false);mo.addView(modeDetail);
-
-        LinearLayout schedule=card("Mesai planı","Saatleri ve günleri yalnızca bir kez ayarla.");
-        LinearLayout hours=new LinearLayout(this);hours.setOrientation(LinearLayout.HORIZONTAL);
-        Button begin=button("Başla: "+prefs.timeString(true),0xff293752);
-        Button end=button("Bitir: "+prefs.timeString(false),0xff293752);
-        hours.addView(begin,new LinearLayout.LayoutParams(0,dp(50),1f));
-        hours.addView(end,new LinearLayout.LayoutParams(0,dp(50),1f));
-        schedule.addView(hours);
-        begin.setOnClickListener(v->pickTime(true,begin));
-        end.setOnClickListener(v->pickTime(false,end));
-        space(schedule,11);
-        schedule.addView(text("Çalışma günleri",14,WHITE,true));
-        String[] names={"Pzt","Sal","Çar","Per","Cum","Cmt","Paz"};
-        LinearLayout rows=new LinearLayout(this);rows.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout line=null;
-        for(int i=0;i<7;i++){
-            if(i%4==0){line=new LinearLayout(this);rows.addView(line);}
-            int day=i;CheckBox cb=new CheckBox(this);cb.setText(names[i]);cb.setTextColor(WHITE);
-            cb.setButtonTintList(ColorStateList.valueOf(CYAN));cb.setTextSize(12);
-            cb.setChecked((prefs.days()&(1<<i))!=0);
-            cb.setOnCheckedChangeListener((v,checked)->{
-                int mask=prefs.days();
-                prefs.days(checked?mask|(1<<day):mask&~(1<<day));
-                if(RecorderService.running)send(RecorderService.ACTION_REFRESH);
+        shell.addView(nav);
+        setContentView(shell);
+        if(tab==0)recordTab();
+        else if(tab==1)workTab();
+        else if(tab==2)reportTab();
+        else settingsTab();
+        refresh();
+    }
+    private void statusCard(LinearLayout box){
+        status=label("Hazır",23,CYAN,true);box.addView(status);
+        gap(box,5);substatus=label("",13,MUTED,false);box.addView(substatus);
+    }
+    private void recordTab(){
+        LinearLayout box=card(null);
+        box.addView(label("İsteğe Bağlı Kayıt",19,WHITE,true));
+        gap(box,8);muted(box,"Bir süre seçip başlat. Süre dolunca kayıt otomatik durur ve klasöre kaydedilir.");
+        gap(box,11);statusCard(box);gap(box,12);
+        LinearLayout times=row();final int[] durations={15,60,360};
+        final String[] titles={"15 dk","1 saat","6 saat"};
+        for(int i=0;i<3;i++){
+            int index=i;
+            Button b=button(titles[i],false);
+            b.setTextColor(prefs.durationMinutes()==durations[i]?CYAN:WHITE);
+            b.setBackground(drawable(prefs.durationMinutes()==durations[i]?0xff254d59:EDGE));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(49),1);
+            if(i<2)p.rightMargin=dp(8);
+            times.addView(b,p);
+            b.setOnClickListener(v->{
+                if(RecorderService.recording){
+                    toast("Süreyi değiştirmeden önce kaydı tamamla.");return;
+                }
+                prefs.durationMinutes(durations[index]);show(0);
             });
-            line.addView(cb,new LinearLayout.LayoutParams(0,dp(46),1f));
         }
-        schedule.addView(rows);
-
-        LinearLayout folder=card("Kayıt klasörü","Dosyalar yalnızca seçtiğin klasöre aktarılır.");
-        folderText=text(prefs.folder()==null?"Henüz seçilmedi":"Klasör izni var ✓",14,CYAN,true);
-        folder.addView(folderText);space(folder,10);
-        Button choose=button("Klasör seç",0xff293752);folder.addView(choose);
-        choose.setOnClickListener(v->{
-            Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION|
-                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-            startActivityForResult(i,FOLDER);
+        box.addView(times);gap(box,12);
+        action=button("Kaydı başlat",true);box.addView(action);
+        action.setOnClickListener(v->{
+            if(RecorderService.running){
+                send(RecorderService.ACTION_STOP);
+                handler.postDelayed(()->show(0),650);
+            }else startManual();
         });
-        space(folder,10);
-        Button restore=button("Şifreli yedekleri kurtar",0xff293752);
-        folder.addView(restore);
-        restore.setOnClickListener(v->{
-            if(RecorderService.running)send(RecorderService.ACTION_RECOVER);
-            else message("Kurtarmak için hizmeti başlat.");
+        gap(box,9);
+        muted(box,"Kayıt yalnızca sen başlattığında çalışır. Önceki saatlere ait sesler geri getirilemez.");
+        LinearLayout folder=card("Kayıt konumu");
+        folderLabel=label(prefs.folder()==null?"Klasör seçilmedi":"Klasör seçildi ✓",13,
+            prefs.folder()==null?0xffedb46f:CYAN,true);
+        folder.addView(folderLabel);
+        gap(folder,8);
+        Button pick=button("Klasörü seç / değiştir",false);
+        folder.addView(pick);pick.setOnClickListener(v->chooseFolder());
+        LinearLayout hint=card("Pil bilgisi");
+        muted(hint,"15 dk / 1 saat / 6 saat boyunca mikrofon ve Opus sıkıştırması çalışır. "
+            +"Kaydı kapattığında mikrofon durur.");
+        gap(hint,7);
+        Button estimate=button("Ayrıntılı pil karşılaştırması",false);hint.addView(estimate);
+        estimate.setOnClickListener(v->startActivity(new Intent(this,BatteryInfoActivity.class)));
+    }
+    private void workTab(){
+        LinearLayout box=card("Mesai Kaydı");
+        muted(box,"Belirlediğin günlerde ve saatlerde otomatik kayıt planı. "
+            +"Android gereği kayıt hizmetini uygulama açıkken etkinleştirmen gerekir.");
+        gap(box,11);statusCard(box);gap(box,12);
+        LinearLayout times=row();
+        Button start=button("Başla "+prefs.timeString(true),false);
+        Button end=button("Bitir "+prefs.timeString(false),false);
+        LinearLayout.LayoutParams p1=new LinearLayout.LayoutParams(0,dp(48),1);
+        p1.rightMargin=dp(9);
+        times.addView(start,p1);times.addView(end,new LinearLayout.LayoutParams(0,dp(48),1));
+        box.addView(times);
+        start.setOnClickListener(v->pickTime(true,start));
+        end.setOnClickListener(v->pickTime(false,end));
+        gap(box,8);
+        final String[] names={"Pzt","Sal","Çar","Per","Cum","Cmt","Paz"};
+        LinearLayout weekdays=row();
+        for(int i=0;i<7;i++){
+            final int day=i;int bit=1<<i;
+            Button b=button(names[i],false);b.setTextSize(11);
+            b.setTextColor((prefs.days()&bit)!=0?CYAN:MUTED);
+            LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(0,dp(46),1);
+            cell.rightMargin=i<6?dp(3):0;
+            weekdays.addView(b,cell);
+            b.setOnClickListener(v->{
+                int mask=prefs.days();prefs.days((mask&bit)!=0?mask&~bit:mask|bit);
+                if(RecorderService.running)send(RecorderService.ACTION_REFRESH);
+                show(1);
+            });
+        }
+        box.addView(weekdays);gap(box,12);
+        action=button("Mesai kaydını etkinleştir",true);box.addView(action);
+        action.setOnClickListener(v->{
+            if(RecorderService.running){send(RecorderService.ACTION_STOP);handler.postDelayed(()->show(1),650);}
+            else startWork();
         });
-
-        LinearLayout ram=card("Gecko tarzı RAM kaydı","Son "+RecorderService.ramMinutes()+" dakikalık ses RAM'de tutulur.");
-        Button save=button("RAM geçmişini WAV olarak kaydet",PURPLE);ram.addView(save);
-        save.setOnClickListener(v->{
-            if(!RecorderService.running || !Prefs.MODE_CONTINUOUS.equals(prefs.mode())){
-                message("Önce Sürekli Kayıt modunu aç.");return;
-            }
-            send(RecorderService.ACTION_SAVE_LAST);message("Kaydetme istendi.");
+        gap(box,9);
+        muted(box,"Hizmet etkin kaldığı sürece saatleri takip eder. Sistem hizmeti sonlandırırsa kayıt kendiliğinden yeniden başlayamayabilir.");
+        LinearLayout folder=card("Otomatik kayıt dosyaları");
+        folderLabel=label(prefs.folder()==null?"Klasör seçilmedi":"Klasör seçildi ✓",14,
+            prefs.folder()==null?0xffedb46f:CYAN,true);
+        folder.addView(folderLabel);gap(folder,8);
+        Button pick=button("Kayıt klasörünü seç",false);folder.addView(pick);
+        pick.setOnClickListener(v->chooseFolder());
+    }
+    private void reportTab(){
+        LinearLayout overview=card("Günlük Özet");
+        muted(overview,"Uzun kayıtları parçalı şekilde yazıya dönüştürür; dil modeli kurulmuşsa "
+            +"bütün parçaları birleştirerek ayrıntılı rapor hazırlar.");
+        gap(overview,12);
+        String last=getSharedPreferences("gunizi",MODE_PRIVATE).getString("summaryLast","");
+        String err=getSharedPreferences("gunizi",MODE_PRIVATE).getString("summaryError","");
+        overview.addView(label(!err.isEmpty()?"Son rapor hatası: "+err:
+            !last.isEmpty()?last:"Henüz rapor oluşturulmadı.",13,err.isEmpty()?CYAN:0xffdf8a7d,false));
+        gap(overview,10);
+        Button open=button("Yerel yapay zeka ve raporlar",true);
+        overview.addView(open);
+        open.setOnClickListener(v->startActivity(new Intent(this,SummaryActivity.class)));
+        LinearLayout info=card("Gerçekten çevrimdışı");
+        muted(info,"Sesler veya konuşma dökümleri sunucuya gönderilmez. "
+            +"Yalnızca modellerin ilk indirmesi için internet gerekir. "
+            +"9 saatlik kayıtların çözülmesi uzun sürebilir ve şarj gerektirebilir.");
+    }
+    private void settingsTab(){
+        LinearLayout permissions=card("İzinler");
+        muted(permissions,"Gerekli izinleri bir kez ver. Hiçbir izin senin onayın olmadan etkinleştirilmez.");
+        gap(permissions,10);
+        boolean mic=checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED;
+        boolean note=Build.VERSION.SDK_INT<33 ||
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED;
+        permissions.addView(label("Mikrofon  "+(mic?"✓":"izin gerekli")+
+            "     Bildirim  "+(note?"✓":"izin gerekli"),13,mic&&note?CYAN:MUTED,false));
+        gap(permissions,8);
+        Button microphone=button("Mikrofon izni",false);permissions.addView(microphone);
+        microphone.setOnClickListener(v->{
+            if(!mic)requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},MIC);
+            else toast("Mikrofon izni var.");
         });
-
-        LinearLayout battery=card("Pil ve performans","Gerçek pil tüketimi henüz ölçülmedi.");
-        battery.addView(text("Mesai Kaydı: 08.00–17.30 örneğinde 9,5 saat. Sürekli Kayıt: 24 saat. Sürekli mod 2,53 kat daha uzun kayıt süresi anlamına gelir; pil tüketimi aynı oranda artmak zorunda değildir.",13,MUTED,false));
-        Button compareBattery=button("İki modun pil tüketimini ayrıntılı karşılaştır",0xff293752);
-        battery.addView(compareBattery);
-        compareBattery.setOnClickListener(v->startActivity(new Intent(this,BatteryInfoActivity.class)));
-
-        LinearLayout ai=card("Yerel yapay zeka ve günlük rapor",
-            "Tüm ses dosyasını cihazda yazıya çevirir, zamanlı özet ve tam döküm oluşturur.");
-        ai.addView(text("Türkçe modeli bir kez indir. Mesai kayıtların şarjdayken otomatik özetlenir.",13,MUTED,false));
-        space(ai,10);
-        Button summary=button("Yerel yapay zeka / Günlük rapor",PURPLE);
-        ai.addView(summary);
-        summary.setOnClickListener(v->startActivity(new Intent(this,SummaryActivity.class)));
-
-        LinearLayout permissions=card("İzinler ve arka plan",
-            "Uygulamanın istediği izinleri sen kontrol edersin.");
-        TextView permissionLabel=text("",13,MUTED,false);
-        permissions.addView(permissionLabel);
-        permissionLabel.setText(
-            "Mikrofon: "+(checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED?"izinli":"izin gerekli")+
-            "\nBildirim: "+(Build.VERSION.SDK_INT<33||
-              checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED?"izinli":"izin gerekli")+
-            "\nKlasör: "+(prefs.folder()!=null?"seçildi":"seçilmedi"));
-        space(permissions,10);
-        Button grantMic=button("Mikrofon iznini ver",0xff293752);
-        permissions.addView(grantMic);
-        grantMic.setOnClickListener(v->{
-            if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)
-                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},MIC);
-            else message("Mikrofon izni zaten verilmiş.");
-        });
-        Button grantNotifications=button("Bildirim iznini ver",0xff293752);
-        permissions.addView(grantNotifications);
-        grantNotifications.setOnClickListener(v->{
-            if(Build.VERSION.SDK_INT>=33&&
-               checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
+        gap(permissions,7);
+        Button notify=button("Bildirim izni",false);permissions.addView(notify);
+        notify.setOnClickListener(v->{
+            if(!note&&Build.VERSION.SDK_INT>=33)
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFY);
-            else message("Bildirim izni zaten verilmiş.");
+            else toast("Bildirim izni var.");
         });
-        Button batterySettingsButton=button("Samsung pil ve arka plan ayarları (isteğe bağlı)",0xff293752);
-        permissions.addView(batterySettingsButton);
-        batterySettingsButton.setOnClickListener(v->{
+        LinearLayout storage=card("Depolama ve yedekleme");
+        folderLabel=label(prefs.folder()==null?"Klasör seçilmedi":"Kayıt klasörü seçildi ✓",14,CYAN,true);
+        storage.addView(folderLabel);gap(storage,9);
+        Button choose=button("Kayıt klasörünü değiştir",false);storage.addView(choose);
+        choose.setOnClickListener(v->chooseFolder());
+        gap(storage,7);
+        Button recover=button("Şifreli yedekleri kurtar",false);storage.addView(recover);
+        recover.setOnClickListener(v->send(RecorderService.ACTION_RECOVER));
+        LinearLayout battery=card("Pil ve gizlilik");
+        Button compare=button("Pil tüketimi karşılaştırması",false);battery.addView(compare);
+        compare.setOnClickListener(v->startActivity(new Intent(this,BatteryInfoActivity.class)));
+        gap(battery,7);
+        Button optimize=button("Samsung arka plan / pil ayarları",false);battery.addView(optimize);
+        optimize.setOnClickListener(v->{
             try{startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));}
             catch(Exception e){startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.parse("package:"+getPackageName())));}
         });
-        layout.addView(text("Android 14+ mikrofon kısıtı: Hizmeti uygulama açıkken başlatmalısın. Sistem servisi durdurursa otomatik kayıt kesilebilir.",12,MUTED,false));
-        refreshStatus();
     }
-    private void pickTime(boolean first,Button btn){
+    private void pickTime(boolean first,Button b){
         new TimePickerDialog(this,(v,h,m)->{
             if(first)prefs.start(h,m);else prefs.end(h,m);
-            btn.setText((first?"Başla: ":"Bitir: ")+prefs.timeString(first));
-            if(!prefs.validRange())message("Başlangıç bitişten önce olmalı.");
+            if(!prefs.validRange()){toast("Başlangıç saati bitişten önce olmalı.");return;}
             if(RecorderService.running)send(RecorderService.ACTION_REFRESH);
-            refreshStatus();
-        },first?prefs.startHour():prefs.endHour(),first?prefs.startMinute():prefs.endMinute(),true).show();
+            show(1);
+        },first?prefs.startHour():prefs.endHour(),
+            first?prefs.startMinute():prefs.endMinute(),true).show();
     }
-    @Override protected void onActivityResult(int request,int result,Intent data){
-        super.onActivityResult(request,result,data);
-        if(request!=FOLDER || result!=RESULT_OK || data==null || data.getData()==null)return;
+    private void chooseFolder(){
+        Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|
+            Intent.FLAG_GRANT_WRITE_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(i,FOLDER);
+    }
+    @Override protected void onActivityResult(int code,int result,Intent data){
+        super.onActivityResult(code,result,data);
+        if(code!=FOLDER||result!=RESULT_OK||data==null||data.getData()==null)return;
         try{
             Uri uri=data.getData();
             getContentResolver().takePersistableUriPermission(uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            prefs.folder(uri);folderText.setText("Klasör izni var ✓");message("Klasör kaydedildi.");
-        }catch(Exception e){message("Klasör erişim hatası: "+e.getMessage());}
+            prefs.folder(uri);show(tab);toast("Kayıt klasörü belirlendi.");
+        }catch(Exception e){toast("Klasör hatası: "+e.getMessage());}
     }
-    private void start(){
+    private void startManual(){
+        prefs.mode(Prefs.MODE_MANUAL);startServiceAction(RecorderService.ACTION_START_MANUAL);
+    }
+    private void startWork(){
+        prefs.mode(Prefs.MODE_WORK);
+        if(!prefs.validRange()||prefs.days()==0){
+            toast("Önce geçerli saatleri ve çalışma günlerini seç.");return;
+        }
+        startServiceAction(RecorderService.ACTION_START);
+    }
+    private void startServiceAction(String actionName){
         if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},MIC);return;
         }
-        if(prefs.folder()==null){message("Önce kayıt klasörünü seç.");return;}
-        if(Prefs.MODE_WORK.equals(prefs.mode())&&(!prefs.validRange()||prefs.days()==0)){
-            message("Geçerli gün ve saat belirle.");return;
-        }
-        prefs.setSetupDone(true);
-        try{startForegroundService(new Intent(this,RecorderService.class).setAction(RecorderService.ACTION_START));}
-        catch(Exception e){message("Başlatma hatası: "+e.getMessage());}
-        handler.postDelayed(this::refreshStatus,1000);
+        if(prefs.folder()==null){toast("Önce kayıt klasörünü seç.");return;}
+        try{
+            startForegroundService(new Intent(this,RecorderService.class).setAction(actionName));
+            handler.postDelayed(this::refresh,900);
+        }catch(Exception e){toast("Kayıt başlatılamadı: "+e.getMessage());}
+    }
+    private void send(String a){
+        try{startService(new Intent(this,RecorderService.class).setAction(a));}
+        catch(Exception e){toast("İşlem başarısız: "+e.getMessage());}
     }
     @Override public void onRequestPermissionsResult(int request,String[] names,int[] results){
         super.onRequestPermissionsResult(request,names,results);
-        if(request==MIC&&results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)
-            start();
-        else if(request==NOTIFY)
-            message(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED?
-                "Bildirimlere izin verildi.":"Bildirim izni verilmedi; kayıt bildirimi görünmeyebilir.");
-        else message("Mikrofon izni gerekli.");
+        if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED){
+            if(request==MIC){if(tab==1)startWork();else startManual();}
+            else toast("Bildirim izni verildi.");
+        }else toast("İzin verilmedi.");show(tab);
     }
-    private void stop(){send(RecorderService.ACTION_STOP);handler.postDelayed(this::refreshStatus,700);}
-    private void send(String action){
-        try{startService(new Intent(this,RecorderService.class).setAction(action));}
-        catch(Exception e){message("İşlem hatası: "+e.getMessage());}
-    }
-    private void refreshStatus(){
-        if(status==null)return;
-        status.setText(RecorderService.running?RecorderService.stateText:"Kayıt hizmeti kapalı");
-        detail.setText(RecorderService.lastEvent);
-        if(serviceButton!=null)serviceButton.setText(RecorderService.running?
-            "Kayıt hizmetini durdur":"Kayıt hizmetini etkinleştir");
-        if(ramGauge!=null){
-            ramGauge.setVisibility(Prefs.MODE_CONTINUOUS.equals(prefs.mode())?View.VISIBLE:View.GONE);
-            ramGauge.update(RecorderService.ramHeldSeconds,RecorderService.ramMaxSeconds());
+    private void refresh(){
+        if(status==null||substatus==null)return;
+        if(RecorderService.running){
+            boolean modeMatch=tab==0?Prefs.MODE_MANUAL.equals(prefs.mode()):
+                Prefs.MODE_WORK.equals(prefs.mode());
+            status.setText(modeMatch?RecorderService.stateText:"Diğer kayıt modu etkin");
+            substatus.setText(RecorderService.lastEvent);
+            if(action!=null)action.setText(tab==0?"Durdur ve kaydet":"Mesai hizmetini durdur");
+        }else{
+            status.setText(tab==0?"Başlatılmadı":"Mesai planı hazır");
+            substatus.setText(tab==0?"Mikrofon şu anda kapalı":
+                prefs.timeString(true)+"–"+prefs.timeString(false)+" • "+Prefs.ZONE.getId());
+            if(action!=null)action.setText(tab==0?"Kaydı başlat":"Mesai kaydını etkinleştir");
         }
-        if(modeDetail!=null)modeDetail.setText(Prefs.MODE_WORK.equals(prefs.mode())?
-            "Mesai: "+prefs.timeString(true)+"–"+prefs.timeString(false)+" · Otomatik kaydetme":
-            "RAM: "+String.format(java.util.Locale.forLanguageTag("tr-TR"),
-                "%02d:%02d:%02d",RecorderService.ramHeldSeconds/3600,
-                (RecorderService.ramHeldSeconds/60)%60,RecorderService.ramHeldSeconds%60)+
-                " / kapasite "+RecorderService.ramMinutes()+" dakika");
     }
-    private void message(String text){Toast.makeText(this,text,Toast.LENGTH_LONG).show();}
+    private void toast(String message){Toast.makeText(this,message,Toast.LENGTH_LONG).show();}
 }
