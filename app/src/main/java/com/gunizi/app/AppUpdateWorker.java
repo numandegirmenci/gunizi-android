@@ -35,6 +35,8 @@ public final class AppUpdateWorker extends Worker {
         return new File(dir,APK);
     }
     static void schedule(Context c){
+        // A debug side-by-side test app must never install a release APK for the other package.
+        if(c.getPackageName().endsWith(".test"))return;
         if(!enabled(c)){
             WorkManager.getInstance(c).cancelUniqueWork(WORK);
             WorkManager.getInstance(c).cancelUniqueWork(WORK+"-initial");return;

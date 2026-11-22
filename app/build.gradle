@@ -11,9 +11,19 @@ android {
         targetSdk 35
         versionCode 10
         versionName '0.9.1'
+        manifestPlaceholders = [appLabel: 'Günİzi']
     }
     buildTypes {
-        release { minifyEnabled false }
+        debug {
+            // Side-by-side test install. Never overwrite the installed production app.
+            applicationIdSuffix '.test'
+            versionNameSuffix '-test'
+            manifestPlaceholders = [appLabel: 'Günİzi Test']
+        }
+        release {
+            minifyEnabled false
+            manifestPlaceholders = [appLabel: 'Günİzi']
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
