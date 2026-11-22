@@ -65,6 +65,7 @@ object CallVaultWhisperEngine {
             AudioChunkDecoder.decode(context,audio){chunk,startMs,_ ->
                 if(Thread.currentThread().isInterrupted)
                     throw InterruptedException("Konuşma çıkarma iptal edildi")
+                val chunkDurationMs=chunk.size*1000L/16000L
                 val checkpoint=File(cache,"part_"+index.toString().padStart(5,'0')+".txt")
                 prefs.edit().putInt("analysisChunkIndex",index+1)
                     .putInt("analysisNativePercent",0)
@@ -74,8 +75,8 @@ object CallVaultWhisperEngine {
                 }else{
                     val floats=chunk
                     AiStageMetrics.enter(context,AiStageMetrics.ASR)
-                    progress.update(progressValue(startMs,totalMs,0),
-                        "Whisper • ${index+1}. ses bölümü işleniyor")
+                    progress.update(progressValue(startMs,totalMs,chunkDurationMs,0),
+                        "Konuşma aranıyor • ${index+1}. bölüm (${chunkDurationMs/1000} sn)")
                     val polling=AtomicBoolean(true)
                     var lastNativePct=-1
                     val job=Thread({
@@ -88,7 +89,7 @@ object CallVaultWhisperEngine {
                                 prefs.edit().putInt("analysisNativePercent",nativePct)
                                     .putLong("analysisLastAdvanceAt",System.currentTimeMillis()).apply()
                             }
-                            progress.update(progressValue(startMs,totalMs,nativePct),
+                            progress.update(progressValue(startMs,totalMs,chunkDurationMs,nativePct),
                                 "Ses çözülüyor • Bölüm ${index+1} • Yerel motor %$nativePct")
                         }
                     },"GunIzi-WhisperProgress").apply{isDaemon=true}
@@ -136,7 +137,7 @@ object CallVaultWhisperEngine {
                         current.replace("\n"," ").takeLast(430)).apply()
                 }
                 index++
-                val chunkMs=chunk.size*1000L/16000L
+                val chunkMs=chunkDurationMs
                 val doneMs=if(totalMs>0) (startMs+chunkMs).coerceAtMost(totalMs) else startMs+chunkMs
                 prefs.edit().putLong("analysisAudioProcessedMs",doneMs)
                     .putInt("analysisNativePercent",100)
@@ -153,9 +154,9 @@ object CallVaultWhisperEngine {
         }
     }
 
-    private fun progressValue(startMs:Long,totalMs:Long,native:Int):Int{
+    private fun progressValue(startMs:Long,totalMs:Long,chunkMs:Long,native:Int):Int{
         if(totalMs<=0)return 1
-        val m=startMs+30_000*native.coerceIn(0,100)/100L
+        val m=startMs+chunkMs*native.coerceIn(0,100)/100L
         return ((m.coerceIn(0,totalMs)*70L)/totalMs).toInt().coerceIn(1,70)
     }
     private fun time(ms:Long):String{
