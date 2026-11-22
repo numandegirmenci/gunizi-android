@@ -72,7 +72,7 @@ object CallVaultWhisperEngine {
                 val current=if(checkpoint.isFile){
                     checkpoint.readText(Charsets.UTF_8)
                 }else{
-                    val floats=readWav(chunk)
+                    val floats=chunk
                     AiStageMetrics.enter(context,AiStageMetrics.ASR)
                     progress.update(progressValue(startMs,totalMs,0),
                         "Whisper • ${index+1}. ses bölümü işleniyor")
@@ -136,7 +136,7 @@ object CallVaultWhisperEngine {
                         current.replace("\n"," ").takeLast(430)).apply()
                 }
                 index++
-                val chunkMs=((chunk.length()-44L).coerceAtLeast(0L)*1000L/(2L*16000L))
+                val chunkMs=chunk.size*1000L/16000L
                 val doneMs=if(totalMs>0) (startMs+chunkMs).coerceAtMost(totalMs) else startMs+chunkMs
                 prefs.edit().putLong("analysisAudioProcessedMs",doneMs)
                     .putInt("analysisNativePercent",100)
@@ -157,18 +157,6 @@ object CallVaultWhisperEngine {
         if(totalMs<=0)return 1
         val m=startMs+30_000*native.coerceIn(0,100)/100L
         return ((m.coerceIn(0,totalMs)*70L)/totalMs).toInt().coerceIn(1,70)
-    }
-    private fun readWav(file:File):FloatArray{
-        val bytes=file.readBytes()
-        require(bytes.size>=44&&String(bytes,0,4,Charsets.US_ASCII)=="RIFF"&&
-            String(bytes,8,4,Charsets.US_ASCII)=="WAVE"){"Ses bölümü WAV değil"}
-        val samples=(bytes.size-44)/2
-        require(samples>0&&samples<=30*16000){"Beklenmeyen WAV uzunluğu"}
-        return FloatArray(samples){i->
-            val offset=44+i*2
-            val n=(bytes[offset].toInt() and 255) or (bytes[offset+1].toInt() shl 8)
-            n.toShort()/32768.0f
-        }
     }
     private fun time(ms:Long):String{
         val seconds=(ms/1000L).coerceAtLeast(0)
