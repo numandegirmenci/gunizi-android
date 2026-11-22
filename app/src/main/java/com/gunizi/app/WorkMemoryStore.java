@@ -64,32 +64,40 @@ final class WorkMemoryStore {
                        List<TopicReportRenderer.Entry> entries)throws IOException {
         if(!valid(id)||digest==null||!digest.matches("[0-9a-f]{64}"))
             throw new IOException("Kayıt kimliği doğrulanamadı");
-        StringBuilder lines=new StringBuilder();
+        AtomicFile table=new AtomicFile(file(c,id,".jsonl"));
+        FileOutputStream raw=null;
         int count=0;
-        for(TopicReportRenderer.Entry entry:entries){
-            String[] p=entry.parts;
-            String kind=filled(p[3])?DECISION:filled(p[4])?TASK:TOPIC;
-            String value=DECISION.equals(kind)?p[3]:TASK.equals(kind)?p[4]:p[2];
-            if(!filled(value))continue;
-            JSONObject row=new JSONObject();
-            try{
-                row.put("id",String.format(Locale.ROOT,"%08x",count++)+"_"+id.substring(0,12));
+        try{
+            raw=table.startWrite();
+            BufferedWriter writer=new BufferedWriter(new OutputStreamWriter(
+                raw,StandardCharsets.UTF_8),64*1024);
+            for(TopicReportRenderer.Entry entry:entries){
+                String[] p=entry.parts;
+                String kind=filled(p[3])?DECISION:filled(p[4])?TASK:TOPIC;
+                String value=DECISION.equals(kind)?p[3]:TASK.equals(kind)?p[4]:p[2];
+                if(!filled(value))continue;
+                JSONObject row=new JSONObject();
+                row.put("id",String.format(Locale.ROOT,"%08x",count++)+
+                    "_"+id.substring(0,12));
                 row.put("kind",kind);row.put("topic",clean(p[1]));
                 row.put("content",clean(value));row.put("responsible",clean(p[5]));
                 row.put("atMs",TopicReportRenderer.timestampMs(p[0]));
                 row.put("suggestedStatus",suggest(kind,value));
-                lines.append(row.toString()).append('\n');
-            }catch(Exception ex){throw new IOException("İş hafızası satırı hazırlanamadı",ex);}
+                writer.write(row.toString());writer.newLine();
+            }
+            if(count==0)throw new IOException("İş hafızasına eklenecek içerik yok");
+            writer.flush();raw.getFD().sync();
+            table.finishWrite(raw);raw=null;
+        }catch(Exception ex){
+            if(raw!=null)table.failWrite(raw);
+            throw new IOException("İş hafızası satırları yazılamadı",ex);
         }
-        if(count==0)throw new IOException("İş hafızasına kaydedilecek doğrulanabilir veri yok");
         JSONObject meta=new JSONObject();
         try{
             meta.put("id",id);meta.put("name",name);meta.put("uri",uri);
             meta.put("digest",digest);meta.put("created",System.currentTimeMillis());
             meta.put("count",count);
         }catch(Exception ex){throw new IOException("Rapor kimliği yazılamadı",ex);}
-        write(new AtomicFile(file(c,id,".jsonl")),
-            lines.toString().getBytes(StandardCharsets.UTF_8));
         write(new AtomicFile(file(c,id,".meta")),
             meta.toString().getBytes(StandardCharsets.UTF_8));
         c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
