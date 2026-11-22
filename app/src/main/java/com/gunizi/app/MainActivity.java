@@ -267,7 +267,7 @@ public final class MainActivity extends Activity {
         models.addView(modelSettings);
         modelSettings.setOnClickListener(v->startActivity(new Intent(this,ModelSettingsActivity.class)));
         LinearLayout updates=card("Uygulama güncellemeleri");
-        boolean testBuild=getPackageName().endsWith(".test")||getPackageName().endsWith(".ai2");
+        boolean testBuild=getPackageName().endsWith(".test")||getPackageName().endsWith(".ai2")||getPackageName().endsWith(".ai3");
         muted(updates,testBuild?
             "Bu bağımsız Günİzi Test uygulamasıdır. Ana uygulamanın kayıtlarına ve "+
             "modellerine dokunmaz. Otomatik güncelleme yalnızca kalıcı imzalı ana yayın içindir.":

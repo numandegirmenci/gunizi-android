@@ -158,6 +158,12 @@ public final class DailySummaryWorker extends Worker {
         if(!tmp.renameTo(dst))throw new IOException("Döküm kaydedilemedi");
         return dst;
     }
+    @Override public void onStopped(){
+        super.onStopped();
+        CallVaultWhisperEngine.cancel();
+        try{com.baba.callvault.summary.LlamaNative.requestAbort();}
+        catch(Throwable ignored){}
+    }
     @NonNull @Override public Result doWork(){
         Context c=getApplicationContext();
         String uriString=getInputData().getString(URI);
@@ -196,7 +202,9 @@ public final class DailySummaryWorker extends Worker {
             File cacheFolder=new File(c.getNoBackupFilesDir(),"ai_drafts");
             cacheFolder.mkdirs();
             File transcriptCache=new File(cacheFolder,
-                safe(base)+"_"+speech+"_"+Integer.toHexString(
+                safe(base)+"_cvnative_"+speech+"_vad"+
+                (c.getSharedPreferences("gunizi",Context.MODE_PRIVATE)
+                    .getBoolean("aiSileroVad",true)?"1":"0")+"_"+Integer.toHexString(
                     (uriString==null?"saved-transcript":uriString).hashCode())+".txt");
             String transcript;
             if(useExistingText){
