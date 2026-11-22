@@ -111,7 +111,9 @@ public final class DailySummaryWorker extends Worker {
             TopicReportRenderer.saveInternal(c,html,fileBase);
             UserNotesStore.latestReport(c,
                 "Günİzi • "+fileName+" • Günlük özet",
-                "ANALİZ TERCİHİ: "+focus+"\n\n"+summary+
+                "ANALİZ TERCİHİ: "+focus+"\n\n"+
+                TopicReportRenderer.noteText(topics)+
+                "\n\n--- GENEL DEĞERLENDİRME VE AYRINTILAR ---\n\n"+summary+
                 "\n\nNot: Otomatik çıkarımlar önemli kararlar için kontrol edilmelidir.");
             ExportManager.writeHtml(c,new Prefs(c).folder(),html,"GunIzi_KonuTablosu_"+fileBase+".html");
             ExportManager.writeCsv(c,new Prefs(c).folder(),TopicReportRenderer.csv(topics),
