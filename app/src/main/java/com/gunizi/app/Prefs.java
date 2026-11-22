@@ -61,6 +61,38 @@ final class Prefs {
             && !t.isBefore(LocalTime.of(startHour(),startMinute()))
             && t.isBefore(LocalTime.of(endHour(),endMinute()));
     }
+    /** Independent schedule for the temporary rolling history, not the Mesai file recorder. */
+    boolean historyScheduleEnabled(){return p.getBoolean("history_schedule_armed",false);}
+    void historyScheduleEnabled(boolean value){
+        p.edit().putBoolean("history_schedule_armed",value).apply();
+    }
+    int historyStartHour(){return p.getInt("history_start_hour",startHour());}
+    int historyStartMinute(){return p.getInt("history_start_minute",startMinute());}
+    int historyEndHour(){return p.getInt("history_end_hour",endHour());}
+    int historyEndMinute(){return p.getInt("history_end_minute",endMinute());}
+    int historyDays(){return p.getInt("history_days",days());}
+    void historyTime(boolean start,int hour,int minute){
+        if(hour<0||hour>23||minute<0||minute>59)
+            throw new IllegalArgumentException("Geçersiz saat");
+        p.edit().putInt(start?"history_start_hour":"history_end_hour",hour)
+            .putInt(start?"history_start_minute":"history_end_minute",minute).apply();
+    }
+    void historyDays(int mask){p.edit().putInt("history_days",mask&127).apply();}
+    String historyTimeString(boolean start){
+        return String.format(java.util.Locale.forLanguageTag("tr-TR"),"%02d:%02d",
+            start?historyStartHour():historyEndHour(),
+            start?historyStartMinute():historyEndMinute());
+    }
+    boolean validHistorySchedule(){
+        return HistoryScheduleWindow.valid(
+            historyStartHour()*60+historyStartMinute(),
+            historyEndHour()*60+historyEndMinute(),historyDays());
+    }
+    boolean inHistoryWindow(){
+        return HistoryScheduleWindow.active(LocalDateTime.now(ZONE),
+            historyStartHour()*60+historyStartMinute(),
+            historyEndHour()*60+historyEndMinute(),historyDays());
+    }
     Uri folder() {
         String s=p.getString("folder",null);
         return s==null?null:Uri.parse(s);
