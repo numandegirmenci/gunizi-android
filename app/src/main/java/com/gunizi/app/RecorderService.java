@@ -25,6 +25,7 @@ public final class RecorderService extends Service {
     public static final String ACTION_START="com.gunizi.START";
     public static final String ACTION_START_HISTORY="com.gunizi.START_HISTORY";
     public static final String ACTION_SAVE_HISTORY="com.gunizi.SAVE_HISTORY";
+    public static final String EXTRA_HISTORY_MINUTES="com.gunizi.extra.HISTORY_MINUTES";
     public static final String ACTION_STOP="com.gunizi.STOP";
     public static final String ACTION_RECOVER="com.gunizi.RECOVER";
     public static final String ACTION_REFRESH="com.gunizi.REFRESH";
@@ -80,7 +81,9 @@ public final class RecorderService extends Service {
             return START_NOT_STICKY;
         }
         if(ACTION_SAVE_HISTORY.equals(action)){
-            if(historyActive)saveHistory();
+            int minutes=intent==null?prefs.durationMinutes():
+                intent.getIntExtra(EXTRA_HISTORY_MINUTES,prefs.durationMinutes());
+            if(historyActive)saveHistory(minutes);
             else lastEvent="Önce geçmiş dinlemeyi başlat";
             return running?START_STICKY:START_NOT_STICKY;
         }
@@ -129,15 +132,27 @@ public final class RecorderService extends Service {
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle(title).setContentText(desc).setContentIntent(open)
             .setOngoing(true).setOnlyAlertOnce(true).setDefaults(0).setShowWhen(false)
-            .setCategory(Notification.CATEGORY_SERVICE).setPriority(Notification.PRIORITY_LOW)
-            .addAction(android.R.drawable.ic_media_pause,"Dinlemeyi durdur",stop);
+            .setCategory(Notification.CATEGORY_SERVICE).setPriority(Notification.PRIORITY_LOW);
         if(historyActive){
-            PendingIntent save=PendingIntent.getService(this,4,
-                new Intent(this,RecorderService.class).setAction(ACTION_SAVE_HISTORY),
-                PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-            builder.addAction(android.R.drawable.ic_menu_save,"Geçmişi kaydet",save);
+            // Android's expanded notification supports three action buttons.
+            // Each PendingIntent has its own request code so extra durations cannot be overwritten.
+            builder.addAction(android.R.drawable.ic_menu_save,
+                "15 dk kaydet",historySaveIntent(15));
+            builder.addAction(android.R.drawable.ic_menu_save,
+                "1 sa kaydet",historySaveIntent(60));
+            builder.addAction(android.R.drawable.ic_menu_save,
+                "2 sa kaydet",historySaveIntent(120));
+        }else{
+            builder.addAction(android.R.drawable.ic_media_pause,"Durdur",stop);
         }
         return builder.build();
+    }
+    private PendingIntent historySaveIntent(int minutes){
+        Intent action=new Intent(this,RecorderService.class)
+            .setAction(ACTION_SAVE_HISTORY)
+            .putExtra(EXTRA_HISTORY_MINUTES,minutes);
+        return PendingIntent.getService(this,1000+minutes,action,
+            PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
     }
     private void applySchedule(){
         if(historyActive){
@@ -230,8 +245,14 @@ public final class RecorderService extends Service {
         historyStore=null;historyCurrentStart=0;historyStart=0;
         stateText="Geçmiş dinleme durduruldu";
     }
-    private void saveHistory(){
+    private void saveHistory(int requestedMinutes){
         if(historyStore==null||!historyActive)return;
+        // Only user-selected supported durations. Never change the saved setting.
+        if(requestedMinutes!=1&&requestedMinutes!=5&&requestedMinutes!=15&&
+            requestedMinutes!=60&&requestedMinutes!=120&&requestedMinutes!=240&&
+            requestedMinutes!=360){
+            lastEvent="Geçersiz geçmiş süresi";return;
+        }
         long now=SystemClock.elapsedRealtime();
         long available=Math.min(HistoryAudioStore.MAX_MS,now-historyStart);
         if(available<1000){lastEvent="Henüz geçmiş birikmedi";return;}
@@ -243,7 +264,7 @@ public final class RecorderService extends Service {
             shutdownIdle();return;
         }
         long end=SystemClock.elapsedRealtime();
-        long take=Math.min((long)prefs.durationMinutes()*60000L,available);
+        long take=Math.min((long)requestedMinutes*60000L,available);
         long cutoff=end-take;
         List<HistoryAudioStore.Segment> selected=historyStore.pinSince(cutoff);
         final HistoryAudioStore store=historyStore;
