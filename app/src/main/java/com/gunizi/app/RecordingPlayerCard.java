@@ -36,7 +36,8 @@ final class RecordingPlayerCard extends LinearLayout {
     };
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private GradientDrawable surface(){
-        GradientDrawable d=new GradientDrawable();d.setColor(0xff1c2b3f);d.setCornerRadius(dp(17));return d;
+        GradientDrawable d=new GradientDrawable();d.setColor(0xff122b36);d.setCornerRadius(dp(17));
+        d.setStroke(dp(1),0xff2e5b61);return d;
     }
     RecordingPlayerCard(Context c){
         super(c);setOrientation(VERTICAL);setPadding(dp(16),dp(14),dp(16),dp(12));

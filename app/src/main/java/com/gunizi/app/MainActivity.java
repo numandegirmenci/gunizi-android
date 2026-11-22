@@ -375,6 +375,23 @@ public final class MainActivity extends Activity {
             Uri.parse("https://github.com/numandegirmenci/gunizi-android"))));
         gap(about,7);
         muted(about,"numandegirmenc@gmail.com");
+        gap(about,14);
+        about.addView(label("Açık kaynak ve atıflar",15,WHITE,true));
+        muted(about,"Günİzi'nin yapay zeka motoru CallVault kaynak kodu kullanılarak "+
+            "uyarlanmıştır. Bu bağımsız, değiştirilmiş bir uygulamadır; "+
+            "CallVault veya ShizuCallRecorder'ın resmi sürümü değildir.");
+        gap(about,8);
+        Button upstream=button("CallVault • Kaynak kodu ve GPL lisansı",false);
+        about.addView(upstream);
+        upstream.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,
+            Uri.parse("https://github.com/madkongo/CallVault"))));
+        gap(about,7);
+        Button original=button("Orijinal proje • ShizuCallRecorder",false);
+        about.addView(original);
+        original.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,
+            Uri.parse("https://github.com/kitsumed/ShizuCallRecorder"))));
+        muted(about,"CallVault / ShizuCallRecorder geliştiricilerinin telif hakları "+
+            "saklıdır. Ayrıntılar: GitHub → LICENSE ve THIRD_PARTY_NOTICES.md.");
     }
     private void pickTime(boolean first,Button b){
         new TimePickerDialog(this,(v,h,m)->{

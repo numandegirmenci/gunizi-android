@@ -35,7 +35,10 @@ public final class SummaryActivity extends Activity {
     };
     private int dp(int n){return Math.round(getResources().getDisplayMetrics().density*n);}
     private GradientDrawable bg(int color){
-        GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(16));return d;
+        GradientDrawable d=new GradientDrawable();d.setColor(color);
+        d.setCornerRadius(dp(18));
+        if(color!=TEAL)d.setStroke(dp(1),0xff28394c);
+        return d;
     }
     private TextView text(LinearLayout container,String content,int size,boolean bold){
         TextView v=new TextView(this);v.setText(content);v.setTextColor(bold?WHITE:MUTED);
@@ -45,13 +48,15 @@ public final class SummaryActivity extends Activity {
         container.addView(v,p);return v;
     }
     private LinearLayout card(LinearLayout parent){
-        LinearLayout c=new LinearLayout(this);c.setPadding(dp(15),dp(16),dp(15),dp(14));
+        LinearLayout c=new LinearLayout(this);c.setPadding(dp(18),dp(18),dp(18),dp(16));
         c.setOrientation(LinearLayout.VERTICAL);c.setBackground(bg(PANEL));
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);
-        p.bottomMargin=dp(12);parent.addView(c,p);return c;
+        p.bottomMargin=dp(14);parent.addView(c,p);return c;
     }
     private Button button(LinearLayout parent,String name,boolean primary){
-        Button b=new Button(this);b.setText(name);b.setAllCaps(false);b.setTextSize(14);
+        Button b=new Button(this);b.setText(name);b.setAllCaps(false);b.setTextSize(15);
+        b.setTypeface(Typeface.DEFAULT,primary?Typeface.BOLD:Typeface.NORMAL);
+        b.setElevation(primary?dp(2):0);
         b.setTextColor(primary?BG:WHITE);
         b.setBackground(bg(primary?TEAL:0xff29384f));
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(52));
@@ -70,26 +75,38 @@ public final class SummaryActivity extends Activity {
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
         scroll.setBackgroundColor(BG);
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(16),dp(22),dp(16),dp(25));scroll.addView(root);
+        root.setPadding(dp(16),dp(24),dp(16),dp(30));scroll.addView(root);
         setContentView(scroll);
-        text(root,"Günİzi • Yapay Zeka",24,true);
-        text(root,"Tek kayıt, iki işlem. Konuşma metni bir kez çıkarılır; "+
-            "sonra istediğin kadar yeniden özetlenebilir.",13,false);
+        TextView eyebrow=text(root,"GÜNİZİ  /  YEREL YAPAY ZEKA",11,true);
+        eyebrow.setTextColor(TEAL);eyebrow.setLetterSpacing(0.13f);
+        text(root,"Konuşmalarına anlam kat.",26,true);
+        text(root,"Kaydı dinle, metnini çıkar, kararları ve yapılacakları gör. "+
+            "Sesin ve notların telefonunda kalır.",13,false);
+        LinearLayout privacy=new LinearLayout(this);
+        privacy.setOrientation(LinearLayout.HORIZONTAL);
+        TextView privacyBadge=text(privacy,"●  ÇEVRİMDIŞI ANALİZ    •    CALLVAULT MOTORU",11,true);
+        privacyBadge.setTextColor(TEAL);
+        privacyBadge.setPadding(dp(10),dp(4),dp(10),dp(4));
+        GradientDrawable bgBadge=bg(0xff102e31);
+        privacyBadge.setBackground(bgBadge);
+        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);
+        bp.bottomMargin=dp(15);root.addView(privacy,bp);
 
         // Primary screen: recording playback and source, rather than model downloads.
         LinearLayout recording=card(root);
-        text(recording,"Seçilen kayıt",17,true);
+        text(recording,"01   KAYDIN",16,true);
         playback=new RecordingPlayerCard(this);
         recording.addView(playback,new LinearLayout.LayoutParams(-1,-2));
         sourceInfo=text(recording,"Ses kaydını seçerek başla.",12,false);
-        Button choose=button(recording,"Ses kaydı seç / değiştir",false);
+        Button choose=button(recording,"Başka ses kaydı seç",false);
         choose.setOnClickListener(v->pickSource(null));
 
         LinearLayout actions=card(root);
-        text(actions,"Ne yapmak istiyorsun?",18,true);
+        text(actions,"02   YAPAY ZEKA İŞLEMLERİ",16,true);
+        text(actions,"Konuşmayı metne dönüştür veya konuları ve görevleri çıkar.",12,false);
         Button transcript=button(actions,"Konuşma metnini çıkar",true);
         transcript.setOnClickListener(v->startAction(DailySummaryWorker.TRANSCRIPT));
-        Button summary=button(actions,"Konuşmayı özetle ve tablolaştır",false);
+        Button summary=button(actions,"Özetle • Konu, karar ve görev tablosu",false);
         summary.setOnClickListener(v->startAction(DailySummaryWorker.REPORT));
         Button again=button(actions,"Hazır metinden yeni özet oluştur",false);
         again.setOnClickListener(v->{
@@ -106,7 +123,7 @@ public final class SummaryActivity extends Activity {
         });
 
         LinearLayout tracking=card(root);
-        text(tracking,"İşlem durumu",18,true);
+        text(tracking,"03   CANLI İŞLEM DURUMU",16,true);
         stage=text(tracking,"Henüz analiz başlatılmadı.",15,true);
         phaseInfo=text(tracking,"İşlem aşaması ve kaynak bilgisi burada görünür.",12,false);
         progressBar=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
@@ -121,7 +138,7 @@ public final class SummaryActivity extends Activity {
         elapsed.setGravity(Gravity.END);metrics.addView(new android.view.View(this),
             new LinearLayout.LayoutParams(0,1,0));
         tracking.addView(metrics);
-        text(tracking,"Son çıkarılan konuşma / konu",13,true);
+        text(tracking,"SON OKUNAN KONUŞMA",12,true);
         preview=text(tracking,"Henüz konuşma çözümlenmedi.",13,false);
         preview.setMaxLines(4);
         cancel=button(tracking,"Analizi durdur",false);
@@ -135,7 +152,8 @@ public final class SummaryActivity extends Activity {
             }).show());
 
         LinearLayout result=card(root);
-        text(result,"Sonuçlar",18,true);
+        text(result,"04   SONUÇLARIN",16,true);
+        text(result,"Metin ve konu tablosu birbirinden bağımsız kaydedilir.",12,false);
         transcriptButton=button(result,"Konuşma metni • Görüntüle",false);
         transcriptButton.setOnClickListener(v->startActivity(new Intent(this,TranscriptActivity.class)));
         reportButton=button(result,"Konu tablosu • Kararlar ve görevler",false);
@@ -147,7 +165,7 @@ public final class SummaryActivity extends Activity {
         });
 
         LinearLayout preferences=card(root);
-        text(preferences,"Özetleme tercihim",17,true);
+        text(preferences,"05   ANALİZ TERCİHİM",16,true);
         text(preferences,"Örneğin alınan kararlar, sorumlular, mağaza açılışları ve "+
             "bekleyen konular. Bu talimat yalnızca özetleme için kullanılır.",12,false);
         focus=new EditText(this);focus.setText(new AnalysisPreferences(this).focus());
@@ -159,9 +177,9 @@ public final class SummaryActivity extends Activity {
             Toast.makeText(this,"Tercih kaydedildi.",Toast.LENGTH_SHORT).show();});
 
         LinearLayout models=card(root);
-        text(models,"Cihazdaki modeller",17,true);
+        text(models,"MODEL VE MOTOR DURUMU",16,true);
         modelStatus=text(models,"Model durumu kontrol ediliyor.",12,false);
-        Button settings=button(models,"Ayarlar • Whisper ve Qwen3",false);
+        Button settings=button(models,"Model seçimi • Whisper / Gemma / Qwen",false);
         settings.setOnClickListener(v->
             startActivity(new Intent(this,ModelSettingsActivity.class)));
         refreshStatus();
@@ -251,8 +269,12 @@ public final class SummaryActivity extends Activity {
         if(stage==null)return;
         android.content.SharedPreferences p=getSharedPreferences(PREF,MODE_PRIVATE);
         String speech=new AnalysisPreferences(this).speechModel(),qwen=new Prefs(this).aiModel();
-        modelStatus.setText("Whisper: "+(AiModelStore.ready(this,speech)?"Hazır ✓":"İndirilmeli")+
-            "  •  Özet modeli: "+(AiModelStore.ready(this,qwen)?"Hazır ✓":"İndirilmeli"));
+        modelStatus.setText(AiModelStore.label(speech)+": "+
+            (AiModelStore.ready(this,speech)?"Hazır ✓":"İndirilmeli")+"\n"+
+            AiModelStore.label(qwen)+": "+
+            (AiModelStore.ready(this,qwen)?"Hazır ✓":"İndirilmeli")+"\n"+
+            "Motor: CallVault whisper.cpp / llama.cpp • Silero VAD "+
+            (getSharedPreferences(PREF,MODE_PRIVATE).getBoolean("aiSileroVad",true)?"açık":"kapalı"));
         String stageKey=AiStageMetrics.stage(this);
         String current=p.getString("analysisStage","");
         String error=p.getString("summaryError","");
