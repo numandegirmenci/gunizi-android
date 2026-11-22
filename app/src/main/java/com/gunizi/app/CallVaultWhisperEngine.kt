@@ -30,7 +30,9 @@ object CallVaultWhisperEngine {
         val jobId=prefs.getString("analysisWorkId","") ?: ""
         val size=try { context.contentResolver.openAssetFileDescriptor(audio,"r")?.use {
             it.length } ?: 0L }catch(_:Exception){0L}
-        val key=hash(audio.toString()+"|"+size+"|"+modelId+"|cv-native-v1|vad="+useVad)
+        val sourceHash=prefs.getString("analysisSourceDigest","") ?: ""
+        require(sourceHash.matches(Regex("[0-9a-f]{64}"))){"Kaynak ses kimliği doğrulanamadı"}
+        val key=hash(sourceHash+"|"+modelId+"|asr-native-v2|vad="+useVad)
         val cache=File(context.noBackupFilesDir,"cv_asr_checkpoints/"+key)
         check(cache.exists()||cache.mkdirs()) { "Konuşma kontrol noktası açılamadı" }
 
