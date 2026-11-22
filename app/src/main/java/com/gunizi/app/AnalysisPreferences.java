@@ -25,12 +25,12 @@ final class AnalysisPreferences {
         p.edit().putString("focus",s.isEmpty()?DEFAULT:s).apply();
     }
     String speechModel(){
-        String id=p.getString("speech_model",AiModelStore.WHISPER_TURBO_Q8);
+        String id=p.getString("speech_model",AiModelStore.WHISPER_Q5);
         return AiModelStore.WHISPER_TURBO.equals(id)||
             AiModelStore.WHISPER_BASE.equals(id)||
             AiModelStore.WHISPER_Q5.equals(id)||
             AiModelStore.WHISPER_TURBO_Q8.equals(id)||
-            AiModelStore.WHISPER.equals(id)?id:AiModelStore.WHISPER_TURBO_Q8;
+            AiModelStore.WHISPER.equals(id)?id:AiModelStore.WHISPER_Q5;
     }
     void speechModel(String id){
         if(!AiModelStore.WHISPER.equals(id)&&
