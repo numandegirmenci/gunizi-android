@@ -18,8 +18,8 @@ import java.util.*;
 import java.util.regex.Pattern;
 
 /** Fully local Turkish speech recognition (Vosk model) + extractive structured report. */
-final class DailyReportEngine {
-    interface Progress {void update(int percent,String message);}
+public final class DailyReportEngine {
+    public interface Progress {void update(int percent,String message);}
     static final class Segment {
         final double start,end; final String text;
         Segment(double s,double e,String t){start=s;end=e;text=t;}
