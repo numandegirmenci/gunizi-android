@@ -560,8 +560,10 @@ public final class MainActivity extends Activity {
                 (armed?"Zamanlı dinleme açık":"Dinleme açık"):
                 armed?"Zamanlı plan beklemede • Mikrofon kapalı":"Dinleme kapalı");
             if(substatus!=null)substatus.setText(active?
-                "Kaydedilmiş geçmiş: "+String.format(Locale.ROOT,"%02d:%02d:%02d",
+                "Biriken geçici geçmiş: "+String.format(Locale.ROOT,"%02d:%02d:%02d",
                     held/3600,(held/60)%60,held%60)+" / 06:00:00":
+                armed?"Mikrofon kapalı • "+prefs.historyTimeString(true)+"–"+
+                    prefs.historyTimeString(false)+" aralığı bekleniyor":
                 "Dinlemeyi açınca geçmiş birikmeye başlar.");
             if(action!=null){
                 action.setText(armed?"Zamanlı plan yönetiliyor":
