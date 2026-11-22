@@ -206,6 +206,11 @@ public final class SummaryActivity extends Activity {
             WorkManager.getInstance(this).cancelAllWorkByTag("gunizi-local-summary");
             status.setText("Özetleme iptal istendi. Kayıt dosyaları korunur.");
         });
+        // Make user intent and daily analysis primary; optional models follow below.
+        root.removeView(instructions);
+        root.removeView(analyze);
+        root.addView(instructions,1);
+        root.addView(analyze,2);
         refreshStatus();
     }
     private void refreshStatus(){

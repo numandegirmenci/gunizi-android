@@ -74,7 +74,7 @@ public final class MainActivity extends Activity {
         shell.addView(sc,new LinearLayout.LayoutParams(-1,0,1f));
         gap(shell,7);
         nav=row();
-        String[] tabs={"Kayıt","Mesai","Rapor","Ayarlar"};
+        String[] tabs={"Kayıt","Mesai","Yapay Zeka","Ayarlar"};
         for(int i=0;i<tabs.length;i++){
             final int target=i;
             Button b=button(tabs[i],false);b.setTextSize(12);
@@ -232,20 +232,21 @@ public final class MainActivity extends Activity {
         pick.setOnClickListener(v->chooseFolder());
     }
     private void reportTab(){
-        LinearLayout overview=card("Günlük Özet");
-        muted(overview,"Uzun kayıtları parçalı şekilde yazıya dönüştürür; dil modeli kurulmuşsa "
-            +"bütün parçaları birleştirerek ayrıntılı rapor hazırlar.");
+        LinearLayout overview=card("Günİzi • Yapay Zeka");
+        muted(overview,"Gün boyunca konuşulanları Türkçe yazıya döker; kararları, "+
+            "görevleri, sorumluları ve konuları tablolarla düzenler. "+
+            "Neye odaklanacağını sen belirlersin.");
         gap(overview,12);
         String last=getSharedPreferences("gunizi",MODE_PRIVATE).getString("summaryLast","");
         String err=getSharedPreferences("gunizi",MODE_PRIVATE).getString("summaryError","");
         overview.addView(label(!err.isEmpty()?"Son rapor hatası: "+err:
             !last.isEmpty()?last:"Henüz rapor oluşturulmadı.",13,err.isEmpty()?CYAN:0xffdf8a7d,false));
         gap(overview,10);
-        Button open=button("Yerel yapay zeka ve raporlar",true);
+        Button open=button("Günlük analizi başlat / Tercihler",true);
         overview.addView(open);
         open.setOnClickListener(v->startActivity(new Intent(this,SummaryActivity.class)));
         gap(overview,7);
-        Button topicTable=button("Konu konu rapor tablosu",false);
+        Button topicTable=button("Ayrıntılı konu ve karar tablosu",false);
         overview.addView(topicTable);
         topicTable.setOnClickListener(v->startActivity(new Intent(this,ReportTableActivity.class)));
         gap(overview,7);
