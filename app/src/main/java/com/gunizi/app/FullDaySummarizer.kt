@@ -63,13 +63,17 @@ object FullDaySummarizer {
                 progress.update(94,"Gün içindeki konular birleştiriliyor")
             }
             progress.update(98,"Tam günlük rapor düzenleniyor")
-            Llama.complete(model,
+            val overall=Llama.complete(model,
                 prompt="/no_think\nAşağıdaki notlardan tam Türkçe günlük rapor oluştur. " +
                     "Bölümler: GÜNÜN ÖZETİ, KRONOLOJİ, ALINAN KARARLAR, YAPILACAKLAR " +
                     "VE SORUMLULAR, BEKLEYEN KONULAR, BELİRSİZ İFADELER. " +
                     "Her maddede varsa kaynak saati yaz. Sadece dökümde geçenleri yaz.\n\n"+
                     level.firstOrNull().orEmpty().take(8200),
                 systemPrompt=SYSTEM,maxTokens=1350).text.trim()
+            val detailed=notes.mapIndexed { index, item ->
+                "KAYIT BÖLÜMÜ "+(index+1).toString()+" / "+notes.size+"\n"+item
+            }.joinToString("\n\n")
+            overall+"\n\n=== GÜN BOYUNCA AYRINTILI PARÇA ÖZETLERİ ===\n\n"+detailed
         } finally {
             Llama.releaseModel(model)
         }
