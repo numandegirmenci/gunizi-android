@@ -32,7 +32,7 @@ object FullDaySummarizer {
         try {
             val parts=splitText(transcript,CHUNK_LIMIT)
             val boundedFocus=focus.take(1500)
-            val folder=File(context.noBackupFilesDir,"ai_checkpoints_v2/"+digest(transcript+"|"+boundedFocus))
+            val folder=File(context.noBackupFilesDir,"ai_checkpoints_v2/"+digest(transcript+"|"+boundedFocus+"|"+languageModel))
             folder.mkdirs()
             val notes=ArrayList<String>()
             val perChunkTables=ArrayList<String>()
