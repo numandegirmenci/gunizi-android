@@ -272,7 +272,10 @@ final class AiLiveStatusCard extends LinearLayout {
         changed(elapsed,queued?"Bekleme "+AiProgressStatus.time(elapsedMs):
             AiProgressStatus.time(elapsedMs));
         long phaseDuration=running?AiStageMetrics.stageMs(getContext()):0;
-        changed(stageTimer,narrow?"Aşama: "+AiProgressStatus.time(phaseDuration):
+        long summaryTime=prefs.getLong("analysisLlmTotalMs",0);
+        changed(stageTimer,completed&&summaryTime>0?
+            (narrow?"Özet: ":"")+AiProgressStatus.time(summaryTime):
+            narrow?"Aşama: "+AiProgressStatus.time(phaseDuration):
             AiProgressStatus.time(phaseDuration));
         int currentPart=prefs.getInt("analysisChunkIndex",0),
             totalParts=prefs.getInt("analysisChunkTotal",0);
@@ -281,17 +284,23 @@ final class AiLiveStatusCard extends LinearLayout {
         boolean summarizing=AiStageMetrics.LLM_LOADING.equals(phase)||
             AiStageMetrics.EXTRACTING.equals(phase)||
             AiStageMetrics.MERGING.equals(phase);
-        changed(parts,summarizing?
+        boolean reportMode=!DailySummaryWorker.TRANSCRIPT.equals(mode);
+        changed(parts,(summarizing||(completed&&reportMode&&llmTotal>0))?
             (llmTotal>0?llmDone+" / "+llmTotal:"Hazırlanıyor"):
-            AiProgressStatus.partLabel(currentPart,totalParts));
+            (completed&&"native".equals(prefs.getString("analysisSpeechSource",""))?
+                "Ses kaydı tarandı":AiProgressStatus.partLabel(currentPart,totalParts)));
         long audioDone=prefs.getLong("analysisAudioProcessedMs",0),
             audioTotal=prefs.getLong("analysisAudioDuration",0);
-        String audioLabel=neverStarted?"":queued?"Ses işlemi henüz başlamadı":summarizing?
-            "Ses çözümlendi • Şimdi metinden konu ve görevler çıkarılıyor":
-            audioTotal>0?
-                "İşlenen ses: "+AiProgressStatus.audioLabel(audioDone,audioTotal)+
-                    " • %"+AiProgressStatus.totalPercent(audioDone,audioTotal):
-                "İşlenen ses süresi hazırlanıyor";
+        String speechSource=prefs.getString("analysisSpeechSource","pending");
+        String audioLabel=neverStarted?"":queued?"Ses işlemi henüz başlamadı":
+            "saved".equals(speechSource)?"Önceden hazırlanmış döküm kullanıldı • Ses yeniden işlenmedi":
+            "cached".equals(speechSource)?"Önceden çözülmüş konuşma metni kullanıldı":
+            summarizing?"Ses çözümleme tamamlandı • Konular inceleniyor":
+            completed&&audioTotal>0&&audioDone==0?
+                "Ses ilerleme bilgisi kaydedilmemiş • Sonuç hazır":
+            audioTotal>0?"İşlenen ses: "+AiProgressStatus.audioLabel(audioDone,audioTotal)+
+                " • %"+AiProgressStatus.totalPercent(audioDone,audioTotal):
+            "Ses süresi hazırlanıyor";
         changed(audio,audioLabel);
         audio.setVisibility(audioLabel.isEmpty()?GONE:VISIBLE);
 
@@ -329,7 +338,8 @@ final class AiLiveStatusCard extends LinearLayout {
             changed(preview,excerpt);
             boolean longText=excerpt.length()>180;
             expandPreview.setVisibility(longText?VISIBLE:GONE);
-            changed(previewTitle,summarizing?"SON ÇIKARILAN KONU":"SON OKUNAN KONUŞMA");
+            changed(previewTitle,(summarizing||(completed&&reportMode))?
+                "ÖZETTEN SON BULGU":"SON OKUNAN KONUŞMA");
             openContent.setVisibility(summarizing?GONE:VISIBLE);
         }
         long stale=System.currentTimeMillis()-prefs.getLong("analysisLastAdvanceAt",0);
