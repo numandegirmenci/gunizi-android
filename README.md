@@ -1,4 +1,4 @@
-# Günİzi Android • v0.5 (Deneysel)
+# Günİzi Android • v0.6 (Deneysel)
 
 **Durum:** Android debug APK deneysel; gerçek cihazda 9 saatlik yük testi henüz yapılmadı.
 
@@ -6,6 +6,19 @@ Günİzi, Türkçe çevrimdışı ses kaydı ve yerel yapay zeka ile günlük ra
 
 ## Ekran tasarımı
 Ana ekran artık tek uzun liste değil: **Kayıt, Mesai, Rapor, Ayarlar** olmak üzere dört kompakt sekme bulunur.
+
+## v0.6 Bildirimde hızlı geçmiş kaydetme
+
+- Geçmiş dinleme aktifken bildirim açıldığında **Son 15 dk**, **Son 1 saat**, **Son 2 saat** işlemleri görünür. Android genişletilmiş bildirimde en fazla üç eylem gösterir.
+- Her seçenek **geçmişe dönüktür**; ana ekrandaki seçili süre değişmez.
+- Örneğin 30 dakika birikmişken Son 1 saat seçilirse mevcut 30 dakikanın dışa aktarımı denenir.
+- Hızlı kaydetme için klasör izni önceden verilmiş olmalıdır.
+- İşlem sırasında dinleme devam eder; yalnızca yeni ses parçasına geçerken kısa bir boşluk oluşabilir.
+- Üç eylem sınırı nedeniyle **Dinlemeyi durdur** seçeneği ana ekranda tutulmuştur. Bildirime dokunmak Günİzi'yi açar.
+- **Sessiz bildirim kanalı korunmuştur.** Samsung bildirim sırasını ve "2 bildirim daha" gibi otomatik gruplamaları kendi belirler; uygulama Gecko ile aynı gruba zorla alınamaz.
+- Normal Android uygulaması hücresel görüşmenin iki tarafını kaydedemez. CallVault gibi bağımsız projeler Shizuku / gömülü ADB üzerinden daha yüksek yetki ve cihaz desteği kullanabilir; bu, Günİzi'nin mevcut mikrofon izniyle aynı şey değildir.
+- Görüşme başladığında Günİzi hizmetini otomatik durdurmaz; fakat Android, rakip mikrofon yakalamada sessiz ses verebilir. Ses eksikliği fark edilebildiğinde uyarı gösterilir, **telefonun kısıtlamalarını aşacağı vaat edilmez**.
+
 
 ## Kayıt modları (v0.4)
 
