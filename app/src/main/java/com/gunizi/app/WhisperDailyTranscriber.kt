@@ -10,7 +10,7 @@ import java.util.Locale
 /** Nine-hour safe: streaming decode into 5-minute mono WAV chunks; one Whisper model instance. */
 object WhisperDailyTranscriber {
     @JvmStatic
-    fun transcribe(context: Context, audio: Uri, progress: DailyReportEngine.Progress): String {
+    fun transcribe(context: Context, audio: Uri, progress: AiProgress): String {
         require(AiModelStore.ready(context, AiModelStore.WHISPER)) { "Whisper modeli kurulmamış" }
         return runBlocking {
             progress.update(0, "Whisper Türkçe modeli yükleniyor")

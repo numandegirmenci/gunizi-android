@@ -21,7 +21,7 @@ object FullDaySummarizer {
 
     @JvmStatic
     fun summarize(context: Context, transcript: String,
-                  progress: DailyReportEngine.Progress): String = runBlocking {
+                  progress: AiProgress): String = runBlocking {
         require(AiModelStore.ready(context,AiModelStore.QWEN)) { "Qwen3 modeli kurulmamış" }
         if (transcript.isBlank()) return@runBlocking "Anlaşılır konuşma bulunamadı."
         progress.update(71,"Qwen3 yerel modeli açılıyor")

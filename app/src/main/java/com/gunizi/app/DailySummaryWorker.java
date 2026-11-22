@@ -68,7 +68,7 @@ public final class DailySummaryWorker extends Worker {
             drafts.mkdirs();
             java.io.File transcriptCache=new java.io.File(drafts,
                 fileBase.replaceAll("[^a-zA-Z0-9_-]","_")+".txt");
-            DailyReportEngine.Progress listener=(pct,message)->{
+            AiProgress listener=(pct,message)->{
                 setProgressAsync(new Data.Builder().putInt("percent",pct).putString("stage",message).build());
                 if(pct%10==0)c.getSystemService(NotificationManager.class).notify(206,notice(message));
             };
