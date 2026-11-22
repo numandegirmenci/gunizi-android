@@ -2,6 +2,22 @@
 
 **Günİzi**, Android'de geçmişe dönük ses kaydı, mesai kaydı, Türkçe konuşma dökümü ve cihaz içinde yapay zeka destekli özet hazırlama uygulamasıdır. Ses kayıtlarının işlenmesi yerel olarak yapılır; modeller yalnızca kullanıcı isterse indirilir.
 
+## Günİzi v0.13.1 — Canlı analiz ve işlem başlatma düzeltmesi
+
+v0.13.0'da kullanıcı testinde tespit edilen **anlaşılmayan bekleme, gizli ilerleme paneli ve geç gelen konuşma akışı** sorunları için düzeltme sürümüdür.
+
+- Manuel analiz isteği hemen durum panelinde onaylanır; işlem kuyruğuna alınmadıysa uyarılır.
+- Android pil kısıtı manuel analizi süresiz bekletmez; sırada bekleme ve gerçek çalışma süreleri ayrılır.
+- Canlı panel ilk ekranda görünür; ilk döküm için 12 saniyelik ses bölümü denenir, kalanlar 30 saniyedir.
+- Oynatıcı ve teknik seçenekler katlanabilir; yeni kurulumun varsayılan konuşma modeli Whisper Small Q5'tir.
+- VAD kapalı veya kullanılamazken gerçek Whisper dökümü korunur; tamamen sessiz kayıtta hata yerine açıklayıcı sonuç verilir.
+
+[Değişiklikler, test sınırları ve kurulum notları](release-notes/v0.13.1.md)
+
+[GitHub Actions v0.13.1 APK derleme ekranı](https://github.com/numandegirmenci/gunizi-android/actions/workflows/build-v0131-stability.yml) • Önceki APK'yı silme. Ayrı uygulama kimliği ile dağıtılan geçici sürümdür; gerçek telefon testi ayrıca gerekir.
+
+---
+
 ## Günİzi v0.13.0 — Kanıtlı günlük iş hafızası
 
 **Hedef:** Uzun ses kaydından “Bugün ne konuşuldu?”, “Hangi işler bana kaldı?”, “Kimden dönüş bekliyorum?”, “Neler sonuçlandı?” sorularına kaynakla ilişkilendirilmiş yanıtlar hazırlamak.
