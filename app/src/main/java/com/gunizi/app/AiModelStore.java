@@ -137,7 +137,7 @@ final class AiModelStore {
                 FileOutputStream out=new FileOutputStream(part,append)){
                 byte[] buffer=new byte[128*1024];int n,previous=-1;long size=already;
                 while((n=in.read(buffer))!=-1){
-                    if(Thread.currentThread().isInterrupted)
+                    if(Thread.currentThread().isInterrupted())
                         throw new InterruptedException("İndirme durduruldu");
                     size+=n;
                     if(size>max)throw new IOException("Model beklenenden büyük");
