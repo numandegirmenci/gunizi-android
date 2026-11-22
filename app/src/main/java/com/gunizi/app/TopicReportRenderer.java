@@ -33,7 +33,9 @@ final class TopicReportRenderer {
                 if(cols[i].length()>1600)cols[i]=cols[i].substring(0,1600);
                 if(cols[i].isEmpty())cols[i]="Belirtilmedi";
             }
-            if(cols[1].equalsIgnoreCase("Konu")||cols[0].equalsIgnoreCase("Saat")
+            // Header detection must not discard a real discussion whose topic is "Konu".
+            if(cols[0].equalsIgnoreCase("Saat")||
+                cols[0].toLowerCase(java.util.Locale.ROOT).startsWith("saat /")
                 ||cols[0].matches("[- :]+"))continue;
             results.add(new Entry(cols));
             // Preserve every extracted row. Large reports are grouped and initially collapsed.
