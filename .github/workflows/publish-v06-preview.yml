@@ -57,13 +57,11 @@ jobs:
           en az 7 olmalıdır.
           NOTES
           if gh release view v0.6.0 --repo numandegirmenci/gunizi-android >/dev/null 2>&1; then
-            echo "v0.6.0 already published; checking asset"
-            gh release upload v0.6.0 "GunIzi-v0.6.0.apk" \
-              --repo numandegirmenci/gunizi-android --clobber
+            echo "v0.6.0 was already published; preserving the original verified APK"
           else
             gh release create v0.6.0 "GunIzi-v0.6.0.apk" \
               --repo numandegirmenci/gunizi-android \
               --target 6d965e6b951e317277f5dee280688a10fc629901 \
               --title "Günİzi v0.6.0 (Test APK)" --notes-file release-notes.md --latest
           fi
-          gh release view v0.6.0 --repo numandegirmenci/gunizi-android --json url,assets,isLatest
+          gh release view v0.6.0 --repo numandegirmenci/gunizi-android --json url,assets
