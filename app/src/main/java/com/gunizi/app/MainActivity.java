@@ -255,44 +255,34 @@ public final class MainActivity extends Activity {
         folder.addView(pick);pick.setOnClickListener(v->show(3));
     }
     private void reportTab(){
-        LinearLayout overview=card("Günİzi • Yapay Zeka");
-        muted(overview,"Gün boyunca konuşulanları Türkçe yazıya döker; kararları, "+
-            "görevleri, sorumluları ve konuları tablolarla düzenler. "+
-            "Neye odaklanacağını sen belirlersin.");
+        page.addView(label("Yapay zeka",22,WHITE,true));gap(page,8);
+        LinearLayout overview=card("Konuşmadan iş hafızasına");
+        muted(overview,"Sesini yazıya dönüştür; kararları, görevleri ve beklenen dönüşleri takip et.");
         gap(overview,12);
         String last=getSharedPreferences("gunizi",MODE_PRIVATE).getString("summaryLast","");
         String err=getSharedPreferences("gunizi",MODE_PRIVATE).getString("summaryError","");
         overview.addView(label(!err.isEmpty()?"Son rapor hatası: "+err:
             !last.isEmpty()?last:"Henüz rapor oluşturulmadı.",13,err.isEmpty()?CYAN:0xffdf8a7d,false));
         gap(overview,10);
-        Button open=button("Konuşmayı yazıya dök / Özet ve tablo oluştur",true);
+        Button open=button("＋  Ses kaydı analiz et",true);
         overview.addView(open);
         open.setOnClickListener(v->startActivity(new Intent(this,SummaryActivity.class)));
-        gap(overview,7);
-        Button topicTable=button("Ayrıntılı konu ve karar tablosu",false);
-        overview.addView(topicTable);
-        topicTable.setOnClickListener(v->startActivity(new Intent(this,ReportTableActivity.class)));
-        gap(overview,7);
-        Button memory=button("Günlük iş hafızam • Bana kalanlar ve beklediklerim",true);
-        overview.addView(memory);
+        gap(overview,10);
+        Button memory=button("Günlük iş hafızam",false);
         memory.setOnClickListener(v->startActivity(new Intent(this,WorkMemoryActivity.class)));
+        Button topicTable=button("Konu ve kararlar",false);
+        topicTable.setOnClickListener(v->startActivity(new Intent(this,ReportTableActivity.class)));
+        pair(overview,memory,topicTable);
         gap(overview,7);
         Button savedNotes=button("Notlarım",false);
-        overview.addView(savedNotes);
         savedNotes.setOnClickListener(v->startActivity(new Intent(this,UserNotesActivity.class)));
-        LinearLayout info=card("Gerçekten çevrimdışı");
-        muted(info,"Sesler veya konuşma dökümleri sunucuya gönderilmez. "
-            +"Yalnızca modellerin ilk indirmesi için internet gerekir. "
-            +"9 saatlik kayıtların çözülmesi uzun sürebilir ve şarj gerektirebilir.");
+        Button models=button("Yapay zeka modelleri",false);
+        models.setOnClickListener(v->startActivity(new Intent(this,ModelSettingsActivity.class)));
+        pair(overview,savedNotes,models);
+        gap(overview,8);
+        muted(overview,"Analiz cihazında yapılır. Uzun kayıtlar daha fazla işlem süresi ve pil kullanabilir.");
     }
     private void settingsTab(){
-        LinearLayout models=card("Yapay zeka modelleri");
-        muted(models,"Whisper ve Qwen3 indirmeleri burada yönetilir. İndirme arka planda ilerler; "+
-            "Yapay Zeka ekranı konuşma çözümleme ve rapor oluşturma içindir.");
-        gap(models,9);
-        Button modelSettings=button("Modelleri seç / İndirme durumunu gör",true);
-        models.addView(modelSettings);
-        modelSettings.setOnClickListener(v->startActivity(new Intent(this,ModelSettingsActivity.class)));
         LinearLayout updates=card("Uygulama güncellemeleri");
         boolean testBuild=getPackageName().endsWith(".test")||getPackageName().endsWith(".ai2")||getPackageName().endsWith(".ai3")||getPackageName().endsWith(".ai4")||getPackageName().endsWith(".ai5")||getPackageName().endsWith(".ai6")||getPackageName().endsWith(".ai7")||getPackageName().endsWith(".ai8")||getPackageName().endsWith(".ai9")||getPackageName().endsWith(".ai10");
         muted(updates,testBuild?
@@ -317,7 +307,14 @@ public final class MainActivity extends Activity {
             else startActivity(new Intent(this,UpdateActivity.class));
         });
 
-        LinearLayout permissions=card("İzinler");
+        LinearLayout models=card("Yapay zeka modelleri");
+        muted(models,"Whisper ve Qwen3 indirmeleri burada yönetilir. İndirme arka planda ilerler; "+
+            "Yapay Zeka ekranı konuşma çözümleme ve rapor oluşturma içindir.");
+        gap(models,9);
+        Button modelSettings=button("Modelleri seç / İndirme durumunu gör",true);
+        models.addView(modelSettings);
+        modelSettings.setOnClickListener(v->startActivity(new Intent(this,ModelSettingsActivity.class)));
+        LinearLayout permissions=accordion("İzinler","Mikrofon ve bildirim izinlerini yönet",false);
         muted(permissions,"Gerekli izinleri bir kez ver. Hiçbir izin senin onayın olmadan etkinleştirilmez.");
         gap(permissions,10);
         boolean mic=checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED;
@@ -338,7 +335,7 @@ public final class MainActivity extends Activity {
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFY);
             else toast("Bildirim izni var.");
         });
-        LinearLayout storage=card("Depolama ve yedekleme");
+        LinearLayout storage=accordion("Depolama ve yedekleme","Kayıt klasörü • Şifreli yedekler",false);
         folderLabel=label(prefs.folder()==null?"Klasör seçilmedi":"Kayıt klasörü seçildi ✓",14,CYAN,true);
         storage.addView(folderLabel);gap(storage,9);
         Button choose=button("Kayıt klasörünü değiştir",false);storage.addView(choose);
@@ -346,12 +343,12 @@ public final class MainActivity extends Activity {
         gap(storage,7);
         Button recover=button("Şifreli yedekleri kurtar",false);storage.addView(recover);
         recover.setOnClickListener(v->send(RecorderService.ACTION_RECOVER));
-        LinearLayout recordingNotice=card("Telefon görüşmeleri");
+        LinearLayout recordingNotice=accordion("Telefon görüşmeleri","Android mikrofon kısıtları ve bilgilendirme",false);
         muted(recordingNotice,"Günİzi normal mikrofon izniyle hücresel aramaların iki tarafını "+
             "güvenilir şekilde kaydedemez. Telefonunun kendi arama kaydı işlevi "+
             "destekleniyorsa onu kullanabilirsin. Görüşmeleri kaydetmek için gerekli "+
             "bilgilendirme ve izinleri gözetmelisin.");
-        LinearLayout notice=card("Sessiz kayıt bildirimi");
+        LinearLayout notice=accordion("Kayıt bildirimi","Android mikrofon bildirimi ve gizlilik",false);
         muted(notice,"Kayıt sırasında Android güvenlik gereği mikrofon bildirimini "+
             "gösterir. Günİzi bildirimi sessiz tutar; bildirim sırasını Samsung belirler.");
         gap(notice,8);
@@ -365,7 +362,7 @@ public final class MainActivity extends Activity {
                     .putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()));
             }
         });
-        LinearLayout battery=card("Pil ve gizlilik");
+        LinearLayout battery=accordion("Pil ve gizlilik","Pil karşılaştırması ve Samsung ayarları",false);
         Button compare=button("Pil tüketimi karşılaştırması",false);battery.addView(compare);
         compare.setOnClickListener(v->startActivity(new Intent(this,BatteryInfoActivity.class)));
         gap(battery,7);
@@ -375,7 +372,8 @@ public final class MainActivity extends Activity {
             catch(Exception e){startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.parse("package:"+getPackageName())));}
         });
-        LinearLayout about=card("Geliştirici ve iletişim");
+        LinearLayout about=accordion("Hakkında • İletişim • Lisanslar",
+            "Sürüm, geri bildirim ve açık kaynak lisansları",false);
         about.addView(label("Geliştiren: Numan Değirmenci",15,WHITE,true));
         gap(about,7);
         String version="Günİzi";
