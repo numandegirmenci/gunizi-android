@@ -41,9 +41,13 @@ public final class DailySummaryWorker extends Worker {
             .setOnlyAlertOnce(true).setOngoing(true).setContentIntent(open).build();
     }
     static void queue(Context c,Uri uri,String name,boolean charging){
-        if(uri==null||!AiModelStore.ready(c,AiModelStore.WHISPER)||!AiModelStore.ready(c,new Prefs(c).aiModel()))return;
+        if(uri==null||
+           !AiModelStore.ready(c,new AnalysisPreferences(c).speechModel())||
+           !AiModelStore.ready(c,new Prefs(c).aiModel()))return;
         Data data=new Data.Builder().putString(URI,uri.toString()).putString(NAME,name)
-            .putString("analysisFocus",new AnalysisPreferences(c).focus()).build();
+            .putString("analysisFocus",new AnalysisPreferences(c).focus())
+            .putString("speechModel",new AnalysisPreferences(c).speechModel())
+            .putString("languageModel",new Prefs(c).aiModel()).build();
         Constraints.Builder constraints=new Constraints.Builder().setRequiresBatteryNotLow(true);
         if(charging)constraints.setRequiresCharging(true);
         OneTimeWorkRequest task=new OneTimeWorkRequest.Builder(DailySummaryWorker.class)
@@ -56,7 +60,12 @@ public final class DailySummaryWorker extends Worker {
         Context c=getApplicationContext();
         String address=getInputData().getString(URI);
         String fileName=getInputData().getString(NAME);
-        if(address==null||fileName==null||!AiModelStore.ready(c,AiModelStore.WHISPER)||!AiModelStore.ready(c,new Prefs(c).aiModel()))
+        String speech=getInputData().getString("speechModel");
+        String language=getInputData().getString("languageModel");
+        if(speech==null)speech=new AnalysisPreferences(c).speechModel();
+        if(language==null)language=new Prefs(c).aiModel();
+        if(address==null||fileName==null||
+           !AiModelStore.ready(c,speech)||!AiModelStore.ready(c,language))
             return Result.failure();
         ensureChannel(c);
         try{
@@ -79,7 +88,7 @@ public final class DailySummaryWorker extends Worker {
                     java.nio.charset.StandardCharsets.UTF_8);
                 listener.update(70,"Önceki konuşma dökümü kurtarıldı");
             }else{
-                transcript=WhisperDailyTranscriber.transcribe(c,Uri.parse(address),listener);
+                transcript=WhisperDailyTranscriber.transcribe(c,Uri.parse(address),speech,listener);
                 try(java.io.FileOutputStream out=new java.io.FileOutputStream(transcriptCache)){
                     out.write(transcript.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 }
@@ -92,7 +101,8 @@ public final class DailySummaryWorker extends Worker {
             if(focus==null||focus.trim().isEmpty())focus=AnalysisPreferences.DEFAULT;
             String summary=FullDaySummarizer.summarize(c,transcript,focus,listener);
             String report="GÜNİZİ • YEREL QWEN3 GÜNLÜK RAPORU\\n"+
-                "Kaynak ses: "+fileName+"\\nModel: Whisper small + seçilen Qwen3\\n"+
+                "Kaynak ses: "+fileName+"\\nKonuşma modeli: "+speech+
+                "\\nÖzet modeli: "+language+"\\n"+
                 "Not: Otomatik tanıma ve özet hatalı olabilir; önemli bilgileri sesle karşılaştır.\\n\\n"+
                 summary+"\\n\\n----- TAM KONUŞMA DÖKÜMÜ -----\\n"+transcript;
             ExportManager.writeText(c,new Prefs(c).folder(),report,"GunIzi_Ozet_"+fileBase+".txt");
