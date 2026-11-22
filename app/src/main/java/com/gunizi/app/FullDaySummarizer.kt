@@ -57,7 +57,7 @@ object FullDaySummarizer {
                         ?:throw IllegalStateException("Önceki JSON özeti okunamadı: bölüm ${index+1}")
                 }else{
                     val prompt=buildPrompt(part,boundedFocus)
-                    val output=LlamaNative.generate(ptr,prompt,1150,4,SummaryGrammar.JSON)
+                    val output=LlamaNative.generate(ptr,prompt,1650,4,SummaryGrammar.JSON)
                     val parsed=CallSummary.parse(output)
                         ?:throw IllegalStateException("Gemma/Qwen geçerli JSON üretemedi: bölüm ${index+1}")
                     val partial=File(checkpointFolder,checkpoint.name+".partial")
@@ -187,7 +187,8 @@ object FullDaySummarizer {
         appendLine("When a timestamp is clearly supported, prefix the item with its exact [HH:MM:SS] shown in the transcript.")
         appendLine("If something was discussed but not decided, place it in keyPoints, NOT decisions.")
         appendLine("If a person did not accept a task, do not create an action item for them.")
-        appendLine("Put [] for absent information. Use at most 8 distinct items per list.")
+        appendLine("Put [] for absent information. Do not impose an arbitrary fixed count on decisions or tasks.")
+        appendLine("Prioritize all supported actions, awaiting replies, completed topics, named people and timestamps; use concise items.")
         appendLine("User's analysis interests: "+focus)
         appendLine("TRANSCRIPT:")
         appendLine("\"\"\"")
