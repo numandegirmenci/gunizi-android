@@ -315,9 +315,14 @@ public final class DailySummaryWorker extends Worker {
             if(folder!=null&&!useExistingText)ExportManager.writeText(c,folder,
                 "GÜNİZİ • TAM TÜRKÇE KONUŞMA DÖKÜMÜ\n"+transcript,
                 "GunIzi_Dokum_"+base+".txt");
-            if(transcript.trim().isEmpty())
-                throw new IOException("Kaydın içinde anlaşılır konuşma bulunamadı. "+
-                    "Kaydı dinleyip daha hafif Whisper modeliyle tekrar dene.");
+            if(transcript.trim().isEmpty()){
+                // Quiet / ambient-only audio is a valid analyzed recording, not an AI crash.
+                AiStageMetrics.enter(c,AiStageMetrics.TEXT_READY);
+                finish(c,"Anlaşılır konuşma bulunamadı",
+                    "Ses kaydı tarandı; güvenilir konuşma metni üretilmedi. "+
+                    "İstersen sessizlik algılamayı kapatıp yeniden deneyebilirsin.");
+                return Result.success();
+            }
             if(TRANSCRIPT.equals(selectedMode)){
                 AiStageMetrics.enter(c,AiStageMetrics.TEXT_READY);
                 finish(c,"Konuşma dökümü hazır","Yazıya dökülen konuşma: "+fileName);
