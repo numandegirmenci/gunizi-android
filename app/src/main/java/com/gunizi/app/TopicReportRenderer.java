@@ -36,7 +36,7 @@ final class TopicReportRenderer {
             if(cols[1].equalsIgnoreCase("Konu")||cols[0].equalsIgnoreCase("Saat")
                 ||cols[0].matches("[- :]+"))continue;
             results.add(new Entry(cols));
-            if(results.size()>=70)break;
+            if(results.size()>=1200)break;
         }
         if(results.isEmpty())
             results.add(new Entry(new String[]{"Belirsiz","Konu tablosu oluşturulamadı",
@@ -44,6 +44,34 @@ final class TopicReportRenderer {
                 "Belirlenemedi","Tam metni kontrol et","Belirtilmedi"}));
         return results;
     }
+
+    /** Readable plain-text topic summary for the user's own notes or Samsung Notes sharing. */
+    static String noteText(List<Entry> entries){
+        java.util.Map<String,java.util.List<Entry>> groups=new java.util.LinkedHashMap<>();
+        for(Entry e:entries){
+            String topic=e.parts[1].trim();
+            groups.computeIfAbsent(topic,k->new java.util.ArrayList<>()).add(e);
+        }
+        StringBuilder result=new StringBuilder("GÜNİZİ • KONU KONU GÜNLÜK NOTLAR\n");
+        result.append("Otomatik analizdir; önemli bilgileri ses kaydından doğrula.\n\n");
+        for(java.util.Map.Entry<String,java.util.List<Entry>> group:groups.entrySet()){
+            result.append("■ ").append(group.getKey()).append("\n");
+            for(Entry row:group.getValue()){
+                result.append("Saat: ").append(row.parts[0]).append("\n");
+                result.append("Konuşulanlar: ").append(row.parts[2]).append("\n");
+                result.append("Karar: ").append(row.parts[3]).append("\n");
+                result.append("Takip: ").append(row.parts[4]).append("\n");
+                result.append("Sorumlu: ").append(row.parts[5]).append("\n\n");
+            }
+            result.append("\n");
+            if(result.length()>200000){
+                result.append("Kalan ayrıntılar HTML/CSV raporunda bulunur.\n");
+                break;
+            }
+        }
+        return result.toString();
+    }
+
     static String csv(List<Entry> entries){
         StringBuilder s=new StringBuilder("\uFEFF");
         for(String h:COLUMNS)s.append('"').append(h).append('"').append(';');
