@@ -1,4 +1,4 @@
-# Günİzi Android • v0.3 (Deneysel)
+# Günİzi Android • v0.4 (Deneysel)
 
 **Durum:** Android debug APK deneysel; gerçek cihazda 9 saatlik yük testi henüz yapılmadı.
 
@@ -7,22 +7,27 @@ Günİzi, Türkçe çevrimdışı ses kaydı ve yerel yapay zeka ile günlük ra
 ## Ekran tasarımı
 Ana ekran artık tek uzun liste değil: **Kayıt, Mesai, Rapor, Ayarlar** olmak üzere dört kompakt sekme bulunur.
 
-## Kayıt modları
+## Kayıt modları (v0.4)
 
-**İsteğe Bağlı Kayıt**
-- Kullanıcı **15 dakika / 1 saat / 6 saat** seçer ve kayıt düğmesine basar.
-- Mikrofon kullanıcı başlatmadan çalışmaz.
-- Seçilen süre bittiğinde kayıt durdurulur ve seçilen klasöre Opus/OGG olarak aktarılır.
-- Durdur ve Kaydet düğmesi kaydı erken bitirir.
-- Bu mod **geçmişe dönük kayıt değildir**; mikrofon önceden kapalıysa eski sesler geri getirilemez.
-- 6 saatlik kayıt yaklaşık 43,2 MB teorik Opus ses alanı tutar (kapsayıcı + yedek ek olabilir).
+**Kayıt sekmesi — Geçmiş Kaydı**
+- **Dinlemeyi Aç** düğmesiyle kullanıcı mikrofonu bilinçli olarak açar ve geçmiş birikmeye başlar.
+- **1 dk / 5 dk / 15 dk / 1 saat / 2 saat / 4 saat / 6 saat** seçimleri gelecekteki kayıt süresi DEĞİLDİR. Kullanıcı düğmeye bastığı **andan geriye doğru** birikmiş ses seçilen klasöre kaydedilir.
+- Örnek: Dinleme 38 dakikadır açıksa "Son 15 dakikayı kaydet" düğmesi önceki 15 dakikayı aktarır.
+- Örnek: Sadece 8 dakika birikmiş ve 15 dakika seçilmişse mevcut 8 dakikalık geçmiş kaydedilebilir; olmayan geçmiş uydurulmaz.
+- Canlı dairesel panel, biriken geçmişin gerçek süresini gösterir.
+- Kaydetmek dinlemeyi durdurmaz. Dinlemeyi durdurmak kaydedilmemiş geçici geçmişi siler.
+- Sesler **yalnızca kullanıcı dinlemeyi başlattıktan itibaren** elde edilir. Mikrofon daha önce kapalıysa eski sesler yoktur.
+- 6 saatlik ham PCM yaklaşık 659 MiB gerektirdiğinden bu prototip **RAM-only** değil, cihaz içindeki **geçici özel önbellekte 30 saniyelik Opus/OGG dosya parçaları** kullanır. 16 kbps 6 saat teorik ses büyüklüğü ~43,2 MB'dir. Kaydetmeden dış klasöre aktarılmaz, dinleme durduğunda temizlenir.
+- Dışa aktarma seçilen geçmişe ait Opus örneklerini yeniden sıkıştırmadan OGG içine birleştirmeyi dener; segment geçişlerinde kısa süreli kesinti olabilir. Bu yeni işlev henüz gerçek cihazda ve 6 saatlik yükte doğrulanmadı.
+- Geçici ses parçaları şu an **şifrelenmemiş uygulama özel önbelleğindedir**. Kalıcı olarak seçilen klasöre aktarmadan önce güvenli yedekleme uygulanır. Gelecek sürümde geçici kayıt şifrelemesi hedeflenmelidir.
 
-**Mesai Kaydı**
-- Çalışma günleri, başlangıç/bitiş saatleri ve klasör bir kez ayarlanır.
-- Kullanıcı hizmeti uygulama açıkken etkinleştirir; hizmet çalışmaya devam ettiği sürece saatlerde otomatik kayıt tutar.
-- Android 14+ mikrofon kısıtlamaları nedeniyle sistem hizmeti kapatmışsa uygulama kendi başına, izinsiz yeniden başlayamaz.
-- Mesai bitiminde kayıt klasöre taşınır; tamamlanmış kayıt için geçici şifreli yedek kullanılır.
-- Aktif kayıt dosyası henüz sürekli olarak şifrelenmemektedir.
+**Mesai sekmesi — Otomatik Mesai Kaydı**
+- Çalışma günleri, başlangıç / bitiş saatleri ve klasör bir kez seçilir.
+- **Telefonun yerel saati** kullanılır; kullanıcıya teknik saat dilimi ifadesi gösterilmez.
+- Kullanıcı mikrofon hizmetini uygulama açıkken etkinleştirir; hizmet çalıştığı sürece seçilen saat aralığında otomatik kayıt başlar / biter.
+- Mesai sonunda dosya seçilen klasöre taşınır ve tamamlanmış kayıt için şifreli yedekleme yapılır.
+- Android 14+ arka plandan yeni mikrofon hizmeti başlatmayı kısıtlar. Sistem hizmeti kapatırsa 08.00'de kendi kendine yeniden başlayacağı garanti edilemez.
+- **Mesai kayıt mantığı v0.3 ile aynıdır**, yalnızca saat algısı telefonun yerel zamanına uyarlanmıştır.
 
 ## Gerçek yerel yapay zeka (Whisper + Qwen3)
 
