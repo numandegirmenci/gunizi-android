@@ -5,10 +5,12 @@ import static org.junit.Assert.*;
 
 public class AiProgressStatusTest {
     @Test public void audioProgressStaysGlobalAcrossNativeChunkResets(){
-        assertEquals(7,AiProgressStatus.totalChunks(203000));
+        assertEquals(8,AiProgressStatus.totalChunks(203000));
+        assertEquals(1,AiProgressStatus.totalChunks(10000));
+        assertEquals(2,AiProgressStatus.totalChunks(13000));
         assertEquals(73,AiProgressStatus.totalPercent(150000,203000));
         assertEquals("00:02:30 / 00:03:23",AiProgressStatus.audioLabel(150000,203000));
-        assertEquals("Bölüm 6 / 7",AiProgressStatus.partLabel(6,7));
+        assertEquals("Bölüm 6 / 8",AiProgressStatus.partLabel(6,8));
     }
     @Test public void unknownAudioLengthNeverShowsInventedPercentage(){
         assertEquals(0,AiProgressStatus.totalChunks(0));
