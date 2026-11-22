@@ -41,7 +41,7 @@ public final class DailySummaryWorker extends Worker {
             .setOnlyAlertOnce(true).setOngoing(true).setContentIntent(open).build();
     }
     static void queue(Context c,Uri uri,String name,boolean charging){
-        if(uri==null||!OfflineModelManager.ready(c))return;
+        if(uri==null||!AiModelStore.ready(c,AiModelStore.WHISPER)||!AiModelStore.ready(c,AiModelStore.QWEN))return;
         Data data=new Data.Builder().putString(URI,uri.toString()).putString(NAME,name).build();
         Constraints.Builder constraints=new Constraints.Builder().setRequiresBatteryNotLow(true);
         if(charging)constraints.setRequiresCharging(true);
@@ -55,7 +55,7 @@ public final class DailySummaryWorker extends Worker {
         Context c=getApplicationContext();
         String address=getInputData().getString(URI);
         String fileName=getInputData().getString(NAME);
-        if(address==null||fileName==null||!OfflineModelManager.ready(c))
+        if(address==null||fileName==null||!AiModelStore.ready(c,AiModelStore.WHISPER)||!AiModelStore.ready(c,AiModelStore.QWEN))
             return Result.failure();
         ensureChannel(c);
         try{
@@ -63,12 +63,37 @@ public final class DailySummaryWorker extends Worker {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING:
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC;
             setForegroundAsync(new ForegroundInfo(206,notice("Türkçe ses modeli hazırlanıyor"),type)).get();
-            String report=DailyReportEngine.analyze(c,Uri.parse(address),fileName,(pct,message)->{
+            String fileBase=fileName.replaceAll("(?i)\\.(ogg|opus|wav|m4a)$","");
+            java.io.File drafts=new java.io.File(c.getNoBackupFilesDir(),"ai_drafts");
+            drafts.mkdirs();
+            java.io.File transcriptCache=new java.io.File(drafts,
+                fileBase.replaceAll("[^a-zA-Z0-9_-]","_")+".txt");
+            DailyReportEngine.Progress listener=(pct,message)->{
                 setProgressAsync(new Data.Builder().putInt("percent",pct).putString("stage",message).build());
                 if(pct%10==0)c.getSystemService(NotificationManager.class).notify(206,notice(message));
-            });
-            String output=fileName.replaceAll("(?i)\\.(ogg|opus|wav|m4a)$","");
-            ExportManager.writeText(c,new Prefs(c).folder(),report,"GunIzi_Ozet_"+output+".txt");
+            };
+            String transcript;
+            if(transcriptCache.isFile()&&transcriptCache.length()>50){
+                transcript=new String(java.nio.file.Files.readAllBytes(transcriptCache.toPath()),
+                    java.nio.charset.StandardCharsets.UTF_8);
+                listener.update(70,"Önceki konuşma dökümü kurtarıldı");
+            }else{
+                transcript=WhisperDailyTranscriber.transcribe(c,Uri.parse(address),listener);
+                try(java.io.FileOutputStream out=new java.io.FileOutputStream(transcriptCache)){
+                    out.write(transcript.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+            }
+            // Save the complete transcript before LLM inference to prevent loss on a model failure.
+            ExportManager.writeText(c,new Prefs(c).folder(),
+                "GÜNİZİ • TAM TÜRKÇE KONUŞMA DÖKÜMÜ\\n"+transcript,
+                "GunIzi_Dokum_"+fileBase+".txt");
+            String summary=FullDaySummarizer.summarize(c,transcript,listener);
+            String report="GÜNİZİ • YEREL QWEN3 GÜNLÜK RAPORU\\n"+
+                "Kaynak ses: "+fileName+"\\nModel: Whisper small + Qwen3-1.7B Q4_K_M\\n"+
+                "Not: Otomatik tanıma ve özet hatalı olabilir; önemli bilgileri sesle karşılaştır.\\n\\n"+
+                summary+"\\n\\n----- TAM KONUŞMA DÖKÜMÜ -----\\n"+transcript;
+            ExportManager.writeText(c,new Prefs(c).folder(),report,"GunIzi_Ozet_"+fileBase+".txt");
+            transcriptCache.delete();
             c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
                 .putString("summaryLast","Günlük rapor hazır: "+fileName)
                 .putString("summaryError","").apply();

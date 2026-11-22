@@ -181,7 +181,8 @@ public final class RecorderService extends Service {
                 backup=CryptoVault.encrypt(getApplicationContext(),audio);
                 android.net.Uri saved=ExportManager.writeFile(getApplicationContext(),
                     prefs.folder(),audio,audio.getName(),"audio/ogg");
-                if(OfflineModelManager.ready(getApplicationContext()))
+                if(AiModelStore.ready(getApplicationContext(),AiModelStore.WHISPER)&&
+                   AiModelStore.ready(getApplicationContext(),AiModelStore.QWEN))
                     DailySummaryWorker.queue(getApplicationContext(),saved,audio.getName(),true);
                 stateText="Kayıt klasöre kaydedildi";
                 lastEvent=audio.getName();
