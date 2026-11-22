@@ -34,22 +34,27 @@ public final class BatteryInfoActivity extends Activity{
         int stop=prefs.endHour()*60+prefs.endMinute();
         double work=Math.max(0,(stop-start)/60.0);
         label("Mesai Kaydı: "+format(work)+" saat/gün",17,true);
-        label("Sürekli Kayıt: 24 saat/gün",17,true);
-        label(work>0?"Sürekli modda mikrofon kullanım süresi "+format(24/work)+" kat daha uzun.":
+        double selected=prefs.durationMinutes()/60.0;
+        label("İsteğe Bağlı Kayıt: "+format(selected)+" saat (seçili süre)",17,true);
+        label(work>0&&selected>0?"Mesai modu, seçili isteğe bağlı kayıttan "+format(work/selected)+
+            " kat uzun sürer. Bu pil tüketiminin aynı oranda artacağı anlamına gelmez.":
             "Geçerli mesai aralığı belirlenmedi.",14,false);
         label("Teorik Opus arşivi (16 kbps)",17,true);
-        label("Mesai: "+format(work*7.2)+" MB/gün · 24 saat: 172,8 MB/gün",14,false);
-        label("Not: Sürekli mod şu an yalnızca RAM geçmişi tutar. Kalıcı 24 saatlik Opus arşivi oluşturmaz.",13,false);
+        label("Mesai: "+format(work*7.2)+" MB · İsteğe Bağlı: "+
+            format(selected*7.2)+" MB (16 kbps Opus)",14,false);
+        label("Yalnızca kayıt başlatıldığında mikrofon çalışır. İsteğe bağlı kayıtta süre dolunca otomatik kapanır.",13,false);
         label("Örnek pil senaryosu",20,true);
         label("Aşağıdaki kaydırıcı, uygulamanın gerçek tüketimi değildir. Yalnızca saatlik ek tüketim varsayımının süre farkına etkisini gösterir.",13,false);
         SeekBar seek=new SeekBar(this);seek.setMax(19);seek.setProgress(7);content.addView(seek);
         output=label("",17,true);
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            @Override public void onProgressChanged(SeekBar bar,int progress,boolean user){update(work,0.1+progress*0.1);}
+            @Override public void onProgressChanged(SeekBar bar,int progress,boolean user){
+                update(work,selected,0.1+progress*0.1);
+            }
             @Override public void onStartTrackingTouch(SeekBar b){}
             @Override public void onStopTrackingTouch(SeekBar b){}
         });
-        update(work,0.8);
+        update(work,selected,0.8);
         label("Pil maliyeti bileşenleri",20,true);
         label("1. Mikrofon: açık kaldığı sürece güç kullanır.\n"
             +"2. Opus sıkıştırması: mesai modunda işlemci kullanır.\n"
@@ -68,7 +73,7 @@ public final class BatteryInfoActivity extends Activity{
         if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
         t.setPadding(0,dp(10),0,dp(10));content.addView(t);return t;
     }
-    private void update(double work,double rate){
+    private void update(double work,double selected,double rate){
         output.setText("Varsayım: saatlik %"+format(rate)+" ek pil\n"
             +"Mesai: %"+format(rate*work)+" · Sürekli: %"+format(rate*24)+"\n"
             +"Fark: +"+format(rate*(24-work))+" yüzde puanı (yalnızca örnek)");
