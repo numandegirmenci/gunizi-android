@@ -150,7 +150,7 @@ final class TopicReportRenderer {
     static long timestampMs(String value){
         if(value==null)return -1;
         java.util.regex.Matcher m=java.util.regex.Pattern
-            .compile("(?<!\\\\d)(\\\\d{2}):(\\\\d{2}):(\\\\d{2})(?!\\\\d)")
+            .compile("(?<!\\d)(\\d{2}):(\\d{2}):(\\d{2})(?!\\d)")
             .matcher(value);
         if(!m.find())return -1;
         try{
