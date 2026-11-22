@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.List;
+import com.gunizi.app.ai.asr.SpeechEngineRegistry;
 
 /**
  * Two real workflows: transcription only (Whisper) and full daily report
@@ -217,7 +218,7 @@ public final class DailySummaryWorker extends Worker {
                     transcript=new String(Files.readAllBytes(transcriptCache.toPath()),StandardCharsets.UTF_8);
                     listener.update(70,"Önceki konuşma dökümü bulundu");
                 }else{
-                    transcript=WhisperDailyTranscriber.transcribe(c,Uri.parse(uriString),speech,listener);
+                    transcript=SpeechEngineRegistry.transcribe(c,Uri.parse(uriString),speech,listener);
                     try(FileOutputStream out=new FileOutputStream(transcriptCache)){
                         out.write(transcript.getBytes(StandardCharsets.UTF_8));out.getFD().sync();
                     }
