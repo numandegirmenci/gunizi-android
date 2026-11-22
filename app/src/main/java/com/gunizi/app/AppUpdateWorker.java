@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit;
  * Only published Releases (not arbitrary commits or Actions debug APKs) are accepted.
  */
 public final class AppUpdateWorker extends Worker {
-    static final String CHANNEL="gunizi_release_updates",WORK="gunizi-update-check";
+    static final String CHANNEL="gunizi_release_updates_visible_v2",WORK="gunizi-update-check";
     static final String API="https://api.github.com/repos/numandegirmenci/gunizi-android/releases/latest";
     static final String RELEASES="https://github.com/numandegirmenci/gunizi-android/releases";
     static final String PREF="gunizi_update";
@@ -36,7 +36,8 @@ public final class AppUpdateWorker extends Worker {
     }
     static void schedule(Context c){
         if(!enabled(c)){
-            WorkManager.getInstance(c).cancelUniqueWork(WORK);return;
+            WorkManager.getInstance(c).cancelUniqueWork(WORK);
+            WorkManager.getInstance(c).cancelUniqueWork(WORK+"-initial");return;
         }
         Constraints constraints=new Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED).build();
@@ -45,6 +46,14 @@ public final class AppUpdateWorker extends Worker {
             .setConstraints(constraints).addTag("gunizi-updates").build();
         WorkManager.getInstance(c).enqueueUniquePeriodicWork(
             WORK,ExistingPeriodicWorkPolicy.KEEP,r);
+        // A newly installed app should not need to wait for the first 12-hour interval.
+        long checked=c.getSharedPreferences(PREF,Context.MODE_PRIVATE).getLong("lastChecked",0);
+        if(System.currentTimeMillis()-checked>6L*60*60*1000){
+            OneTimeWorkRequest initial=new OneTimeWorkRequest.Builder(AppUpdateWorker.class)
+                .setConstraints(constraints).addTag("gunizi-update-initial").build();
+            WorkManager.getInstance(c).enqueueUniqueWork(
+                WORK+"-initial",ExistingWorkPolicy.KEEP,initial);
+        }
     }
     static boolean enabled(Context c){
         return c.getSharedPreferences(PREF,Context.MODE_PRIVATE)
@@ -99,13 +108,23 @@ public final class AppUpdateWorker extends Worker {
     }
     static String check(Context c,boolean background)throws Exception{
         JSONObject release=json(new URL(API));
-        if(release==null)return "Henüz yayınlanmış GitHub sürümü yok.";
+        if(release==null){
+            recordChecked(c);
+            return "Henüz yayınlanmış GitHub sürümü yok.";
+        }
         if(release.optBoolean("draft",false)||release.optBoolean("prerelease",false))
             return "Yalnızca kararlı yayınlar güncellenir.";
         String tag=release.optString("tag_name","");
         int remote=versionCode(release);
         int current=(int)c.getPackageManager().getPackageInfo(c.getPackageName(),0).getLongVersionCode();
-        if(remote<=current)return "Günİzi güncel • sürüm kodu "+current;
+        recordChecked(c);
+        if(remote<=current){
+            android.content.SharedPreferences p=c.getSharedPreferences(PREF,Context.MODE_PRIVATE);
+            p.edit().putString("remoteTag",tag)
+                .putString("releaseNotes",release.optString("body","").substring(0,
+                    Math.min(12000,release.optString("body","").length()))).apply();
+            return "Günİzi güncel • "+tag;
+        }
         JSONArray assets=release.optJSONArray("assets");
         JSONObject candidate=null;
         if(assets!=null)for(int i=0;i<assets.length();i++){
@@ -123,9 +142,13 @@ public final class AppUpdateWorker extends Worker {
         if(!destination.startsWith("https://github.com/numandegirmenci/gunizi-android/releases/download/"))
             throw new IOException("Güvenilir yayın adresi yok");
         android.content.SharedPreferences pref=c.getSharedPreferences(PREF,Context.MODE_PRIVATE);
+        String notes=release.optString("body","");
+        if(notes.length()>12000)notes=notes.substring(0,12000);
         pref.edit().putInt("remoteCode",remote).putString("remoteTag",tag)
             .putString("releaseUrl",release.optString("html_url",RELEASES))
-            .putString("assetUrl",destination).putString("assetSha",sha).apply();
+            .putString("assetUrl",destination).putString("assetSha",sha)
+            .putString("releaseNotes",notes)
+            .putString("releaseSummary",shortNotes(notes)).apply();
         // Automatic transfer only on unmetered networks, and only if GitHub supplies a SHA-256 digest.
         boolean unmetered=!c.getSystemService(ConnectivityManager.class).isActiveNetworkMetered();
         if(unmetered&&sha.matches("sha256:[a-fA-F0-9]{64}")){
@@ -133,9 +156,9 @@ public final class AppUpdateWorker extends Worker {
                 pref.edit().putString("lastDownloadError",ex.getMessage()).apply();
             }
         }
-        showUpdateNotice(c,tag,packageFile(c).isFile() &&
-            pref.getInt("downloadVersion",0)==remote);
-        return "Yeni sürüm bulundu: "+tag+(packageFile(c).exists()?" • İndirildi":" • Yayınlandı");
+        boolean downloaded=packageFile(c).isFile()&&pref.getInt("downloadVersion",0)==remote;
+        showUpdateNotice(c,tag,remote,downloaded,notes);
+        return "Yeni sürüm bulundu: "+tag+(downloaded?" • APK indirildi":" • Yenilikleri görüntüle");
     }
     private static int versionCode(JSONObject release){
         String notes=release.optString("body","");
@@ -183,20 +206,53 @@ public final class AppUpdateWorker extends Worker {
             con.disconnect();tmp.delete();
         }
     }
-    private static void showUpdateNotice(Context c,String version,boolean downloaded){
+    private static void recordChecked(Context c){
+        c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit()
+            .putLong("lastChecked",System.currentTimeMillis()).apply();
+    }
+
+    static String shortNotes(String body){
+        if(body==null||body.isEmpty())return "Sürüm notlarını görmek için dokun.";
+        for(String line:body.split("\\R")){
+            String t=line.trim();
+            if(t.startsWith("- ")||t.startsWith("* ")){
+                t=t.substring(2).replace("**","").trim();
+                return t.length()>100?t.substring(0,100)+"…":t;
+            }
+        }
+        return "Bu sürümdeki yenilikleri görüntüle.";
+    }
+
+    private static void showUpdateNotice(Context c,String version,int remote,
+                                          boolean downloaded,String notes){
         NotificationManager mgr=c.getSystemService(NotificationManager.class);
+        android.content.SharedPreferences prefs=c.getSharedPreferences(PREF,Context.MODE_PRIVATE);
+        if(prefs.getInt("notifiedVersion",0)==remote)return;
         NotificationChannel channel=new NotificationChannel(CHANNEL,
-            "Günİzi sürüm güncellemeleri",NotificationManager.IMPORTANCE_LOW);
-        channel.setShowBadge(false);mgr.createNotificationChannel(channel);
+            "Günİzi • Yeni sürümler",NotificationManager.IMPORTANCE_DEFAULT);
+        // Audible interruptions are disabled, but the notification stays visible.
+        channel.setSound(null,null);
+        channel.setShowBadge(true);
+        channel.setDescription("Yeni sürüm yayınlandığında yenilikleri ve kurulumu gösterir");
+        mgr.createNotificationChannel(channel);
         Intent open=new Intent(c,UpdateActivity.class);
         PendingIntent pi=PendingIntent.getActivity(c,211,open,
             PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
-        mgr.notify(211,new Notification.Builder(c,CHANNEL)
+        String summary=shortNotes(notes);
+        Notification.BigTextStyle style=new Notification.BigTextStyle()
+            .bigText("Bu sürümde neler yeni?\\n"+summary+
+                "\\nKurulumdan önce ayrıntılı değişiklikleri incele.")
+            .setBigContentTitle("Günİzi "+version+" güncellemesi");
+        Notification notification=new Notification.Builder(c,CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("Günİzi "+version+" güncellemesi")
-            .setContentText(downloaded?
-                "Yeni APK hazır. Yüklemek için dokun.":"Yeni sürüm yayınlandı. Ayrıntıları aç.")
-            .setContentIntent(pi).setAutoCancel(true).setOnlyAlertOnce(true)
-            .setCategory(Notification.CATEGORY_STATUS).build());
+            .setContentTitle("Günİzi "+version+" hazır")
+            .setContentText(summary)
+            .setStyle(style).setContentIntent(pi).setAutoCancel(true)
+            .setOnlyAlertOnce(true).setCategory(Notification.CATEGORY_RECOMMENDATION)
+            .addAction(android.R.drawable.ic_menu_info_details,
+                "Yenilikleri gör",pi)
+            .build();
+        mgr.notify(211,notification);
+        prefs.edit().putInt("notifiedVersion",remote).apply();
     }
 }
