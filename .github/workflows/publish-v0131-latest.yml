@@ -61,6 +61,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if ! git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            git fetch --no-tags --depth=1 origin "6b6d425c37f0a6562167c2f1f3faffacf956b7f3"
             git tag "$TAG" "6b6d425c37f0a6562167c2f1f3faffacf956b7f3"
             git push origin "refs/tags/$TAG"
           fi
