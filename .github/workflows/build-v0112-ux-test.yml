@@ -1,0 +1,101 @@
+name: Günİzi v0.11.2 UX Test APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-v0112-ux-test.yml'
+      - 'app/src/main/java/com/gunizi/app/**'
+      - 'app/build.gradle'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gunizi-ux-test-v0112
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout native sources recursively
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Verify native sources and model asset
+        run: |
+          test -f third_party/callvault/app/src/main/cpp/whispercv.cpp
+          test -f third_party/callvault/third_party/whisper.cpp/CMakeLists.txt
+          test -f third_party/callvault/third_party/llama.cpp/CMakeLists.txt
+          test -f third_party/callvault/app/src/main/assets/ggml-silero-v5.1.2.bin
+      - name: Build Android UX test and run JVM tests
+        run: |
+          gradle --no-daemon :app:assembleDebug
+          gradle --no-daemon :app:testDebugUnitTest
+      - name: Inspect and verify installable APK
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          unzip -tq "$APK" > /dev/null
+          AAPT="$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)"
+          SIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          test -n "$AAPT" && test -n "$SIGNER"
+          "$AAPT" dump badging "$APK" | head -n 1 | tee package.txt
+          grep -F "name='com.gunizi.app.ai5'" package.txt
+          grep -F "versionCode='14'" package.txt
+          grep -F "versionName='0.11.2-test'" package.txt
+          unzip -Z1 "$APK" | grep -F 'lib/arm64-v8a/libwhispercv.so'
+          unzip -Z1 "$APK" | grep -F 'lib/arm64-v8a/libllamacv.so'
+          unzip -Z1 "$APK" | grep -F 'assets/ggml-silero-v5.1.2.bin'
+          "$SIGNER" verify "$APK"
+          sha256sum "$APK"
+      - name: Upload tested APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GunIzi-UX-Test-v0.11.2
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 60
+      - name: Publish APK as prerelease, never replace previous build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="test-v0.11.2-ux"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release tag already exists; do not overwrite a published APK."
+            exit 1
+          fi
+          cp app/build/outputs/apk/debug/app-debug.apk GunIzi-UX-Test-v0.11.2.apk
+          cat > notes.md <<'NOTES'
+          Günİzi v0.11.2 — compact AI and Notes UX test build.
+
+          - Task-first model recommendations: 5-minute balanced, 5–60-minute detailed, and long-recording low-footprint.
+          - Streamlined AI screen; technical controls are collapsible.
+          - Searchable local Notes library and on-demand editor.
+          - CallVault brand removed from ordinary UI. Required open-source credits retained in About > Legal.
+          - Native Whisper / Silero / llama models unchanged.
+
+          TEST ONLY: Android CI compile and JVM unit tests do not prove end-to-end transcription, note behavior or speed on Samsung hardware.
+
+          App package: com.gunizi.app.ai5 (isolated install, does not replace existing Günİzi).
+          Existing app recordings stay in the previous app. Models stored in the old application's private storage will not transfer automatically.
+          NOTES
+          gh release create "$TAG" GunIzi-UX-Test-v0.11.2.apk \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Günİzi v0.11.2 • Kullanışlı Yapay Zeka ve Notlarım (TEST)" \
+            --notes-file notes.md --prerelease
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,assets
