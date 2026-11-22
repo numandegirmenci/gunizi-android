@@ -119,6 +119,27 @@ public final class SummaryActivity extends Activity {
             whisperState.setText("Whisper modeli hazır ✓");
         if(AiModelStore.ready(this,p.aiModel()))
             qwenState.setText("Seçilen Qwen3 modeli hazır ✓");
+        LinearLayout instructions=card();
+        text(instructions,"Yapay zeka neye dikkat etsin?",18,true);
+        text(instructions,"Örneğin ruhsat, abonelik, belediye görüşmeleri, kararlar, "+
+            "kişiler veya belirli bir proje. Talimatın sonraki analizlerde uygulanır.",13,false);
+        AnalysisPreferences profile=new AnalysisPreferences(this);
+        EditText focus=new EditText(this);
+        focus.setText(profile.focus());
+        focus.setTextColor(WHITE);
+        focus.setHintTextColor(MUTED);
+        focus.setTextSize(14);
+        focus.setMinLines(4);focus.setMaxLines(9);
+        focus.setHint("Örn. Alınan kararları, teslim tarihlerini ve sorumluları ayrıca çıkar.");
+        instructions.addView(focus);
+        Button saveFocus=button(instructions,"Analiz tercihimi kaydet");
+        saveFocus.setOnClickListener(v->{
+            profile.focus(focus.getText().toString());
+            Toast.makeText(this,"Yapay zeka analiz tercihi kaydedildi.",Toast.LENGTH_SHORT).show();
+        });
+        text(instructions,"Önemli: Yapay zeka kesinleşmeyen işleri karar gibi göstermemeli. "+
+            "Her maddede varsa ses kaydının kaynak saati yer alacak.",12,false);
+
         LinearLayout analyze=card();
         text(analyze,"Günlük rapor",19,true);
         text(analyze,"İki model de kuruluysa mesai kayıtları telefon şarjdayken otomatik "
@@ -140,6 +161,12 @@ public final class SummaryActivity extends Activity {
         status=text(analyze,"Rapor kuyruğu kontrol ediliyor…",13,false);
         Button topics=button(analyze,"Konu konu özet tablosunu aç");
         topics.setOnClickListener(v->startActivity(new Intent(this,ReportTableActivity.class)));
+        Button notes=button(analyze,"Notlarım • Raporu düzenle ve ekle");
+        notes.setOnClickListener(v->{
+            Intent openNotes=new Intent(this,UserNotesActivity.class);
+            openNotes.putExtra("openLatestReport",true);
+            startActivity(openNotes);
+        });
                 Button refresh=button(analyze,"İşlem durumunu yenile");
         refresh.setOnClickListener(v->refreshStatus());
         text(analyze,"Uzun seslerin çözülmesi ve Qwen3 özetlemesi saatler sürebilir. "
