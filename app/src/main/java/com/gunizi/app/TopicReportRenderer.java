@@ -88,28 +88,56 @@ final class TopicReportRenderer {
             .replace(String.valueOf((char)34),"&quot;").replace("'","&#39;");
     }
     static String html(List<Entry> entries,String name){
+        java.util.Map<String,java.util.List<Entry>> grouped=new java.util.LinkedHashMap<>();
+        for(Entry e:entries){
+            String key=e.parts[1].toLowerCase(java.util.Locale.forLanguageTag("tr-TR"))
+                .replaceAll("\\s+"," ").trim();
+            grouped.computeIfAbsent(key,k->new java.util.ArrayList<>()).add(e);
+        }
+        int tasks=0,decisions=0;
+        for(Entry e:entries){
+            if(!e.parts[4].equalsIgnoreCase("Belirtilmedi"))tasks++;
+            if(!e.parts[3].equalsIgnoreCase("Belirtilmedi"))decisions++;
+        }
         StringBuilder s=new StringBuilder();
         s.append("<!doctype html><html lang='tr'><head><meta charset='utf-8'>")
          .append("<meta name='viewport' content='width=device-width, initial-scale=1'>")
-         .append("<title>Günİzi – Konu Tablosu</title>")
-         .append("<style>body{font:14px system-ui,-apple-system,sans-serif;background:#090e1b;color:#eff7ff;")
-         .append("margin:0;padding:18px}h2{margin:8px 0 4px}.meta{color:#a2b4c9;margin:0 0 12px}")
-         .append(".scroll{overflow-x:auto;border:1px solid #344055;border-radius:14px}")
-         .append("table{border-collapse:collapse;width:100%;min-width:930px}th{background:#1e3544;color:#49d9cf;")
-         .append("text-align:left;padding:13px;position:sticky;top:0}td{border-bottom:1px solid #2f384b;")
-         .append("padding:12px;vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere}tr:nth-child(even)")
-         .append("{background:#151e30}</style></head><body><h2>Günİzi · Günlük konu raporu</h2>")
-         .append("<p class='meta'>Kaynak: ").append(esc(name)).append("</p>")
-         .append("<p class='meta'>Otomatik çıkarım; önemli maddeleri sesle doğrula.</p>")
-         .append("<div class='scroll'><table><thead><tr>");
-        for(String h:COLUMNS)s.append("<th>").append(esc(h)).append("</th>");
-        s.append("</tr></thead><tbody>");
-        for(Entry e:entries){
-            s.append("<tr>");
-            for(String cell:e.parts)s.append("<td>").append(esc(cell)).append("</td>");
-            s.append("</tr>");
+         .append("<title>Günİzi Konu Analizi</title>")
+         .append("<style>body{font:14px system-ui;background:#090e1b;color:#edf8ff;margin:0;padding:16px}")
+         .append("h2{margin:5px 0 10px}.muted{color:#a9b9ca;line-height:1.5}")
+         .append(".stats{display:flex;gap:8px;margin:14px 0;flex-wrap:wrap}")
+         .append(".stat{background:#172031;border-radius:14px;padding:12px;flex:1;min-width:75px}")
+         .append(".stat b{display:block;font-size:22px;color:#3bdbc9}")
+         .append("details{background:#172031;border-radius:14px;margin:10px 0;border:1px solid #2d3b4d}")
+         .append("summary{cursor:pointer;padding:15px;font-weight:700;color:white}")
+         .append("summary small{display:block;color:#b0bfd0;font-weight:400;margin-top:5px}")
+         .append(".scroll{overflow-x:auto}table{width:100%;min-width:650px;border-collapse:collapse}")
+         .append("th{text-align:left;background:#233448;color:#3bdbc9;padding:11px}")
+         .append("td{padding:11px;vertical-align:top;border-top:1px solid #324053;white-space:pre-wrap;overflow-wrap:anywhere}")
+         .append("tr:nth-child(even){background:#111a2a}</style></head><body>")
+         .append("<h2>Günİzi • Günlük konu analizi</h2>")
+         .append("<p class='muted'>Kaynak: ").append(esc(name))
+         .append("<br>Karar ve görevleri kaynaktaki sesle doğrula.</p>")
+         .append("<div class='stats'><div class='stat'><b>").append(grouped.size())
+         .append("</b>Konu</div><div class='stat'><b>").append(decisions)
+         .append("</b>Karar ifadesi</div><div class='stat'><b>").append(tasks)
+         .append("</b>Takip ifadesi</div></div>");
+        for(java.util.List<Entry> group:grouped.values()){
+            s.append("<details open><summary>").append(esc(group.get(0).parts[1]))
+             .append("<small>").append(group.size())
+             .append(" görüşme bölümü</small></summary><div class='scroll'><table>")
+             .append("<thead><tr><th>Saat</th><th>Konuşulanlar</th><th>Karar</th>")
+             .append("<th>Yapılacak</th><th>Sorumlu</th></tr></thead><tbody>");
+            for(Entry e:group){
+                s.append("<tr>");
+                for(int index:new int[]{0,2,3,4,5})
+                    s.append("<td>").append(esc(e.parts[index])).append("</td>");
+                s.append("</tr>");
+            }
+            s.append("</tbody></table></div></details>");
         }
-        return s.append("</tbody></table></div></body></html>").toString();
+        return s.append("<p class='muted'>Otomatik konuşma tanıma ve özetleme hatalı olabilir.</p>")
+            .append("</body></html>").toString();
     }
     static File saveInternal(Context c,String html,String filename)throws IOException{
         File root=new File(c.getNoBackupFilesDir(),"reports");
