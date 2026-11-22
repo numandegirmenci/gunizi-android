@@ -4,12 +4,14 @@ import java.util.Locale;
 
 /** Stable, unit-testable presentation rules for on-device inference progress. */
 final class AiProgressStatus {
-    static final int CHUNK_MS=30000;
+    static final int CHUNK_MS=30000,FIRST_CHUNK_MS=12000;
     private AiProgressStatus(){}
 
     static int totalChunks(long durationMs){
-        return durationMs<=0?0:(int)Math.min(Integer.MAX_VALUE,
-            (durationMs+CHUNK_MS-1)/CHUNK_MS);
+        if(durationMs<=0)return 0;
+        if(durationMs<=FIRST_CHUNK_MS)return 1;
+        return (int)Math.min(Integer.MAX_VALUE,
+            1+(durationMs-FIRST_CHUNK_MS+CHUNK_MS-1)/CHUNK_MS);
     }
     static int totalPercent(long processedMs,long durationMs){
         if(durationMs<=0)return 0;
