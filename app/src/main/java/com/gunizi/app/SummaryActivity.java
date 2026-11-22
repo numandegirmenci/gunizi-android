@@ -272,9 +272,9 @@ public final class SummaryActivity extends Activity {
         String speech=new AnalysisPreferences(this).speechModel(),
             llm=new Prefs(this).aiModel();
         String text=AiModelStore.label(speech)+": "+
-            (AiModelStore.ready(this,speech)?"Hazır ✓":"İndirilmeli")+"\\n"+
+            (AiModelStore.ready(this,speech)?"Hazır ✓":"İndirilmeli")+"\n"+
             AiModelStore.label(llm)+": "+
-            (AiModelStore.ready(this,llm)?"Hazır ✓":"İndirilmeli")+"\\n"+
+            (AiModelStore.ready(this,llm)?"Hazır ✓":"İndirilmeli")+"\n"+
             "Motor: CallVault whisper.cpp / llama.cpp • Silero VAD "+
             (p.getBoolean("aiSileroVad",true)?"açık":"kapalı");
         if(!text.contentEquals(modelStatus.getText()))
