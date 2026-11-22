@@ -22,6 +22,7 @@ public final class WorkMemoryActivity extends Activity {
     private LinearLayout filters;
     private final Button[] tabs=new Button[4];
     private int filter=0;
+    private int generation=0;
     private int dp(int n){return Math.round(getResources().getDisplayMetrics().density*n);}
     private GradientDrawable shape(int color){
         GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(12));return d;
@@ -83,14 +84,26 @@ public final class WorkMemoryActivity extends Activity {
         b.setBackground(shape(primary?CYAN:0xff25364a));return b;
     }
     private void load(String id){
-        try{
-            report=WorkMemoryStore.load(this,id);
-            getSharedPreferences("gunizi",MODE_PRIVATE).edit()
-                .putString("workMemoryLatest",id).apply();
-            sourceTitle.setText(report.name+" · "+new SimpleDateFormat("dd.MM.yyyy HH:mm",
-                new Locale("tr","TR")).format(new Date(report.created)));
-            rebuild();
-        }catch(Exception e){sourceTitle.setText("Rapor açılamadı: "+e.getMessage());}
+        final int pending=++generation;
+        sourceTitle.setText("İş hafızası yükleniyor…");
+        new Thread(()->{
+            try{
+                WorkMemoryStore.Report loaded=WorkMemoryStore.load(this,id);
+                runOnUiThread(()->{
+                    if(pending!=generation||isFinishing()||isDestroyed())return;
+                    report=loaded;
+                    getSharedPreferences("gunizi",MODE_PRIVATE).edit()
+                        .putString("workMemoryLatest",id).apply();
+                    sourceTitle.setText(loaded.name+" · "+new SimpleDateFormat("dd.MM.yyyy HH:mm",
+                        new Locale("tr","TR")).format(new Date(loaded.created)));
+                    rebuild();
+                });
+            }catch(Exception e){
+                runOnUiThread(()->{
+                    if(pending==generation)sourceTitle.setText("Rapor açılamadı: "+e.getMessage());
+                });
+            }
+        },"GunIzi-MemoryLoad").start();
     }
     private void chooseReport(){
         List<String> ids=WorkMemoryStore.recent(this);
@@ -98,9 +111,7 @@ public final class WorkMemoryActivity extends Activity {
         String[] options=new String[ids.size()];
         for(int i=0;i<ids.size();i++){
             try{
-                WorkMemoryStore.Report r=WorkMemoryStore.load(this,ids.get(i));
-                options[i]=r.name+" · "+new SimpleDateFormat("dd.MM HH:mm",
-                    new Locale("tr","TR")).format(new Date(r.created));
+                options[i]=WorkMemoryStore.describe(this,ids.get(i));
             }catch(Exception e){options[i]="Rapor #"+(i+1);}
         }
         new AlertDialog.Builder(this).setTitle("İncelenecek kayıt")
