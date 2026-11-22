@@ -128,7 +128,7 @@ public final class RecorderService extends Service {
         Notification.Builder builder=new Notification.Builder(this,CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle(title).setContentText(desc).setContentIntent(open)
-            .setOngoing(true).setOnlyAlertOnce(true).setSilent(true).setShowWhen(false)
+            .setOngoing(true).setOnlyAlertOnce(true).setDefaults(0).setShowWhen(false)
             .setCategory(Notification.CATEGORY_SERVICE).setPriority(Notification.PRIORITY_LOW)
             .addAction(android.R.drawable.ic_media_pause,"Dinlemeyi durdur",stop);
         if(historyActive){
