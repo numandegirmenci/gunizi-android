@@ -174,6 +174,8 @@ public final class SummaryActivity extends Activity {
             +"işleme alınır. Mevcut bir ses kaydını da elle seçebilirsin.",13,false);
         Button select=button(analyze,"Kaydedilmiş sesi seç ve özetle");
         select.setOnClickListener(v->{
+            // Selecting a report is explicit permission to use the instructions visible above.
+            profile.focus(focus.getText().toString());
             if(!AiModelStore.ready(this,new AnalysisPreferences(this).speechModel())||
                !AiModelStore.ready(this,new Prefs(this).aiModel())){
                 Toast.makeText(this,"Önce iki yerel modeli indir.",Toast.LENGTH_LONG).show();return;
