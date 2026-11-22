@@ -1,6 +1,15 @@
-# Günİzi Android • v0.6 (Deneysel)
+# Günİzi Android • v0.7 kaynak kodu (Deneysel)
 
 **Durum:** Android debug APK deneysel; gerçek cihazda 9 saatlik yük testi henüz yapılmadı.
+
+> **Yayın durumu (22 Kasım 2026):** v0.6.0, GitHub Releases'e yüklenmiş son test APK'dır. 
+> v0.7.0'da sürüm bildirimi, değişiklik listesi ve silmeden güncelleme için imza kontrolü kodu vardır. 
+> v0.7.0 **henüz imzalı Release olarak yayımlanmadı**. Önce kalıcı imza anahtarı GitHub Secrets'a yüklenmeli. 
+> Kurulum: [Silmeden güncelleme rehberi](docs/UPDATE_SETUP.md) ve [v0.7 yenilikleri](release-notes/v0.7.0.md).
+>
+> **Eski test APK'sı sorunu:** Önceki debug imzalama anahtarı GitHub runner ile değiştiyse mevcut kurulumun üzerine yeni APK yüklenemez. İlk kalıcı imzalı sürüme geçerken bir kerelik geçiş gerekebilir. Bundan sonra aynı anahtarla imzalanan sürümler mevcut uygulamanın üzerine yüklenir.
+
+
 
 Günİzi, Türkçe çevrimdışı ses kaydı ve yerel yapay zeka ile günlük rapor amaçlayan Android uygulamasıdır.
 
@@ -74,6 +83,13 @@ Her iki model de **Rapor** sekmesinden kullanıcının açık onayıyla indirili
 - Pil karşılaştırma ekranı seçili manuel kayıt süresi ile mesai süresini gösterir; **gerçek ölçümler yerine varsayımsal hesapları açıkça belirtir**.
 - Yerel yapay zeka yoğun CPU/RAM kullanabilir. Otomatik raporlar varsayılan olarak şarj koşulu sağlanınca başlar.
 - Bir cihazın gizlilik ve mikrofon göstergeleri Android tarafından yönetilir; uygulama bunları gizlemez.
+
+## Güncelleme deneyimi (v0.7)
+
+- Android WorkManager yeni sürümleri arka planda kontrol eder; mümkünse ilk açılıştan sonra erken kontrol de yapar.
+- Yeni sürüm bulununca bildirimde kısa **yenilikler** gösterilir. Bildirime dokununca **Bu güncellemede neler var?** ekranı açılır.
+- Kurulumdan önce mevcut ve yeni APK'nın paket adı, sürüm kodu ve imzası denetlenir; uyumsuzsa kullanıcıya uygulamayı silme önerilmez.
+- **Kalıcı imza anahtarı olmadan v0.7 signed Release yayınlanmaz.** Tek seferlik [kurulum rehberi](docs/UPDATE_SETUP.md).
 
 ## GitHub'dan otomatik sürüm kontrolü (v0.5)
 
