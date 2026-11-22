@@ -166,6 +166,13 @@ final class WorkMemoryStore {
         for(File f:files)ids.add(f.getName().replace(".meta",""));
         return ids;
     }
+    static String describe(Context c,String id)throws IOException {
+        JSONObject meta=readJson(file(c,id,".meta"));
+        String name=meta.optString("name","Ses kaydı");
+        long created=meta.optLong("created",0);
+        return name+" · "+new java.text.SimpleDateFormat("dd.MM.yyyy HH:mm",
+            new Locale("tr","TR")).format(new Date(created));
+    }
     static boolean hasSource(Context c,String uri){
         if(uri==null||uri.isEmpty())return false;
         for(String id:recent(c))try{
