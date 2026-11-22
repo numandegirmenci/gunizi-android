@@ -15,9 +15,9 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Locale;
 
-/** Decode as streaming mono PCM; emit bounded 30-second WAV segments for first-text latency. */
+/** Stream bounded 30-second mono PCM directly to the native engine. No plaintext WAV temp files. */
 final class AudioChunkDecoder {
-    interface Consumer {void onChunk(File wav,long offsetMs,int percent)throws Exception;}
+    interface Consumer {void onChunk(float[] pcm,long offsetMs,int percent)throws Exception;}
     private static final int RATE=16000,CHUNK_SECONDS=30,MAX=CHUNK_SECONDS*RATE*2;
     private final Context context;
     private final Consumer consumer;
@@ -118,17 +118,18 @@ final class AudioChunkDecoder {
     private void emit()throws Exception{
         byte[] bytes=pcm.toByteArray();
         if(bytes.length==0)return;
-        File temp=File.createTempFile("gunizi_chunk_"+sequence++,".wav",context.getCacheDir());
         try{
-            try(FileOutputStream out=new FileOutputStream(temp)){
-                header(out,bytes.length);
-                out.write(bytes);out.flush();
+            float[] samples=new float[bytes.length/2];
+            for(int i=0;i<samples.length;i++){
+                int j=i*2;
+                int sample=(bytes[j]&255)|(bytes[j+1]<<8);
+                samples[i]=((short)sample)/32768.0f;
             }
-            consumer.onChunk(temp,currentStartMs,progress);
+            consumer.onChunk(samples,currentStartMs,progress);
         }finally{
-            temp.delete();
             currentStartMs+=bytes.length*1000L/(RATE*2);
             pcm.reset();
+            java.util.Arrays.fill(bytes,(byte)0);
         }
     }
     private static void header(OutputStream out,int bytes)throws IOException{
