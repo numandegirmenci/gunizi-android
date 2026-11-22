@@ -376,22 +376,30 @@ public final class MainActivity extends Activity {
         gap(about,7);
         muted(about,"numandegirmenc@gmail.com");
         gap(about,14);
-        about.addView(label("Açık kaynak ve atıflar",15,WHITE,true));
-        muted(about,"Günİzi'nin yapay zeka motoru CallVault kaynak kodu kullanılarak "+
-            "uyarlanmıştır. Bu bağımsız, değiştirilmiş bir uygulamadır; "+
+        about.addView(label("Yasal bilgiler",15,WHITE,true));
+        muted(about,"Kullanılan açık kaynak bileşenlerin lisansları ve geliştirici atıfları.");
+        Button licenses=button("Açık kaynak lisanslarını görüntüle ▼",false);
+        about.addView(licenses);
+        LinearLayout credits=new LinearLayout(this);
+        credits.setOrientation(LinearLayout.VERTICAL);
+        credits.setVisibility(View.GONE);
+        about.addView(credits);
+        muted(credits,"Günİzi, CallVault kaynak kodundan uyarlanmış bağımsız ve değiştirilmiş bir uygulamadır. "+
             "CallVault veya ShizuCallRecorder'ın resmi sürümü değildir.");
-        gap(about,8);
         Button upstream=button("CallVault • Kaynak kodu ve GPL lisansı",false);
-        about.addView(upstream);
+        credits.addView(upstream);
         upstream.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,
             Uri.parse("https://github.com/madkongo/CallVault"))));
-        gap(about,7);
         Button original=button("Orijinal proje • ShizuCallRecorder",false);
-        about.addView(original);
+        credits.addView(original);
         original.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,
             Uri.parse("https://github.com/kitsumed/ShizuCallRecorder"))));
-        muted(about,"CallVault / ShizuCallRecorder geliştiricilerinin telif hakları "+
-            "saklıdır. Ayrıntılar: GitHub → LICENSE ve THIRD_PARTY_NOTICES.md.");
+        muted(credits,"Telif hakları ve lisanslar korunur. Ayrıntılar: GitHub → LICENSE ve THIRD_PARTY_NOTICES.md.");
+        licenses.setOnClickListener(v->{
+            boolean open=credits.getVisibility()!=View.VISIBLE;
+            credits.setVisibility(open?View.VISIBLE:View.GONE);
+            licenses.setText(open?"Lisans bilgilerini gizle ▲":"Açık kaynak lisanslarını görüntüle ▼");
+        });
     }
     private void pickTime(boolean first,Button b){
         new TimePickerDialog(this,(v,h,m)->{
