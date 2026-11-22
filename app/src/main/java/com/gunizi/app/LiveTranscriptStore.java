@@ -58,7 +58,7 @@ final class LiveTranscriptStore {
             for(int i=split.length-1;i>=0&&kept<16;i--){
                 if(split[i].trim().isEmpty())continue;
                 if(window.length()+split[i].length()>4500)break;
-                window.insert(0,split[i]+"\\n");
+                window.insert(0,split[i]+"\n");
                 kept++;
             }
             p.edit().putString("analysisTimeline",window.toString()).apply();
