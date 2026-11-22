@@ -21,6 +21,7 @@ final class RecordingPlayerCard extends LinearLayout {
     private Uri source;
     private MediaPlayer player;
     private boolean userSeeking;
+    private long pendingSeek=-1;
     private final Runnable heartbeat=new Runnable(){
         @Override public void run(){
             if(player!=null){
@@ -72,7 +73,7 @@ final class RecordingPlayerCard extends LinearLayout {
     }
     void setSource(Uri uri,AiAudioPreflight.Info info){
         release();
-        source=uri;
+        source=uri;pendingSeek=-1;
         name.setText(info.name);
         metadata.setText(info.description());
         position.setText("00:00 / "+time(info.durationMs));
@@ -93,7 +94,12 @@ final class RecordingPlayerCard extends LinearLayout {
                 player=new MediaPlayer();
                 player.setDataSource(getContext(),source);
                 player.setOnPreparedListener(p->{
-                    seek.setMax(Math.max(1000,p.getDuration()));p.start();
+                    seek.setMax(Math.max(1000,p.getDuration()));
+                    if(pendingSeek>=0){
+                        p.seekTo((int)Math.min(Math.max(0,p.getDuration()-1),pendingSeek));
+                        pendingSeek=-1;
+                    }
+                    p.start();
                     handler.removeCallbacks(heartbeat);handler.post(heartbeat);
                 });
                 player.setOnCompletionListener(p->{
@@ -106,6 +112,16 @@ final class RecordingPlayerCard extends LinearLayout {
             release();metadata.setText("Ses oynatılamadı: "+
                 ex.getClass().getSimpleName());play.setText("Yeniden dene");
         }
+    }
+    void playAt(long ms){
+        if(source==null)return;
+        pendingSeek=Math.max(0,ms);
+        if(player==null)toggle();
+        else try{
+            player.seekTo((int)Math.min(Integer.MAX_VALUE,pendingSeek));
+            pendingSeek=-1;
+            if(!player.isPlaying())player.start();
+        }catch(Exception ignored){}
     }
     void seekTo(long ms){
         try{if(player!=null)player.seekTo((int)Math.min(Integer.MAX_VALUE,Math.max(0,ms)));}
