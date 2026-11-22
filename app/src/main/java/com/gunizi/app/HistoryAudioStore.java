@@ -30,6 +30,7 @@ final class HistoryAudioStore {
     }
     private final File dir;
     private final ArrayList<Segment> segments=new ArrayList<>();
+    private boolean disposed=false;
     HistoryAudioStore(Context context){
         dir=new File(context.getCacheDir(),"gunizi_rolling_history");
         if(!dir.exists())dir.mkdirs();
@@ -61,7 +62,7 @@ final class HistoryAudioStore {
     }
     synchronized void release(List<Segment> pinned){
         for(Segment s:pinned)s.pins=Math.max(0,s.pins-1);
-        prune(SystemClock.elapsedRealtime());
+        if(disposed)deleteUnpinned();else prune(SystemClock.elapsedRealtime());
     }
     synchronized void prune(long now){
         long earliest=now-MAX_MS-SEGMENT_MS;
@@ -70,11 +71,15 @@ final class HistoryAudioStore {
             if(s.end<earliest&&s.pins==0){s.file.delete();segments.remove(i);}
         }
     }
-    synchronized void discard(){
+    private void deleteUnpinned(){
         for(int i=segments.size()-1;i>=0;i--){
             Segment s=segments.get(i);
             if(s.pins==0){s.file.delete();segments.remove(i);}
         }
+    }
+    synchronized void discard(){
+        disposed=true;
+        deleteUnpinned();
     }
     /** Re-mux selected Opus samples into a single playable OGG file, no recompression. */
     static File merge(Context context,List<Segment> source,long cutoff,long endTime)throws IOException{
@@ -124,10 +129,14 @@ final class HistoryAudioStore {
                 }finally{extractor.release();}
             }
             if(samples==0)throw new IOException("Seçilen aralıkta ses verisi yok");
-            success=true;return result;
+            if(!started)throw new IOException("Ses kapsayıcısı oluşturulamadı");
+            muxer.stop();
+            started=false;
+            success=true;
+            return result;
         }finally{
             if(muxer!=null){
-                if(started)try{muxer.stop();}catch(Exception e){success=false;}
+                if(started)try{muxer.stop();}catch(Exception ignored){}
                 muxer.release();
             }
             if(!success)result.delete();
