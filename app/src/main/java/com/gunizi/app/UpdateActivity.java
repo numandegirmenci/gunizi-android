@@ -31,12 +31,12 @@ public final class UpdateActivity extends Activity {
         t.setText(value);t.setTextSize(size);t.setTextColor(bold?WHITE:MUTED);
         if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);
-        p.bottomMargin=dp(13);parent.addView(t,p);return t;
+        p.bottomMargin=dp(8);parent.addView(t,p);return t;
     }
     private Button button(LinearLayout parent,String value){
         Button b=new Button(this);b.setAllCaps(false);b.setText(value);b.setTextSize(14);
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(50));
-        p.bottomMargin=dp(10);parent.addView(b,p);return b;
+        p.bottomMargin=dp(6);parent.addView(b,p);return b;
     }
     private LinearLayout card(LinearLayout root){
         LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);
@@ -49,15 +49,31 @@ public final class UpdateActivity extends Activity {
         ScrollView sc=new ScrollView(this);sc.setBackgroundColor(BG);
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(18),dp(24),dp(18),dp(24));sc.addView(root);setContentView(sc);
-        label(root,"Günİzi · Güncellemeler",24,true);
+        label(root,"Günİzi • Güncellemeler",22,true);
         LinearLayout latest=card(root);
         headline=label(latest,"GitHub sürümü",19,true);
         status=label(latest,"Güncelleme bilgisi kontrol ediliyor…",14,false);
-        check=button(latest,"Yeni sürümleri kontrol et");
+        LinearLayout actions=new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        latest.addView(actions,new LinearLayout.LayoutParams(-1,dp(50)));
+        check=button(actions,"Şimdi kontrol et");
+        Button releases=button(actions,"GitHub Releases");
+        LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,dp(48),1);
+        left.rightMargin=dp(8);check.setLayoutParams(left);
+        releases.setLayoutParams(new LinearLayout.LayoutParams(0,dp(48),1));
+        check.setTextSize(12);releases.setTextSize(12);
         check.setOnClickListener(v->check());
+        releases.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,
+            Uri.parse(AppUpdateWorker.RELEASES))));
         LinearLayout notes=card(root);
-        label(notes,"Bu güncellemede neler var?",18,true);
-        changes=label(notes,"GitHub'daki yayın notları bu alanda gösterilir.",14,false);
+        Button notesToggle=button(notes,"Sürüm notlarını göster ▾");
+        changes=label(notes,"GitHub'daki yayın notları bu alanda gösterilir.",13,false);
+        changes.setVisibility(android.view.View.GONE);
+        notesToggle.setOnClickListener(v->{
+            boolean expanded=changes.getVisibility()!=android.view.View.VISIBLE;
+            changes.setVisibility(expanded?android.view.View.VISIBLE:android.view.View.GONE);
+            notesToggle.setText(expanded?"Sürüm notlarını gizle ▴":"Sürüm notlarını göster ▾");
+        });
         LinearLayout upgrade=card(root);
         label(upgrade,"Uygulamayı güncelle",18,true);
         compatibility=label(upgrade,"Önceki kayıtların ve ayarların korunması için imza kontrol edilecek.",13,false);
@@ -65,9 +81,6 @@ public final class UpdateActivity extends Activity {
         install.setOnClickListener(v->install());
         label(upgrade,"Android, kurulumu onaylamanı isteyecek. Günİzi, "
             +"mevcut sürümü kendiliğinden kaldırmaz ve kayıtlarını silmez.",13,false);
-        Button releases=button(root,"GitHub yayın sayfasını aç");
-        releases.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,
-            Uri.parse(AppUpdateWorker.RELEASES))));
         refresh();
         check(); // Opening the page explicitly requests a fresh version check.
     }
