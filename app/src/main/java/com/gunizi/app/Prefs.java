@@ -11,12 +11,24 @@ import java.time.ZoneId;
 /** A one-time setup; no sensitive audio stored in preferences. */
 final class Prefs {
     static final String MODE_WORK = "work";
+    static final String MODE_MANUAL = "manual";
     static final String MODE_CONTINUOUS = "continuous";
     static final ZoneId ZONE = ZoneId.of("Europe/Istanbul");
     private final SharedPreferences p;
     Prefs(Context c) { p = c.getSharedPreferences("gunizi", Context.MODE_PRIVATE); }
-    String mode() { return p.getString("mode", MODE_WORK); }
+    String mode() {
+        String v=p.getString("mode",MODE_WORK);
+        return MODE_CONTINUOUS.equals(v)?MODE_MANUAL:v;
+    }
     void mode(String x) { p.edit().putString("mode", x).apply(); }
+    int durationMinutes() {
+        int n=p.getInt("manual_minutes",15);
+        return (n==15||n==60||n==360)?n:15;
+    }
+    void durationMinutes(int value){
+        if(value!=15&&value!=60&&value!=360)throw new IllegalArgumentException("Süre: 15, 60 veya 360 dakika");
+        p.edit().putInt("manual_minutes",value).apply();
+    }
     int startHour() { return p.getInt("sh", 8); }
     int startMinute() { return p.getInt("sm", 0); }
     int endHour() { return p.getInt("eh", 17); }

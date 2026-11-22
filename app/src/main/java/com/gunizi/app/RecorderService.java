@@ -5,7 +5,7 @@ import android.app.*;
 import android.content.*;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
-import android.media.*;
+import android.media.MediaRecorder;
 import android.os.*;
 import android.util.Log;
 import java.io.File;
@@ -13,146 +13,134 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
 
-/** User-started microphone foreground service. Does not bypass Android background restrictions. */
+/** Android-compliant user-started microphone service with work and on-demand modes. */
 public final class RecorderService extends Service {
     public static final String ACTION_START="com.gunizi.START";
+    public static final String ACTION_START_MANUAL="com.gunizi.START_MANUAL";
     public static final String ACTION_STOP="com.gunizi.STOP";
-    public static final String ACTION_SAVE_LAST="com.gunizi.SAVE_LAST";
     public static final String ACTION_RECOVER="com.gunizi.RECOVER";
     public static final String ACTION_REFRESH="com.gunizi.REFRESH";
-
-    public static volatile boolean running=false;
-    public static volatile boolean recording=false;
-    public static volatile int ramHeldSeconds=0;
-    public static volatile String stateText="Hazır";
-    public static volatile String lastEvent="Henüz kayıt oluşturulmadı";
+    public static volatile boolean running=false,recording=false;
+    public static volatile String stateText="Hazır",lastEvent="Kayıt yapılmadı";
+    public static volatile long manualEndElapsed=0;
+    public static int remainingSeconds(){
+        return (int)Math.max(0,(manualEndElapsed-SystemClock.elapsedRealtime()+999)/1000);
+    }
+    private static final int ID=103;
     private static final String CHANNEL="gunizi_recording";
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService io=Executors.newSingleThreadExecutor();
-    private final AtomicBoolean captureActive=new AtomicBoolean(false);
-    public static int ramMinutes(){return memoryBytes()/32000/60;}
-    public static int ramMaxSeconds(){return memoryBytes()/32000;}
-    private static int memoryBytes() {
-        long heap=Runtime.getRuntime().maxMemory();
-        return (int)Math.min(256L*1024*1024,Math.max(32L*1024*1024,(long)(heap*0.60)));
-    }
-    private final PcmRingBuffer ring=new PcmRingBuffer(memoryBytes());
-    private AudioRecord audioRecord;
-    private Thread captureThread;
     private MediaRecorder recorder;
     private File activeFile;
     private String activeDay="";
     private Prefs prefs;
-
+    private boolean manualActive=false;
     private final Runnable monitor=new Runnable(){
         @Override public void run(){
             if(!running)return;
             applySchedule();
-            getSystemService(NotificationManager.class).notify(103,notification());
-            handler.postDelayed(this,15000);
+            if(running){
+                getSystemService(NotificationManager.class).notify(ID,notification());
+                handler.postDelayed(this,1000);
+            }
         }
     };
 
     @Override public void onCreate(){
         super.onCreate();
         prefs=new Prefs(this);
-        NotificationManager mgr=getSystemService(NotificationManager.class);
         NotificationChannel channel=new NotificationChannel(CHANNEL,
-            "Günİzi kayıt servisi",NotificationManager.IMPORTANCE_LOW);
+            "Günİzi kayıt durumu",NotificationManager.IMPORTANCE_LOW);
         channel.setShowBadge(false);
-        channel.setDescription("Aktif mikrofon ve kayıt durumu");
-        mgr.createNotificationChannel(channel);
+        channel.setDescription("Mikrofon kullanımı ve kayıt süresi");
+        getSystemService(NotificationManager.class).createNotificationChannel(channel);
     }
-
     @Override public int onStartCommand(Intent intent,int flags,int startId){
-        String action=intent==null?ACTION_START:intent.getAction();
+        String action=intent==null?ACTION_REFRESH:intent.getAction();
         if(ACTION_STOP.equals(action)){
-            running=false;
-            handler.removeCallbacks(monitor);
-            stopCurrent();
-            stopForeground(STOP_FOREGROUND_REMOVE);
-            stopSelf();
-            stateText="Durduruldu";
-            return START_NOT_STICKY;
+            stopCurrent();shutdownIdle();return START_NOT_STICKY;
         }
-        if(ACTION_SAVE_LAST.equals(action)){saveLast();return START_STICKY;}
-        if(ACTION_RECOVER.equals(action)){recover();return START_STICKY;}
+        if(ACTION_RECOVER.equals(action)){
+            recover();return running?START_STICKY:START_NOT_STICKY;
+        }
+        if(ACTION_REFRESH.equals(action)&&!running){
+            stopSelf();return START_NOT_STICKY;
+        }
         if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
             stateText="Mikrofon izni gerekli";stopSelf();return START_NOT_STICKY;
         }
         if(!running){
             try{
-                startForeground(103,notification(),ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+                startForeground(ID,notification(),ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
                 running=true;
             }catch(Exception e){
-                Log.e("GunIzi","Mic service rejected",e);
+                Log.e("GunIzi","Foreground microphone refused",e);
                 stateText="Android mikrofon başlatmayı engelledi";
                 stopSelf();return START_NOT_STICKY;
             }
             handler.post(monitor);
-        } else applySchedule();
-        getSystemService(NotificationManager.class).notify(103,notification());
+        }
+        if(ACTION_START_MANUAL.equals(action)){
+            if(!Prefs.MODE_MANUAL.equals(prefs.mode())){
+                lastEvent="Önce İsteğe Bağlı Kayıt modunu seç";
+            } else if(recorder==null) {
+                manualActive=true;
+                manualEndElapsed=SystemClock.elapsedRealtime()+prefs.durationMinutes()*60_000L;
+                startRecording(LocalDateTime.now(Prefs.ZONE).toLocalDate().toString());
+            }
+        }else{
+            applySchedule();
+        }
+        if(running)getSystemService(NotificationManager.class).notify(ID,notification());
         return START_STICKY;
     }
-
     private Notification notification(){
-        PendingIntent openPi=PendingIntent.getActivity(this,2,
-            new Intent(this,MainActivity.class),
-            PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
-        PendingIntent stopPi=PendingIntent.getService(this,3,
+        PendingIntent open=PendingIntent.getActivity(this,2,new Intent(this,MainActivity.class),
+            PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent stop=PendingIntent.getService(this,3,
             new Intent(this,RecorderService.class).setAction(ACTION_STOP),
-            PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
-        Notification.Builder builder=new Notification.Builder(this,CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("Günİzi • "+(Prefs.MODE_CONTINUOUS.equals(prefs.mode())?"Sürekli dinleme":"Mesai kaydı"))
-            .setContentText(Prefs.MODE_CONTINUOUS.equals(prefs.mode())
-                ?"RAM: "+(ramHeldSeconds/3600)+" sa "+((ramHeldSeconds/60)%60)+
-                    " dk / "+(ring.capacitySeconds()/60)+" dk kapasite"
-                :"Saat "+prefs.timeString(true)+"–"+prefs.timeString(false)+" • Otomatik kayıt")
-            .setSubText("Sesler cihazın içinde tutulur")
+            PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        boolean manual=Prefs.MODE_MANUAL.equals(prefs.mode());
+        String title=manual?"Günİzi · İsteğe bağlı kayıt":"Günİzi · Mesai kaydı";
+        String text=manual?(manualActive?"Kalan "+remainingSeconds()/60+" dk "+remainingSeconds()%60+" sn":
+            "Hazır, mikrofon boşta"):(recording?"Mesai kaydı sürüyor":
+                prefs.timeString(true)+"–"+prefs.timeString(false)+" bekleniyor");
+        return new Notification.Builder(this,CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now).setContentTitle(title)
+            .setContentText(text).setContentIntent(open).setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE).setPriority(Notification.PRIORITY_LOW)
-            .setContentIntent(openPi).setOngoing(true)
-            .addAction(android.R.drawable.ic_media_pause,"Durdur",stopPi);
-        if(Prefs.MODE_CONTINUOUS.equals(prefs.mode())){
-            PendingIntent savePi=PendingIntent.getService(this,4,
-                new Intent(this,RecorderService.class).setAction(ACTION_SAVE_LAST),
-                PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
-            builder.addAction(android.R.drawable.ic_menu_save,"Geçmişi kaydet",savePi);
-        }
-        return builder.build();
+            .addAction(android.R.drawable.ic_media_pause,"Durdur ve kaydet",stop).build();
     }
-
     private void applySchedule(){
-        if(Prefs.MODE_CONTINUOUS.equals(prefs.mode())){
-            if(recorder!=null)stopWorkRecording();
-            if(!captureActive.get())startRing();
+        if(Prefs.MODE_MANUAL.equals(prefs.mode())){
+            if(manualActive&&recorder!=null){
+                if(SystemClock.elapsedRealtime()>=manualEndElapsed){
+                    stopRecording();manualActive=false;manualEndElapsed=0;shutdownIdle();
+                }else{
+                    stateText="Kayıt sürüyor · "+remainingSeconds()/60+" dk "+remainingSeconds()%60+" sn kaldı";
+                }
+            }else if(!manualActive){
+                if(recorder!=null)stopRecording();
+                stateText="İsteğe bağlı kayıt hazır";
+            }
             return;
         }
-        if(captureActive.get())stopRing();
-        if(!prefs.validRange()){
-            stateText="Mesai saatlerini kontrol et";
-            return;
-        }
-        if(prefs.folder()==null){
-            stateText="Önce kayıt klasörünü seç";
-            return;
-        }
+        manualActive=false;manualEndElapsed=0;
+        if(!prefs.validRange()){stateText="Mesai saatlerini kontrol et";return;}
+        if(prefs.folder()==null){stateText="Kayıt klasörü seçilmedi";return;}
         boolean should=prefs.inWorkWindow();
         String day=LocalDateTime.now(Prefs.ZONE).toLocalDate().toString();
-        if(recorder!=null&&(!should||!activeDay.equals(day)))stopWorkRecording();
-        if(should&&recorder==null)startWorkRecording(day);
-        if(!should&&recorder==null)stateText="Mesai saati bekleniyor";
+        if(recorder!=null&&(!should||!activeDay.equals(day)))stopRecording();
+        if(should&&recorder==null)startRecording(day);
+        if(!should&&recorder==null)stateText="Mesai kaydı beklemede";
     }
-
-    private void startWorkRecording(String day){
-        File dir=new File(getFilesDir(),"active_recordings");
-        if(!dir.exists()&&!dir.mkdirs()){
-            stateText="Kayıt klasörü oluşturulamadı";return;
-        }
-        File output=new File(dir,"GunIzi_"+day+"_"+LocalDateTime.now(Prefs.ZONE)
-            .format(DateTimeFormatter.ofPattern("HHmmss"))+".ogg");
+    private void startRecording(String day){
+        if(prefs.folder()==null){stateText="Önce klasör seç";return;}
+        File dir=new File(getFilesDir(),"pending_audio");
+        if(!dir.exists()&&!dir.mkdirs()){stateText="Geçici klasör açılamadı";return;}
+        File output=new File(dir,(manualActive?"GunIzi_Secimli_":"GunIzi_Mesai_")+day+"_"+
+            LocalDateTime.now(Prefs.ZONE).format(DateTimeFormatter.ofPattern("HHmmss"))+".ogg");
         MediaRecorder r=null;
         try{
             r=Build.VERSION.SDK_INT>=31?new MediaRecorder(this):new MediaRecorder();
@@ -163,167 +151,81 @@ public final class RecorderService extends Service {
             r.setAudioSamplingRate(16000);
             r.setAudioEncodingBitRate(16000);
             r.setOutputFile(output.getAbsolutePath());
-            r.prepare();
-            r.start();
-            recorder=r;
-            activeFile=output;
-            activeDay=day;
-            recording=true;
-            stateText="Mesai kaydı sürüyor";
+            r.prepare();r.start();
+            recorder=r;activeFile=output;activeDay=day;recording=true;
+            stateText=manualActive?"İsteğe bağlı kayıt başladı":"Mesai kaydı sürüyor";
         }catch(Exception e){
-            Log.e("GunIzi","Opus start",e);
-            stateText="Opus kaydı başlatılamadı: "+e.getClass().getSimpleName();
-            recording=false;
-            if(r!=null)try{r.release();}catch(Exception ignored){}
-            output.delete();
+            Log.e("GunIzi","MediaRecorder start",e);
+            stateText="Ses kaydı başlatılamadı: "+e.getClass().getSimpleName();
+            if(r!=null)r.release();
+            output.delete();recording=false;
+            if(manualActive){manualActive=false;manualEndElapsed=0;shutdownIdle();}
         }
     }
-
-    private void stopWorkRecording(){
+    private void stopRecording(){
         MediaRecorder r=recorder;
         if(r==null)return;
         recorder=null;recording=false;
-        File f=activeFile;activeFile=null;
-        boolean complete=false;
-        try{r.stop();complete=true;}
-        catch(Exception e){Log.e("GunIzi","Opus stop",e);}
+        File audio=activeFile;activeFile=null;
+        boolean completed=false;
+        try{r.stop();completed=true;}catch(Exception e){Log.e("GunIzi","Recorder stop",e);}
         finally{try{r.reset();}catch(Exception ignored){}r.release();}
-        if(f==null)return;
-        if(!complete||f.length()<64){
-            f.delete();
-            stateText="Kayıt tamamlanamadı";return;
+        if(audio==null)return;
+        if(!completed||audio.length()<64){
+            audio.delete();stateText="Kayıt tamamlanamadı";return;
         }
-        stateText="Dosya klasöre kaydediliyor";
+        stateText="Dosya kaydediliyor";
         io.execute(()->{
+            File backup=null;
             try{
-                // Completed sessions only. Unfinished active audio is not encrypted.
-                File encrypted=CryptoVault.encrypt(getApplicationContext(),f);
-                try{
-                    android.net.Uri saved=ExportManager.writeFile(
-                        getApplicationContext(),prefs.folder(),f,f.getName(),"audio/ogg");
-                    if(OfflineModelManager.ready(getApplicationContext()))
-                        DailySummaryWorker.queue(getApplicationContext(),saved,f.getName(),true);
-                    lastEvent="Kaydedildi: "+f.getName()+
-                        (OfflineModelManager.ready(getApplicationContext())?
-                          " • Şarjdayken yerel özet hazırlanacak":"");
-                    stateText="Mesai kaydı kaydedildi";
-                    encrypted.delete();
-                    f.delete();
-                }catch(Exception e){
-                    f.delete();
-                    stateText="Aktarma başarısız; şifreli yedek saklandı";
-                    lastEvent="Klasöre aktarılamadı: "+e.getMessage();
-                }
+                backup=CryptoVault.encrypt(getApplicationContext(),audio);
+                android.net.Uri saved=ExportManager.writeFile(getApplicationContext(),
+                    prefs.folder(),audio,audio.getName(),"audio/ogg");
+                if(OfflineModelManager.ready(getApplicationContext()))
+                    DailySummaryWorker.queue(getApplicationContext(),saved,audio.getName(),true);
+                stateText="Kayıt klasöre kaydedildi";
+                lastEvent=audio.getName();
+                audio.delete();
+                backup.delete();
             }catch(Exception e){
-                Log.e("GunIzi","Backup",e);
-                stateText="Özel depolamadaki kayıt korundu";
-                lastEvent="Yedekleme hatası: "+e.getMessage();
+                Log.e("GunIzi","Export / backup",e);
+                stateText="Aktarım başarısız · Kayıt kurtarma için korundu";
+                lastEvent="Kayıt kaydedilemedi: "+e.getMessage();
+                // Keep raw audio and/or encrypted backup until successful manual recovery.
             }
         });
     }
-
-    private void startRing(){
-        AudioRecord a=null;
-        try{
-            int min=AudioRecord.getMinBufferSize(16000,
-                AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT);
-            if(min<=0)throw new IllegalStateException("Mikrofon biçimi desteklenmiyor");
-            a=new AudioRecord(MediaRecorder.AudioSource.MIC,16000,
-                AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT,
-                Math.max(min*4,4096));
-            if(a.getState()!=AudioRecord.STATE_INITIALIZED)
-                throw new IllegalStateException("AudioRecord açılamadı");
-            a.startRecording();
-            audioRecord=a;
-            captureActive.set(true);
-            recording=true;
-            stateText="Sürekli kayıt • Son "+(ring.capacitySeconds()/60)+" dakika RAM'de";
-            final AudioRecord source=a;
-            captureThread=new Thread(()->{
-                byte[] buf=new byte[2560];
-                while(captureActive.get()){
-                    try{
-                        int n=source.read(buf,0,buf.length);
-                        if(n>0){ring.write(buf,0,n);ramHeldSeconds=ring.size()/32000;}
-                        else if(n<0){stateText="Mikrofondan ses okunamadı";break;}
-                    }catch(Exception e){Log.e("GunIzi","RAM record",e);break;}
-                }
-            },"GunIzi-RamCapture");
-            captureThread.start();
-        }catch(Exception e){
-            Log.e("GunIzi","AudioRecord",e);
-            stateText="RAM kaydı başlatılamadı: "+e.getMessage();
-            recording=false;
-            if(a!=null)try{a.release();}catch(Exception ignored){}
-        }
-    }
-
-    private void stopRing(){
-        captureActive.set(false);
-        recording=false;
-        AudioRecord a=audioRecord;audioRecord=null;
-        if(a!=null){
-            try{a.stop();}catch(Exception ignored){}
-            a.release();
-        }
-        Thread t=captureThread;captureThread=null;
-        if(t!=null)try{t.join(500);}catch(InterruptedException e){
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    private void saveLast(){
-        if(!Prefs.MODE_CONTINUOUS.equals(prefs.mode())){
-            lastEvent="Önce Sürekli Kayıt modunu seç";return;
-        }
-        if(ring.size()==0){lastEvent="RAM tamponu henüz boş";return;}
-        stateText="RAM kaydı dışa aktarılıyor";
-        io.execute(()->{
-            try{
-                String stamp=LocalDateTime.now(Prefs.ZONE)
-                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HHmmss"));
-                int seconds=ring.size()/32000;
-                ExportManager.writeWav(getApplicationContext(),prefs.folder(),ring,
-                    "GunIzi_Gecmis_"+stamp+".wav");
-                lastEvent="Son "+(seconds/60)+" dakika kaydedildi";
-                stateText="Sürekli kayıt açık";
-            }catch(Exception e){
-                lastEvent="Kaydedilemedi: "+e.getMessage();
-                stateText="Klasör erişimini kontrol et";
-            }
-        });
-    }
-
     private void recover(){
         io.execute(()->{
             File dir=new File(getNoBackupFilesDir(),"encrypted_pending");
             File[] files=dir.listFiles((d,n)->n.endsWith(".giz"));
-            if(files==null||files.length==0){
-                lastEvent="Kurtarılacak yedek yok";return;
-            }
+            if(files==null||files.length==0){lastEvent="Kurtarılacak yedek yok";return;}
             int recovered=0;
-            for(File encrypted:files){
-                File decrypted=null;
+            for(File file:files){
+                File raw=null;
                 try{
-                    decrypted=CryptoVault.decryptToTemp(getApplicationContext(),encrypted);
-                    String name=encrypted.getName().replaceFirst("\\.giz$","");
-                    ExportManager.writeFile(getApplicationContext(),prefs.folder(),decrypted,
-                        name,"audio/ogg");
-                    if(encrypted.delete())recovered++;
+                    raw=CryptoVault.decryptToTemp(getApplicationContext(),file);
+                    ExportManager.writeFile(getApplicationContext(),prefs.folder(),raw,
+                        file.getName().replaceFirst("\\.giz$",""),"audio/ogg");
+                    if(file.delete())recovered++;
                 }catch(Exception e){lastEvent="Kurtarma hatası: "+e.getMessage();}
-                finally{if(decrypted!=null)decrypted.delete();}
+                finally{if(raw!=null)raw.delete();}
             }
             if(recovered>0)lastEvent=recovered+" kayıt kurtarıldı";
         });
     }
-
     private void stopCurrent(){
-        if(recorder!=null)stopWorkRecording();
-        if(captureActive.get())stopRing();
+        if(recorder!=null)stopRecording();
+        manualActive=false;manualEndElapsed=0;
     }
-
+    private void shutdownIdle(){
+        running=false;handler.removeCallbacks(monitor);
+        try{stopForeground(STOP_FOREGROUND_REMOVE);}catch(Exception ignored){}
+        stopSelf();
+    }
     @Override public void onDestroy(){
-        running=false;handler.removeCallbacks(monitor);stopCurrent();io.shutdown();super.onDestroy();
+        running=false;handler.removeCallbacks(monitor);
+        stopCurrent();io.shutdown();super.onDestroy();
     }
     @Override public IBinder onBind(Intent intent){return null;}
 }
