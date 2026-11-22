@@ -57,12 +57,12 @@ jobs:
             echo "::error::Release already exists; refusing to overwrite"
             exit 1
           fi
-          # Create the lightweight Git ref separately: release API may be unable to
-          # create tags on behalf of the GitHub Actions installation.
-          if ! gh api "repos/$REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
-            gh api --method POST "repos/$REPO/git/refs" \
-              -f ref="refs/tags/$TAG" \
-              -f sha="6b6d425c37f0a6562167c2f1f3faffacf956b7f3"
+          # Fallback to authenticated Git transport instead of the denied REST create-ref route.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            git tag "$TAG" "6b6d425c37f0a6562167c2f1f3faffacf956b7f3"
+            git push origin "refs/tags/$TAG"
           fi
           cat > notes.md <<'NOTES'
           ## Günİzi v0.13.1
@@ -85,5 +85,5 @@ jobs:
           NOTES
           gh release create "$TAG" GunIzi-v0.13.1.apk \
             --repo "$REPO" --target "6b6d425c37f0a6562167c2f1f3faffacf956b7f3" \
-            --title "Günİzi v0.13.1" --notes-file notes.md --latest
+            --title "Günİzi v0.13.1" --notes-file notes.md --verify-tag --latest
           gh release view "$TAG" --repo "$REPO" --json url,isPrerelease,isDraft,assets
