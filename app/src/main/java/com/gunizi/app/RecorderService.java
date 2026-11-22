@@ -36,6 +36,7 @@ public final class RecorderService extends Service {
     private String activeDay="";
     private Prefs prefs;
     private boolean manualActive=false;
+    private volatile boolean shutdownAfterExport=false;
     private final Runnable monitor=new Runnable(){
         @Override public void run(){
             if(!running)return;
@@ -59,7 +60,14 @@ public final class RecorderService extends Service {
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         String action=intent==null?ACTION_REFRESH:intent.getAction();
         if(ACTION_STOP.equals(action)){
-            stopCurrent();shutdownIdle();return START_NOT_STICKY;
+            if(recorder!=null){
+                shutdownAfterExport=true;
+                stopCurrent();
+            }else{
+                stopCurrent();
+                shutdownIdle();
+            }
+            return START_NOT_STICKY;
         }
         if(ACTION_RECOVER.equals(action)){
             recover();return running?START_STICKY:START_NOT_STICKY;
@@ -116,7 +124,9 @@ public final class RecorderService extends Service {
         if(Prefs.MODE_MANUAL.equals(prefs.mode())){
             if(manualActive&&recorder!=null){
                 if(SystemClock.elapsedRealtime()>=manualEndElapsed){
-                    stopRecording();manualActive=false;manualEndElapsed=0;shutdownIdle();
+                    shutdownAfterExport=true;
+                    stopRecording();manualActive=false;manualEndElapsed=0;
+                    stateText="Kayıt tamamlandı · Kaydediliyor";
                 }else{
                     stateText="Kayıt sürüyor · "+remainingSeconds()/60+" dk "+remainingSeconds()%60+" sn kaldı";
                 }
@@ -193,6 +203,13 @@ public final class RecorderService extends Service {
                 stateText="Aktarım başarısız · Kayıt kurtarma için korundu";
                 lastEvent="Kayıt kaydedilemedi: "+e.getMessage();
                 // Keep raw audio and/or encrypted backup until successful manual recovery.
+            }finally{
+                if(shutdownAfterExport){
+                    handler.post(()->{
+                        shutdownAfterExport=false;
+                        shutdownIdle();
+                    });
+                }
             }
         });
     }
