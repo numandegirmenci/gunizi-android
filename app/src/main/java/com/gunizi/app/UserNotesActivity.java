@@ -263,6 +263,6 @@ public final class UserNotesActivity extends Activity {
                 "Aramana uygun not bulunamadı.",13,false);
     }
     @Override public void onBackPressed(){
-        protect(()->UserNotesActivity.super.onBackPressed());
+        protect(()->super.onBackPressed());
     }
 }
