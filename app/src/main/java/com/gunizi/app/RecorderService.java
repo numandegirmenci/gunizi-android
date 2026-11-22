@@ -33,6 +33,14 @@ public final class RecorderService extends Service {
     public static final String ACTION_REFRESH="com.gunizi.REFRESH";
     public static volatile boolean running=false,recording=false,historyActive=false;
     public static volatile int historyHeldSeconds=0;
+    private static volatile long historyStartedElapsedMs=0;
+    /** Exact elapsed clock while rolling audio is being captured. */
+    public static int liveHistorySeconds(){
+        long origin=historyStartedElapsedMs;
+        if(!historyActive||origin<=0)return 0;
+        return (int)Math.max(0,Math.min(HistoryAudioStore.MAX_MS,
+            android.os.SystemClock.elapsedRealtime()-origin)/1000L);
+    }
     public static volatile String stateText="Hazır",lastEvent="Henüz kayıt oluşturulmadı";
     private static final int ID=103;
     private static final String CHANNEL="gunizi_recording_quiet_v2";
@@ -200,7 +208,7 @@ public final class RecorderService extends Service {
                 startHistorySegment();
             }
             if(historyActive&&historyStore!=null){
-                historyHeldSeconds=(int)historyStore.secondsAvailable(historyCurrentStart);
+                historyHeldSeconds=liveHistorySeconds();
                 stateText="Geçmiş dinleme açık";
             }
             return;
@@ -234,6 +242,7 @@ public final class RecorderService extends Service {
     private void startHistory(){
         historyStore=new HistoryAudioStore(this);
         historyStart=SystemClock.elapsedRealtime();
+        historyStartedElapsedMs=historyStart;
         historyHeldSeconds=0;
         historyActive=true;
         recording=true;
@@ -278,6 +287,7 @@ public final class RecorderService extends Service {
         if(!historyActive)return;
         finishHistorySegment();
         historyActive=false;recording=false;historyHeldSeconds=0;
+        historyStartedElapsedMs=0L;
         wasCallMode=false;warnedSilenced=false;
         if(historyStore!=null&&deleteTemporary)historyStore.discard();
         historyStore=null;historyCurrentStart=0;historyStart=0;

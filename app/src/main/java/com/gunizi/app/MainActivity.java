@@ -160,7 +160,7 @@ public final class MainActivity extends Activity {
         choose.addView(saveHistoryButton);
         saveHistoryButton.setOnClickListener(v->{
             if(!RecorderService.historyActive){toast("Önce dinlemeyi aç.");return;}
-            if(RecorderService.historyHeldSeconds<1){toast("Henüz geçmiş birikmedi.");return;}
+            if(RecorderService.liveHistorySeconds()<1){toast("Henüz geçmiş birikmedi.");return;}
             if(prefs.folder()==null){toast("Önce bir kayıt klasörü seç.");return;}
             send(RecorderService.ACTION_SAVE_HISTORY);
             toast("Biriken geçmiş kaydediliyor. Dinleme devam eder.");
@@ -337,6 +337,33 @@ public final class MainActivity extends Activity {
             catch(Exception e){startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.parse("package:"+getPackageName())));}
         });
+        LinearLayout about=card("Geliştirici ve iletişim");
+        about.addView(label("Geliştiren: Numan Değirmenci",15,WHITE,true));
+        gap(about,7);
+        String version="Günİzi";
+        try{
+            version="Günİzi v"+getPackageManager().getPackageInfo(
+                getPackageName(),0).versionName;
+        }catch(Exception ignored){}
+        muted(about,version+" • Yerel ses kaydı ve yapay zeka");
+        gap(about,9);
+        Button feedback=button("Görüş / hata bildir • E-posta",false);
+        about.addView(feedback);
+        feedback.setOnClickListener(v->{
+            Intent mail=new Intent(Intent.ACTION_SENDTO,
+                Uri.parse("mailto:numandegirmenc@gmail.com"));
+            mail.putExtra(Intent.EXTRA_SUBJECT,"Günİzi • Geri bildirim");
+            try{startActivity(mail);}catch(Exception e){
+                toast("E-posta uygulaması bulunamadı: numandegirmenc@gmail.com");
+            }
+        });
+        gap(about,7);
+        Button github=button("GitHub'da Günİzi projesini aç",false);
+        about.addView(github);
+        github.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,
+            Uri.parse("https://github.com/numandegirmenci/gunizi-android"))));
+        gap(about,7);
+        muted(about,"numandegirmenc@gmail.com");
     }
     private void pickTime(boolean first,Button b){
         new TimePickerDialog(this,(v,h,m)->{
@@ -402,7 +429,7 @@ public final class MainActivity extends Activity {
     private void refresh(){
         if(tab==0){
             boolean active=RecorderService.historyActive;
-            int held=active?RecorderService.historyHeldSeconds:0;
+            int held=active?RecorderService.liveHistorySeconds():0;
             if(historyGauge!=null)historyGauge.update(held);
             if(status!=null)status.setText(active?"Dinleme açık":"Dinleme kapalı");
             if(substatus!=null)substatus.setText(active?
