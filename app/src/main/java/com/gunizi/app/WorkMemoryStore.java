@@ -53,6 +53,15 @@ final class WorkMemoryStore {
             s.contains("yapacağım")||s.contains("ilgileniyorum")))return MINE;
         return REVIEW;
     }
+    private static String entryKey(String reportId,int ordinal,String kind,
+                                   String stamp,String topic,String content)throws Exception{
+        String base=reportId+"|"+ordinal+"|"+kind+"|"+stamp+"|"+topic+"|"+content;
+        byte[] bytes=MessageDigest.getInstance("SHA-256")
+            .digest(base.getBytes(StandardCharsets.UTF_8));
+        StringBuilder id=new StringBuilder(32);
+        for(int i=0;i<16;i++)id.append(String.format(Locale.ROOT,"%02x",bytes[i]&255));
+        return id.toString();
+    }
     private static void write(AtomicFile target,byte[] data)throws IOException{
         FileOutputStream out=null;
         try{
@@ -77,8 +86,7 @@ final class WorkMemoryStore {
                 String value=DECISION.equals(kind)?p[3]:TASK.equals(kind)?p[4]:p[2];
                 if(!filled(value))continue;
                 JSONObject row=new JSONObject();
-                row.put("id",String.format(Locale.ROOT,"%08x",count++)+
-                    "_"+id.substring(0,12));
+                row.put("id",entryKey(id,count++,kind,p[0],p[1],value));
                 row.put("kind",kind);row.put("topic",clean(p[1]));
                 row.put("content",clean(value));row.put("responsible",clean(p[5]));
                 row.put("atMs",TopicReportRenderer.timestampMs(p[0]));
