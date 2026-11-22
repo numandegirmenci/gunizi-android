@@ -70,6 +70,13 @@ object FullDaySummarizer {
                     notes.add(note)
                     unclassified++
                 }
+                context.getSharedPreferences("gunizi", Context.MODE_PRIVATE).edit()
+                    .putString("analysisPreview",
+                        "İşlenen konu özeti ("+(i+1)+"/"+parts.size+"): "+
+                        notes.last().replace("\n"," ").take(540))
+                    .putInt("analysisPartsDone",i+1)
+                    .putInt("analysisPartsTotal",parts.size)
+                    .apply()
                 progress.update(72+(i+1)*20/parts.size,
                     "Qwen3: "+(i+1)+"/"+parts.size+" bölüm yorumlandı")
             }

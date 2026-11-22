@@ -19,7 +19,7 @@ public final class SummaryActivity extends Activity {
         WHITE=0xfff0f7ff,MUTED=0xffa2b4c9,CYAN=0xff38d4ca;
     private String chosenMode=DailySummaryWorker.REPORT;
     private ProgressBar progress;
-    private TextView stage,source,progressText,modelState;
+    private TextView stage,source,progressText,modelState,preview;
     private EditText focus;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable tick=new Runnable(){
@@ -84,6 +84,8 @@ public final class SummaryActivity extends Activity {
             android.content.res.ColorStateList.valueOf(CYAN));
         tracker.addView(progress,new LinearLayout.LayoutParams(-1,dp(12)));
         progressText=text(tracker,"%0",13,true);
+        text(tracker,"Son okunan / incelenen bölüm",14,true);
+        preview=text(tracker,"Henüz işlenen konuşma yok.",13,false);
         text(tracker,"Döküm sırasında: ses parçaları çözümlenir. "+
             "Özet sırasında: konular, kararlar ve görevler çıkarılır. "+
             "Otomatik mesai raporu şarj koşulunu bekleyebilir.",12,false);
@@ -186,6 +188,8 @@ public final class SummaryActivity extends Activity {
             "İşlem başlatmak için yukarıdan bir seçenek seç.":phase);
         progress.setProgress(percent);
         progressText.setText("%"+percent);
+        String excerpt=p.getString("analysisPreview","");
+        preview.setText(excerpt.isEmpty()?"Analiz başladığında burada kaynak metin ve konu açıklaması görünecek.":excerpt);
         new Thread(()->{
             try{
                 List<WorkInfo> jobs=WorkManager.getInstance(this)

@@ -69,6 +69,11 @@ object WhisperDailyTranscriber {
                         resultText.append(current)
                         count += current.count { it == '\n' }
                     }
+                    if (current != NO_SPEECH) {
+                        val excerpt=current.replace("\n"," ").takeLast(440)
+                        context.getSharedPreferences("gunizi", Context.MODE_PRIVATE)
+                            .edit().putString("analysisPreview",excerpt).apply()
+                    }
                     index++
                     progress.update(percent * 70 / 100,
                         "Türkçe ses çözülüyor: bölüm $index, ilerleme %$percent")
