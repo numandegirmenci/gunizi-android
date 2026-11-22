@@ -122,12 +122,16 @@ public final class AppUpdateWorker extends Worker {
             return "Yalnızca kararlı yayınlar güncellenir.";
         String tag=release.optString("tag_name","");
         int remote=versionCode(release);
-        int current=(int)c.getPackageManager().getPackageInfo(c.getPackageName(),0).getLongVersionCode();
+        android.content.pm.PackageInfo installedInfo=
+            c.getPackageManager().getPackageInfo(c.getPackageName(),0);
+        int current=(int)installedInfo.getLongVersionCode();
+        int versionOrder=ReleaseVersion.compare(tag,installedInfo.versionName);
         recordChecked(c);
-        if(remote<=current){
+        if(versionOrder==Integer.MIN_VALUE)return "Yayın etiketi anlaşılamadı: "+tag;
+        if(versionOrder<=0){
             android.content.SharedPreferences p=c.getSharedPreferences(PREF,Context.MODE_PRIVATE);
             p.edit().putString("remoteTag",tag)
-                .putInt("remoteCode",remote)
+                .putInt("remoteCode",Math.min(current,remote))
                 .putString("releaseNotes",release.optString("body","").substring(0,
                     Math.min(12000,release.optString("body","").length()))).apply();
             return "Yüklü sürüm GitHub Latest ("+tag+") ile aynı veya daha yeni.";
@@ -247,6 +251,9 @@ public final class AppUpdateWorker extends Worker {
 
     private static void showUpdateNotice(Context c,String version,int remote,
                                           boolean downloaded,String notes){
+        if(Build.VERSION.SDK_INT>=33 &&
+            c.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=
+                android.content.pm.PackageManager.PERMISSION_GRANTED)return;
         NotificationManager mgr=c.getSystemService(NotificationManager.class);
         android.content.SharedPreferences prefs=c.getSharedPreferences(PREF,Context.MODE_PRIVATE);
         if(prefs.getInt("notifiedVersion",0)==remote)return;
