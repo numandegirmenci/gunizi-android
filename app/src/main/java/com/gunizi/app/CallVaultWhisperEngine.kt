@@ -89,8 +89,15 @@ object CallVaultWhisperEngine {
                                 prefs.edit().putInt("analysisNativePercent",nativePct)
                                     .putLong("analysisLastAdvanceAt",System.currentTimeMillis()).apply()
                             }
-                            progress.update(progressValue(startMs,totalMs,chunkDurationMs,nativePct),
-                                "Ses çözülüyor • Bölüm ${index+1} • Yerel motor %$nativePct")
+                            try{
+                                progress.update(progressValue(startMs,totalMs,chunkDurationMs,nativePct),
+                                    "Ses çözülüyor • Bölüm ${index+1} • Yerel motor %$nativePct")
+                            }catch(_:Throwable){
+                                // Cancellation must not terminate the entire Android process
+                                // through an uncaught exception on this progress thread.
+                                polling.set(false)
+                                break
+                            }
                         }
                     },"GunIzi-WhisperProgress").apply{isDaemon=true}
                     job.start()
