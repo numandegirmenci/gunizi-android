@@ -59,15 +59,41 @@ public final class MainActivity extends Activity {
     private Button button(String value,boolean accent){
         Button b=new Button(this);b.setText(value);b.setAllCaps(false);b.setTextSize(14);
         b.setTextColor(accent?BG:WHITE);b.setBackground(drawable(accent?CYAN:EDGE));
-        b.setMinHeight(dp(48));return b;
+        b.setMinHeight(dp(48));b.setPadding(dp(8),dp(4),dp(8),dp(4));
+        b.setMaxLines(2);b.setGravity(Gravity.CENTER);return b;
     }
     private LinearLayout row(){LinearLayout r=new LinearLayout(this);r.setOrientation(LinearLayout.HORIZONTAL);return r;}
+    private void pair(LinearLayout parent,Button left,Button right){
+        LinearLayout line=row();line.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams a=new LinearLayout.LayoutParams(0,dp(49),1);
+        a.rightMargin=dp(8);
+        line.addView(left,a);line.addView(right,new LinearLayout.LayoutParams(0,dp(49),1));
+        parent.addView(line);
+    }
+    private LinearLayout accordion(String title,String hint,boolean expanded){
+        LinearLayout wrapper=card(null);
+        Button header=button((expanded?"▴ ":"▾ ")+title,false);
+        header.setContentDescription(title+" bölümünü aç veya kapat");
+        wrapper.addView(header,new LinearLayout.LayoutParams(-1,dp(48)));
+        TextView caption=label(hint,12,MUTED,false);
+        LinearLayout.LayoutParams capLp=new LinearLayout.LayoutParams(-1,-2);
+        capLp.topMargin=dp(5);wrapper.addView(caption,capLp);
+        LinearLayout body=column();
+        body.setVisibility(expanded?View.VISIBLE:View.GONE);
+        wrapper.addView(body);
+        header.setOnClickListener(v->{
+            boolean open=body.getVisibility()!=View.VISIBLE;
+            body.setVisibility(open?View.VISIBLE:View.GONE);
+            header.setText((open?"▴ ":"▾ ")+title);
+        });
+        return body;
+    }
     private void show(int selected){
         tab=selected;
         LinearLayout shell=column();shell.setBackgroundColor(BG);
-        shell.setPadding(dp(17),dp(19),dp(17),dp(9));
+        shell.setPadding(dp(13),dp(13),dp(13),dp(7));
         LinearLayout header=row();header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView logo=label("◉ Günİzi",26,WHITE,true);header.addView(logo,new LinearLayout.LayoutParams(0,-2,1f));
+        TextView logo=label("◉ Günİzi",24,WHITE,true);header.addView(logo,new LinearLayout.LayoutParams(0,-2,1f));
         TextView caption=label("ÖZEL • ÇEVRİMDIŞI",10,CYAN,true);
         header.addView(caption);shell.addView(header);gap(shell,13);
         ScrollView sc=new ScrollView(this);
@@ -76,7 +102,7 @@ public final class MainActivity extends Activity {
         shell.addView(sc,new LinearLayout.LayoutParams(-1,0,1f));
         gap(shell,7);
         nav=row();
-        String[] tabs={"Kayıt","Mesai","Yapay Zeka","Ayarlar"};
+        String[] tabs={"◉ Kayıt","◷ Mesai","✦ Yapay Zeka","⚙ Ayarlar"};
         for(int i=0;i<tabs.length;i++){
             final int target=i;
             Button b=button(tabs[i],false);b.setTextSize(12);
@@ -99,16 +125,14 @@ public final class MainActivity extends Activity {
         gap(box,5);substatus=label("",13,MUTED,false);box.addView(substatus);
     }
     private void recordTab(){
-        LinearLayout intro=card("Geçmiş Kaydı");
-        muted(intro,"Dinlemeyi açtığında sesler geçici geçmişe eklenir. "+
-            "İstediğin anda son 1 dakika ile son 6 saat arasındaki birikmiş sesi kaydedebilirsin.");
-        gap(intro,7);
-        muted(intro,"Bu ekran gelecekteki süreyi kaydetmez: seçimin, dinlemenin "+
-            "başladığı andan itibaren biriken GEÇMİŞ sese uygulanır.");
+        page.addView(label("Geçmiş kaydı",22,WHITE,true));
+        gap(page,3);
+        page.addView(label("İstediğin an son dakikaları kaydet • Ses yalnızca dinleme açıkken birikir.",12,MUTED,false));
+        gap(page,11);
 
         LinearLayout live=card("Canlı geçmiş");
         historyGauge=new HistoryGaugeView(this);
-        live.addView(historyGauge,new LinearLayout.LayoutParams(-1,dp(220)));
+        live.addView(historyGauge,new LinearLayout.LayoutParams(-1,dp(136)));
         status=label("Dinleme kapalı",22,CYAN,true);
         live.addView(status);gap(live,4);
         substatus=label("Dinlemeyi açınca sayaç ilerler.",13,MUTED,false);
@@ -136,33 +160,27 @@ public final class MainActivity extends Activity {
             }
         });
 
-        timedHistoryCard();
-
-        LinearLayout choose=card("Geçmişten ne kadarını kaydetmek istersin?");
-        muted(choose,"Seçilen süre geriye doğrudur. Henüz o kadar geçmiş birikmediyse "+
-            "kullanılabilen süre kaydedilir.");
-        gap(choose,12);
+        LinearLayout choose=card("Son geçmişi kaydet");
+        muted(choose,"Süreyi seç; mikrofon açıldığından beri biriken geçmişten kaydet.");
+        gap(choose,9);
         int[] minutes={1,5,15,60,120,240,360};
         String[] titles={"1 dk","5 dk","15 dk","1 saat","2 saat","4 saat","6 saat"};
-        for(int startIndex=0;startIndex<minutes.length;startIndex+=4){
-            LinearLayout row=row();
-            for(int i=startIndex;i<Math.min(startIndex+4,minutes.length);i++){
-                final int duration=minutes[i];
-                Button b=button(titles[i],false);
-                b.setTextSize(12);
-                b.setTextColor(prefs.durationMinutes()==duration?CYAN:WHITE);
-                b.setBackground(drawable(prefs.durationMinutes()==duration?0xff244d57:EDGE));
-                LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(0,dp(46),1);
-                if(i<Math.min(startIndex+4,minutes.length)-1)cell.rightMargin=dp(7);
-                row.addView(b,cell);
-                b.setOnClickListener(v->{
-                    prefs.durationMinutes(duration);
-                    show(0);
-                });
-            }
-            choose.addView(row);
-            gap(choose,8);
+        HorizontalScrollView durations=new HorizontalScrollView(this);
+        durations.setHorizontalScrollBarEnabled(false);
+        LinearLayout durationRow=row();
+        durations.addView(durationRow);
+        choose.addView(durations,new LinearLayout.LayoutParams(-1,dp(48)));
+        for(int i=0;i<minutes.length;i++){
+            final int duration=minutes[i];
+            Button chip=button(titles[i],false);
+            chip.setTextSize(12);
+            chip.setTextColor(prefs.durationMinutes()==duration?BG:WHITE);
+            chip.setBackground(drawable(prefs.durationMinutes()==duration?CYAN:EDGE));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(72),dp(44));
+            lp.rightMargin=dp(6);durationRow.addView(chip,lp);
+            chip.setOnClickListener(v->{prefs.durationMinutes(duration);show(0);});
         }
+        gap(choose,8);
         saveHistoryButton=button("Son "+formatDuration(prefs.durationMinutes())+" kaydet",true);
         choose.addView(saveHistoryButton);
         saveHistoryButton.setOnClickListener(v->{
@@ -172,24 +190,22 @@ public final class MainActivity extends Activity {
             send(RecorderService.ACTION_SAVE_HISTORY);
             toast("Biriken geçmiş kaydediliyor. Dinleme devam eder.");
         });
-        gap(choose,6);
-        muted(choose,"Kaydetmek, dinlemeyi sonlandırmaz. En fazla son 6 saat korunur.");
-
-        LinearLayout folder=card("Kayıt dosyalarının konumu");
-        muted(folder,prefs.folder()==null?
-            "Henüz kayıt klasörü seçmedin. Klasörü Ayarlar'dan bir kez belirle.":
-            "Kayıt klasörü hazır ✓  Değiştirmek için Ayarlar'a git.");
-        gap(folder,8);
-        Button pick=button("Ayarlar • Kayıt klasörü",false);
-        folder.addView(pick);pick.setOnClickListener(v->show(3));
-        gap(folder,5);
-        muted(folder,"Dinlemeyi durdurunca kaydedilmeyen geçici sesler temizlenir.");
+        gap(choose,5);
+        muted(choose,"Dinleme devam eder; kaydedilmeyen geçmiş, durduğunda silinir.");
+        timedHistoryCard();
+        if(prefs.folder()==null){
+            LinearLayout folder=card("Kayıt klasörü seçilmedi");
+            muted(folder,"Ses kaydedebilmek için Ayarlar'dan klasör seç.");
+            Button pick=button("Klasör seç",false);
+            folder.addView(pick);pick.setOnClickListener(v->show(3));
+        }
     }
     private static String formatDuration(int m){
         return m<60?m+" dakikayı":m/60+" saati";
     }
     private void workTab(){
-        LinearLayout box=card("Mesai Kaydı");
+        page.addView(label("Mesai kaydı",22,WHITE,true));gap(page,9);
+        LinearLayout box=card("Mesai zamanlaması");
         muted(box,"Belirlediğin günlerde ve saatlerde otomatik kayıt planı. "
             +"Android gereği kayıt hizmetini uygulama açıkken etkinleştirmen gerekir.");
         gap(box,11);statusCard(box);gap(box,12);
@@ -413,7 +429,10 @@ public final class MainActivity extends Activity {
         });
     }
     private void timedHistoryCard(){
-        LinearLayout plan=card("Zamanlı geçmiş dinleme");
+        LinearLayout plan=accordion("Zamanlı geçmiş dinleme",
+            RecorderService.historyScheduledArmed?
+                "Plan etkin • "+prefs.historyTimeString(true)+"–"+prefs.historyTimeString(false):
+                "İsteğe bağlı • Günleri ve saatleri belirle",false);
         muted(plan,"Gün ve saatleri seç. Plan açıkken yalnızca seçili zaman diliminde mikrofonla geçmiş ses biriktirilir.");
         gap(plan,10);
         LinearLayout times=row();
