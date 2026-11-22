@@ -31,23 +31,37 @@ object FullDaySummarizer {
         check(checkpointFolder.exists()||checkpointFolder.mkdirs()){"Özet kontrol noktası oluşturulamadı"}
         AiStageMetrics.enter(context,AiStageMetrics.LLM_LOADING)
         progress.update(71,"CallVault llama.cpp • "+AiModelStore.label(languageModel)+" belleğe alınıyor")
+        val llmStarted=SystemClock.elapsedRealtime()
         val started=SystemClock.elapsedRealtime()
         val ptr=LlamaNative.initContext(modelFile.absolutePath,
             context.applicationInfo.nativeLibraryDir)
         if(ptr==0L)throw IllegalStateException("llama.cpp modeli açamadı. RAM veya GGUF uyumsuzluğu olabilir.")
-        context.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
+        val preferences=context.getSharedPreferences("gunizi",Context.MODE_PRIVATE)
+        preferences.edit()
             .putLong("lastLlamaLoadMs",SystemClock.elapsedRealtime()-started)
-            .putString("analysisSummaryRuntime","CallVault llama.cpp").apply()
+            .putString("analysisSummaryRuntime","Yerel dil modeli").apply()
         try{
             if(!LlamaNative.grammarAccepted(ptr,SummaryGrammar.JSON))
                 throw IllegalStateException("CallVault JSON grameri yerel model tarafından kabul edilmedi")
             val parts=split(transcript,CHUNK_LIMIT)
+            // For short recordings, preserve every part and evidence row without
+            // spending another native generation pass to restate the same content.
+            val audioDuration=preferences.getLong("analysisAudioDuration",0L)
+            val fast=audioDuration in 1L..(8*60_000L) &&
+                parts.size<=3 && !preferences.getBoolean("aiDetailedSummary",false)
+            preferences.edit()
+                .putBoolean("analysisFastSummary",fast)
+                .putLong("analysisLlmTotalMs",0L)
+                .putLong("analysisLlmExtractMs",0L)
+                .putLong("analysisLlmMergeMs",0L)
+                .apply()
             context.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
                 .putInt("analysisPartsTotal",totalSteps(parts.size)).putInt("analysisPartsDone",0)
                 .putLong("analysisLastAdvanceAt",System.currentTimeMillis()).apply()
             val summaries=ArrayList<CallSummary>(parts.size)
             val rows=ArrayList<String>()
             AiStageMetrics.enter(context,AiStageMetrics.EXTRACTING)
+            val extractionStart=SystemClock.elapsedRealtime()
             parts.forEachIndexed{index,part->
                 if(Thread.currentThread().isInterrupted)
                     throw InterruptedException("Özetleme durduruldu")
@@ -56,8 +70,8 @@ object FullDaySummarizer {
                     CallSummary.parse(checkpoint.readText(Charsets.UTF_8))
                         ?:throw IllegalStateException("Önceki JSON özeti okunamadı: bölüm ${index+1}")
                 }else{
-                    val prompt=buildPrompt(part,boundedFocus)
-                    val output=LlamaNative.generate(ptr,prompt,1650,4,SummaryGrammar.JSON)
+                    val prompt=buildPrompt(part,boundedFocus,fast)
+                    val output=LlamaNative.generate(ptr,prompt,if(fast)1050 else 1650,4,SummaryGrammar.JSON)
                     val parsed=CallSummary.parse(output)
                         ?:throw IllegalStateException("Gemma/Qwen geçerli JSON üretemedi: bölüm ${index+1}")
                     val partial=File(checkpointFolder,checkpoint.name+".partial")
@@ -75,14 +89,27 @@ object FullDaySummarizer {
                 progress.update(73+(index+1)*17/parts.size,
                     "Konu çıkarımı ${index+1}/${parts.size}")
             }
+            preferences.edit()
+                .putLong("analysisLlmExtractMs",SystemClock.elapsedRealtime()-extractionStart)
+                .apply()
             AiStageMetrics.enter(context,AiStageMetrics.MERGING)
-            progress.update(91,"İkinci aşama: Bölüm özetleri birleştiriliyor")
-            val unified=hierarchicalMerge(context,ptr,summaries,checkpointFolder,progress)
+            val mergeStarted=SystemClock.elapsedRealtime()
+            val unifiedText=if(fast){
+                progress.update(94,"Kısa kayıt • Bölüm özetleri ek model çalıştırılmadan düzenleniyor")
+                summaries.mapIndexed{index,item->"Bölüm ${index+1}: "+item.summary}
+                    .joinToString("\n")
+            }else{
+                progress.update(91,"İkinci aşama: Bölüm özetleri birleştiriliyor")
+                hierarchicalMerge(context,ptr,summaries,checkpointFolder,progress).summary
+            }
+            preferences.edit()
+                .putLong("analysisLlmMergeMs",SystemClock.elapsedRealtime()-mergeStarted)
+                .apply()
             val report=StringBuilder("GÜNİZİ • GÜNLÜK KONU VE KARAR RAPORU\n")
             report.append("Model: ").append(AiModelStore.label(languageModel)).append("\n")
             report.append("Motor: CallVault llama.cpp • Kaynak: yerel konuşma metni\n\n")
             report.append("GÜNÜN BÜTÜNLEŞTİRİLMİŞ ÖZETİ (sesle doğrulanmalı)\n")
-            report.append(unified.summary).append("\n\n")
+            report.append(unifiedText).append("\n\n")
             report.append("GÜNÜN ÖZETİ / BÖLÜM KAYITLARI\n")
             summaries.forEachIndexed{index,part->
                 report.append("\nBÖLÜM ").append(index+1).append(" / ")
@@ -98,6 +125,9 @@ object FullDaySummarizer {
             report.append(TopicReportRenderer.END)
             report.append("\nKAYIT SAYISI: ").append(rows.size)
                 .append(" • Tüm çıkarılan satırlar korundu.\n")
+            preferences.edit()
+                .putLong("analysisLlmTotalMs",SystemClock.elapsedRealtime()-llmStarted)
+                .apply()
             progress.update(99,"Konuşma tablosu ve notlar tamamlanıyor")
             return report.toString()
         }finally{
@@ -178,7 +208,7 @@ object FullDaySummarizer {
     @JvmStatic fun cancel(){
         try{LlamaNative.requestAbort()}catch(_:Throwable){}
     }
-    private fun buildPrompt(part:String,focus:String)=buildString {
+    private fun buildPrompt(part:String,focus:String,fast:Boolean)=buildString {
         appendLine("You analyze a Turkish workday conversation. Return ONLY a valid JSON object.")
         appendLine("Respond entirely in Turkish. Use EXACTLY these keys and types in this order:")
         appendLine("""{"intent":string,"summary":string,"keyPoints":string[],"decisions":string[],"actionItems":string[],"keyFacts":string[]}""")
@@ -189,6 +219,7 @@ object FullDaySummarizer {
         appendLine("If a person did not accept a task, do not create an action item for them.")
         appendLine("Put [] for absent information. Do not impose an arbitrary fixed count on decisions or tasks.")
         appendLine("Prioritize all supported actions, awaiting replies, completed topics, named people and timestamps; use concise items.")
+        if(fast) appendLine("Be concise: short summary and brief factual action items, no repetitive prose. Keep all supported names and follow-ups.")
         appendLine("User's analysis interests: "+focus)
         appendLine("TRANSCRIPT:")
         appendLine("\"\"\"")
