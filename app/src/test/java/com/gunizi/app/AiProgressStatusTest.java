@@ -21,6 +21,16 @@ public class AiProgressStatusTest {
         assertFalse(AiProgressStatus.indeterminate(AiStageMetrics.ASR));
         assertFalse(AiProgressStatus.indeterminate(AiStageMetrics.DONE));
     }
+    @Test public void stepsMatchActualWorkMode(){
+        assertEquals("1 / 2",AiProgressStatus.stageNumber(
+            AiStageMetrics.MODEL_LOADING,DailySummaryWorker.TRANSCRIPT));
+        assertEquals("2 / 2",AiProgressStatus.stageNumber(
+            AiStageMetrics.ASR,DailySummaryWorker.TRANSCRIPT));
+        assertEquals("3 / 3",AiProgressStatus.stageNumber(
+            AiStageMetrics.EXTRACTING,DailySummaryWorker.REPORT));
+        assertEquals("1 / 2",AiProgressStatus.stageNumber(
+            AiStageMetrics.LLM_LOADING,DailySummaryWorker.TEXT_REPORT));
+    }
     @Test public void longRunningIsWarningNotCrash(){
         assertEquals("",AiProgressStatus.attention(
             AiStageMetrics.ASR,85000,85000,true));

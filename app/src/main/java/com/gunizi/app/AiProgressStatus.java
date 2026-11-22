@@ -29,15 +29,21 @@ final class AiProgressStatus {
         return total<=0?"Bölüm "+index:"Bölüm "+Math.min(index,total)+" / "+total;
     }
     static String stageNumber(String stage,String mode){
+        if(AiStageMetrics.DONE.equals(stage))return "Tamamlandı";
+        if(AiStageMetrics.ERROR.equals(stage))return "Hata";
+        if(AiStageMetrics.CANCELLED.equals(stage))return "İptal edildi";
+        if(AiStageMetrics.QUEUED.equals(stage))return "Sırada";
+        if(DailySummaryWorker.TEXT_REPORT.equals(mode))
+            return AiStageMetrics.LLM_LOADING.equals(stage)?"1 / 2":"2 / 2";
+        boolean onlyText=DailySummaryWorker.TRANSCRIPT.equals(mode);
         if(AiStageMetrics.PREFLIGHT.equals(stage)||
-            AiStageMetrics.MODEL_LOADING.equals(stage))return "1 / 3";
+            AiStageMetrics.MODEL_LOADING.equals(stage))return onlyText?"1 / 2":"1 / 3";
         if(AiStageMetrics.AUDIO_DECODING.equals(stage)||
             AiStageMetrics.ASR.equals(stage)||
-            AiStageMetrics.TEXT_READY.equals(stage))return "2 / 3";
+            AiStageMetrics.TEXT_READY.equals(stage))return onlyText?"2 / 2":"2 / 3";
         if(AiStageMetrics.LLM_LOADING.equals(stage)||
             AiStageMetrics.EXTRACTING.equals(stage)||
             AiStageMetrics.MERGING.equals(stage))return "3 / 3";
-        if(AiStageMetrics.DONE.equals(stage))return "Tamamlandı";
         return "Durum";
     }
     static boolean indeterminate(String stage){
