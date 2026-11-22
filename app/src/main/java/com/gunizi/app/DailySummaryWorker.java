@@ -99,7 +99,7 @@ public final class DailySummaryWorker extends Worker {
                 "GunIzi_Dokum_"+fileBase+".txt");
             String focus=getInputData().getString("analysisFocus");
             if(focus==null||focus.trim().isEmpty())focus=AnalysisPreferences.DEFAULT;
-            String summary=FullDaySummarizer.summarize(c,transcript,focus,listener);
+            String summary=FullDaySummarizer.summarize(c,transcript,focus,language,listener);
             String report="GÜNİZİ • YEREL QWEN3 GÜNLÜK RAPORU\\n"+
                 "Kaynak ses: "+fileName+"\\nKonuşma modeli: "+speech+
                 "\\nÖzet modeli: "+language+"\\n"+

@@ -20,12 +20,14 @@ object FullDaySummarizer {
         "Düşünce adımlarını yazma. /no_think"
 
     @JvmStatic
-    fun summarize(context: Context, transcript: String, focus: String,
+    fun summarize(context: Context, transcript: String, focus: String, languageModel: String,
                   progress: AiProgress): String = runBlocking {
-        require(AiModelStore.ready(context,PrefSModel(context))) { "Seçilen Qwen3 modeli kurulmamış" }
+        require(AiModelStore.ready(context,languageModel)) { "Seçilen Qwen3 modeli kurulmamış" }
         if (transcript.isBlank()) return@runBlocking "Anlaşılır konuşma bulunamadı."
         progress.update(71,"Qwen3 yerel modeli açılıyor")
-        val model=Llama.loadModel(AiModelStore.selectedQwen(context).absolutePath,
+        val modelFile=if(AiModelStore.QWEN4==languageModel)AiModelStore.qwen4(context)
+            else AiModelStore.qwen(context)
+        val model=Llama.loadModel(modelFile.absolutePath,
             LlamaConfig(contextSize=4096,threads=4,temperature=0.15f,topP=0.85f,topK=30,seed=17))
         try {
             val parts=splitText(transcript,CHUNK_LIMIT)
@@ -113,7 +115,6 @@ object FullDaySummarizer {
         }
     }
 
-    private fun PrefSModel(c: Context): String = Prefs(c).aiModel()
     private fun splitText(text:String,limit:Int):List<String> {
         val pieces=ArrayList<String>()
         val buffer=StringBuilder()
