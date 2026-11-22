@@ -119,8 +119,13 @@ object CallVaultWhisperEngine {
                             WhisperNative.segmentText(ptr,it).trim())
                     }
                     // A VAD-confirmed empty region is not speech; do not accept ASR hallucinations.
-                    val corrected=if(vad!=null && kept.isEmpty())
-                        emptyList<TranscriptSegment>() else SpeechGapSnap.apply(raw,kept)
+                    // When VAD is disabled or fails to load, use Whisper's real segments.
+                    // A missing VAD must never turn valid speech into an empty transcript.
+                    val corrected=when{
+                        vad==null -> raw
+                        kept.isEmpty() -> emptyList<TranscriptSegment>()
+                        else -> SpeechGapSnap.apply(raw,kept)
+                    }
                     val text=corrected.filter{it.text.isNotBlank()}.joinToString("") {
                         "["+time(startMs+it.startMs)+"–"+time(startMs+it.endMs)+"] "+
                         it.text+"\n"
