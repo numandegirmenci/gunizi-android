@@ -60,7 +60,7 @@ public final class WorkMemoryActivity extends Activity {
             @Override public Object getItem(int i){return visible.get(i);}
             @Override public long getItemId(int i){return i;}
             @Override public View getView(int position,View convert,android.view.ViewGroup parent){
-                return itemView(visible.get(position));
+                return itemView(visible.get(position),convert);
             }
         };
         list.setAdapter(adapter);
@@ -143,30 +143,45 @@ public final class WorkMemoryActivity extends Activity {
             "Bu bölümde henüz kayıt yok. Bir görevi açıp durumunu doğrulayabilirsin.");
         adapter.notifyDataSetChanged();list.setSelection(0);
     }
-    private View itemView(WorkMemoryStore.Item item){
-        LinearLayout container=new LinearLayout(this);
-        container.setOrientation(LinearLayout.HORIZONTAL);
-        container.setPadding(dp(12),dp(11),dp(8),dp(11));
-        container.setBackground(shape(PANEL));
-        LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);
-        container.addView(content,new LinearLayout.LayoutParams(0,-2,1));
+    private static final class Holder {
+        LinearLayout container,content;
+        TextView heading,message,note;
+        Button more;
+    }
+    private View itemView(WorkMemoryStore.Item item,View existing){
+        final Holder h;
+        if(existing instanceof LinearLayout&&existing.getTag() instanceof Holder){
+            h=(Holder)existing.getTag();
+        }else{
+            h=new Holder();
+            h.container=new LinearLayout(this);
+            h.container.setOrientation(LinearLayout.HORIZONTAL);
+            h.container.setPadding(dp(12),dp(11),dp(8),dp(11));
+            h.container.setBackground(shape(PANEL));
+            h.content=new LinearLayout(this);
+            h.content.setOrientation(LinearLayout.VERTICAL);
+            h.container.addView(h.content,new LinearLayout.LayoutParams(0,-2,1));
+            h.heading=text(h.content,"",12,true);h.heading.setTextColor(CYAN);
+            h.message=text(h.content,"",14,false);
+            h.message.setTextColor(WHITE);h.message.setMaxLines(5);
+            h.note=text(h.content,"",11,false);
+            h.more=button("⋯",false);
+            h.container.addView(h.more,new LinearLayout.LayoutParams(dp(49),dp(43)));
+            h.container.setTag(h);
+        }
         String type=WorkMemoryStore.DECISION.equals(item.kind)?"Karar":
             WorkMemoryStore.TASK.equals(item.kind)?"Görev":"Görüşme";
         String stamp=item.timeMs>=0?" · "+String.format(Locale.ROOT,"%02d:%02d:%02d",
             item.timeMs/3600000,(item.timeMs/60000)%60,(item.timeMs/1000)%60):"";
-        TextView heading=text(content,type+" • "+item.topic+stamp,12,true);
-        heading.setTextColor(CYAN);
-        TextView message=text(content,item.content,14,false);
-        message.setTextColor(WHITE);message.setMaxLines(5);
+        h.heading.setText(type+" • "+item.topic+stamp);
+        h.message.setText(item.content);
         String note=item.confirmed?"Durum tarafınızdan doğrulandı":
             item.suggested?"Yapay zeka önerisi · Sesle doğrulayın":
             "Kaynak zamanına dokunarak doğrulayın";
-        text(content,note+(item.contact.isEmpty()?"":" · Beklenen: "+item.contact),11,false);
-        content.setOnClickListener(v->play(item));
-        Button more=button("⋯",false);
-        container.addView(more,new LinearLayout.LayoutParams(dp(49),dp(43)));
-        more.setOnClickListener(v->popup(more,item));
-        return container;
+        h.note.setText(note+(item.contact.isEmpty()?"":" · Beklenen: "+item.contact));
+        h.content.setOnClickListener(v->play(item));
+        h.more.setOnClickListener(v->popup(h.more,item));
+        return h.container;
     }
     private void play(WorkMemoryStore.Item item){
         if(report==null||item.timeMs<0){
