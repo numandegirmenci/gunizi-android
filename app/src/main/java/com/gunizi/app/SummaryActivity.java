@@ -195,6 +195,9 @@ public final class SummaryActivity extends Activity {
             Intent i=new Intent(this,UserNotesActivity.class);
             startActivity(i);
         });
+        Button memory=button(result,"Günlük iş hafızam • İşler, dönüşler ve kararlar",true);
+        memory.setOnClickListener(v->
+            startActivity(new Intent(this,WorkMemoryActivity.class)));
         text(result,"Notlarını düzenleyebilir, onayınla Samsung Notes'a paylaşabilirsin.",12,false);
 
         // Advanced controls are available but no longer fill the first screen.
