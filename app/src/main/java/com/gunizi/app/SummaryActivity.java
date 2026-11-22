@@ -240,6 +240,19 @@ public final class SummaryActivity extends Activity {
         save.setOnClickListener(v->{
             saveFocus();Toast.makeText(this,"Tercih kaydedildi.",Toast.LENGTH_SHORT).show();
         });
+        text(advancedBody,"ÖZETLEME HIZI",14,true);
+        android.widget.Switch detailed=new android.widget.Switch(this);
+        detailed.setText("Ayrıntılı ikinci aşama özetleme");
+        detailed.setTextColor(WHITE);
+        detailed.setTextSize(13);
+        detailed.setChecked(getSharedPreferences(PREF,MODE_PRIVATE)
+            .getBoolean("aiDetailedSummary",false));
+        detailed.setOnCheckedChangeListener((view,on)->
+            getSharedPreferences(PREF,MODE_PRIVATE).edit()
+                .putBoolean("aiDetailedSummary",on).apply());
+        advancedBody.addView(detailed);
+        text(advancedBody,"Kapalıyken kısa kayıtlarda hızlı özet kullanılır. Açıkken model "+
+            "bölüm özetlerini ikinci kez birleştirir; daha uzun sürebilir.",12,false);
         text(advancedBody,"MODEL DURUMU",14,true);
         modelStatus=text(advancedBody,"Model durumu kontrol ediliyor.",12,false);
         Button settings=button(advancedBody,"Model önerileri ve indirmeler",false);
