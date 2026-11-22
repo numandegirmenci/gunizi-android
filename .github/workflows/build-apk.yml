@@ -13,9 +13,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -28,7 +30,14 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME"
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
           test -n "$SDKMANAGER"
-          "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+          "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools' 'ndk;27.2.12479018' 'cmake;3.22.1'
+      - name: Verify pinned CallVault native sources
+        run: |
+          git submodule status --recursive
+          test -f third_party/callvault/app/src/main/cpp/whispercv.cpp
+          test -f third_party/callvault/third_party/whisper.cpp/CMakeLists.txt
+          test -f third_party/callvault/third_party/llama.cpp/CMakeLists.txt
+          test -f third_party/callvault/app/src/main/assets/ggml-silero-v5.1.2.bin
       - name: Build test APK (do not distribute as in-place update)
         run: gradle --no-daemon :app:assembleDebug
       - name: Test topic extraction and HTML safety
