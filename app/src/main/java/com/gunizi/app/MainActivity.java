@@ -24,7 +24,9 @@ public final class MainActivity extends Activity {
     private Prefs prefs;
     private LinearLayout page,nav;
     private TextView status,substatus,folderLabel;
-    private Button action,saveHistoryButton;
+    private Button action,saveHistoryButton,scheduleActionButton;
+    private TextView scheduleState;
+    private String pendingMicAction;
     private HistoryGaugeView historyGauge;
     private int tab=0;
     private final Handler handler=new Handler(Looper.getMainLooper());
@@ -114,6 +116,9 @@ public final class MainActivity extends Activity {
         action=button("Dinlemeyi aç",true);
         live.addView(action);
         action.setOnClickListener(v->{
+            if(RecorderService.historyScheduledArmed){
+                toast("Önce zamanlı geçmiş planını kapat.");return;
+            }
             if(RecorderService.historyActive){
                 new AlertDialog.Builder(this)
                     .setTitle("Geçmiş dinlemeyi durdur")
@@ -130,6 +135,8 @@ public final class MainActivity extends Activity {
                 startHistory();
             }
         });
+
+        timedHistoryCard();
 
         LinearLayout choose=card("Geçmişten ne kadarını kaydetmek istersin?");
         muted(choose,"Seçilen süre geriye doğrudur. Henüz o kadar geçmiş birikmediyse "+
@@ -214,8 +221,8 @@ public final class MainActivity extends Activity {
         box.addView(weekdays);gap(box,12);
         action=button("Mesai kaydını etkinleştir",true);box.addView(action);
         action.setOnClickListener(v->{
-            if(RecorderService.historyActive){
-                toast("Mesaiyi başlatmadan önce Kayıt sekmesindeki geçmiş dinlemeyi durdur.");
+            if(RecorderService.historyActive||RecorderService.historyScheduledArmed){
+                toast("Mesaiyi başlatmadan önce zamanlı veya manuel geçmiş dinlemeyi kapat.");
             }else if(RecorderService.running){
                 send(RecorderService.ACTION_STOP);
                 handler.postDelayed(()->show(1),650);
@@ -405,6 +412,81 @@ public final class MainActivity extends Activity {
             licenses.setText(open?"Lisans bilgilerini gizle ▲":"Açık kaynak lisanslarını görüntüle ▼");
         });
     }
+    private void timedHistoryCard(){
+        LinearLayout plan=card("Zamanlı geçmiş dinleme");
+        muted(plan,"Gün ve saatleri seç. Plan açıkken yalnızca seçili zaman diliminde mikrofonla geçmiş ses biriktirilir.");
+        gap(plan,10);
+        LinearLayout times=row();
+        Button begin=button("Başla "+prefs.historyTimeString(true),false);
+        Button finish=button("Bitir "+prefs.historyTimeString(false),false);
+        LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,dp(46),1);
+        left.rightMargin=dp(8);
+        times.addView(begin,left);
+        times.addView(finish,new LinearLayout.LayoutParams(0,dp(46),1));
+        plan.addView(times);
+        begin.setOnClickListener(v->pickHistoryTime(true));
+        finish.setOnClickListener(v->pickHistoryTime(false));
+        gap(plan,10);
+        LinearLayout days=row();
+        String[] names={"Pzt","Sal","Çar","Per","Cum","Cmt","Paz"};
+        for(int i=0;i<names.length;i++){
+            final int bit=1<<i;
+            Button day=button(names[i],false);
+            day.setTextSize(11);
+            day.setTextColor((prefs.historyDays()&bit)!=0?CYAN:MUTED);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(42),1);
+            if(i<6)lp.rightMargin=dp(3);
+            days.addView(day,lp);
+            day.setOnClickListener(v->{
+                int mask=prefs.historyDays();
+                prefs.historyDays((mask&bit)!=0?mask&~bit:mask|bit);
+                if(RecorderService.historyScheduledArmed)send(RecorderService.ACTION_REFRESH);
+                show(0);
+            });
+        }
+        plan.addView(days);
+        gap(plan,11);
+        scheduleState=label("Plan kapalı",13,CYAN,true);plan.addView(scheduleState);
+        gap(plan,9);
+        scheduleActionButton=button("Zamanlı dinlemeyi etkinleştir",true);
+        plan.addView(scheduleActionButton);
+        scheduleActionButton.setOnClickListener(v->{
+            if(RecorderService.historyScheduledArmed){
+                new AlertDialog.Builder(this)
+                    .setTitle("Zamanlı dinlemeyi kapat")
+                    .setMessage("Mikrofon duracak. Kaydedilmemiş geçici geçmiş temizlenecek.")
+                    .setNegativeButton("Vazgeç",null)
+                    .setPositiveButton("Planı kapat",(d,w)->{
+                        send(RecorderService.ACTION_DISARM_HISTORY_SCHEDULE);
+                        handler.postDelayed(()->show(0),550);
+                    }).show();
+                return;
+            }
+            if(RecorderService.running||RecorderService.historyActive){
+                toast("Önce diğer kayıt hizmetini durdur.");return;
+            }
+            if(!prefs.validHistorySchedule()){
+                toast("En az bir gün seç ve başlangıç/bitiş saatlerini farklı yap.");return;
+            }
+            prefs.mode(Prefs.MODE_HISTORY);
+            startServiceAction(RecorderService.ACTION_ARM_HISTORY_SCHEDULE);
+            handler.postDelayed(()->show(0),550);
+        });
+        gap(plan,9);
+        muted(plan,"Saat dışında mikrofon tamamen kapanır; hafif bir Android bildirimi planı izlemeye devam eder. "+
+            "Ekran kapalıyken saat geçişleri gecikebilir. Sistem hizmeti durdurursa uygulamayı açıp planı yeniden etkinleştir.");
+        gap(plan,6);
+        muted(plan,"Önemli: Zaman aralığı sonunda kaydedilmemiş geçmiş silinir. "+
+            "Saklamak istediğin sesi süre dolmadan 'Son geçmişi kaydet' ile kaydet. Geceye taşan vardiyalar desteklenir.");
+    }
+    private void pickHistoryTime(boolean start){
+        new TimePickerDialog(this,(view,h,m)->{
+            prefs.historyTime(start,h,m);
+            if(RecorderService.historyScheduledArmed)send(RecorderService.ACTION_REFRESH);
+            show(0);
+        },start?prefs.historyStartHour():prefs.historyEndHour(),
+            start?prefs.historyStartMinute():prefs.historyEndMinute(),true).show();
+    }
     private void pickTime(boolean first,Button b){
         new TimePickerDialog(this,(v,h,m)->{
             if(first)prefs.start(h,m);else prefs.end(h,m);
@@ -442,9 +524,11 @@ public final class MainActivity extends Activity {
     }
     private void startServiceAction(String actionName){
         if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
+            pendingMicAction=actionName;
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},MIC);return;
         }
-        if(!RecorderService.ACTION_START_HISTORY.equals(actionName)&&prefs.folder()==null){
+        if(!RecorderService.ACTION_START_HISTORY.equals(actionName)&&
+            !RecorderService.ACTION_ARM_HISTORY_SCHEDULE.equals(actionName)&&prefs.folder()==null){
             toast("Önce kayıt klasörünü seç.");return;
         }
         try{
@@ -460,9 +544,9 @@ public final class MainActivity extends Activity {
         super.onRequestPermissionsResult(request,names,results);
         if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED){
             if(request==MIC){
-                if(tab==0)startHistory();
-                else if(tab==1)startWork();
-                else toast("Mikrofon izni verildi. Kayıt kendiliğinden başlamaz.");
+                String pending=pendingMicAction;pendingMicAction=null;
+                if(pending!=null)startServiceAction(pending);
+                else toast("Mikrofon izni verildi. Kaydı başlatabilirsin.");
             }else toast("Bildirim izni verildi.");
         }else toast("İzin verilmedi.");show(tab);
     }
@@ -471,12 +555,33 @@ public final class MainActivity extends Activity {
             boolean active=RecorderService.historyActive;
             int held=active?RecorderService.liveHistorySeconds():0;
             if(historyGauge!=null)historyGauge.update(held);
-            if(status!=null)status.setText(active?"Dinleme açık":"Dinleme kapalı");
+            boolean armed=RecorderService.historyScheduledArmed;
+            if(status!=null)status.setText(active?
+                (armed?"Zamanlı dinleme açık":"Dinleme açık"):
+                armed?"Zamanlı plan beklemede • Mikrofon kapalı":"Dinleme kapalı");
             if(substatus!=null)substatus.setText(active?
                 "Kaydedilmiş geçmiş: "+String.format(Locale.ROOT,"%02d:%02d:%02d",
                     held/3600,(held/60)%60,held%60)+" / 06:00:00":
                 "Dinlemeyi açınca geçmiş birikmeye başlar.");
-            if(action!=null)action.setText(active?"Dinlemeyi durdur":"Dinlemeyi aç");
+            if(action!=null){
+                action.setText(armed?"Zamanlı plan yönetiliyor":
+                    active?"Dinlemeyi durdur":"Dinlemeyi aç");
+                action.setEnabled(!armed);
+            }
+            if(scheduleState!=null){
+                String detail=armed?
+                    (active?"Plan çalışıyor • Geçmiş birikiyor":
+                        "Plan etkin • Saat bekleniyor • Mikrofon kapalı"):
+                    prefs.historyScheduleEnabled()?
+                        "Plan kayıtlı ancak hizmet durmuş • Yeniden etkinleştir":
+                        "Plan kapalı";
+                scheduleState.setText(detail);
+            }
+            if(scheduleActionButton!=null)
+                scheduleActionButton.setText(armed?
+                    "Zamanlı dinlemeyi kapat":
+                    prefs.historyScheduleEnabled()?"Planı yeniden etkinleştir":
+                        "Zamanlı dinlemeyi etkinleştir");
             if(saveHistoryButton!=null){
                 int requested=prefs.durationMinutes()*60;
                 int actual=Math.min(requested,held);
@@ -487,16 +592,19 @@ public final class MainActivity extends Activity {
                 saveHistoryButton.setEnabled(active&&held>0&&prefs.folder()!=null);
             }
         }else if(tab==1){
-            if(status!=null)status.setText(RecorderService.historyActive?
-                "Geçmiş dinleme açık":
+            if(status!=null)status.setText(RecorderService.historyActive||
+                RecorderService.historyScheduledArmed?
+                "Önce geçmiş dinleme planını kapat":
                 RecorderService.running?RecorderService.stateText:"Mesai planı hazır");
             if(substatus!=null)substatus.setText(RecorderService.running?
                 RecorderService.lastEvent:prefs.timeString(true)+"–"+prefs.timeString(false)+
                 " • Telefon saatine göre");
             if(action!=null){
-                action.setText(RecorderService.historyActive?"Önce geçmiş dinlemeyi durdur":
+                action.setText((RecorderService.historyActive||
+                    RecorderService.historyScheduledArmed)?"Önce geçmiş planını kapat":
                     RecorderService.running?"Mesai hizmetini durdur":"Mesai kaydını etkinleştir");
-                action.setEnabled(!RecorderService.historyActive);
+                action.setEnabled(!RecorderService.historyActive&&
+                    !RecorderService.historyScheduledArmed);
             }
         }
     }
