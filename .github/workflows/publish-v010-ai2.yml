@@ -1,0 +1,71 @@
+name: Publish Günİzi AI 2.0 v0.10 Test APK
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v010-ai2.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exactly tested AI 2.0 APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          REPO="numandegirmenci/gunizi-android"
+          RUN="44976914771"
+          EXPECTED_SHA="62de367682421187f9b76d3921bb95dae0207798"
+          # Wait for this precise commit's CI, not an older APK.
+          for i in $(seq 1 90); do
+            STATUS="$(gh api "repos/$REPO/actions/runs/$RUN" --jq .status)"
+            if [ "$STATUS" = "completed" ]; then break; fi
+            sleep 8
+          done
+          test "$(gh api "repos/$REPO/actions/runs/$RUN" --jq .conclusion)" = "success" ||
+            { echo "::error::The pinned v0.10 build and tests have not succeeded"; exit 1; }
+          test "$(gh api "repos/$REPO/actions/runs/$RUN" --jq .head_sha)" = "$EXPECTED_SHA" ||
+            { echo "::error::Build source SHA does not match"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/ai2"
+          gh run download "$RUN" --repo "$REPO" --name GunIzi-debug-apk --dir "$RUNNER_TEMP/ai2"
+          APK="$(find "$RUNNER_TEMP/ai2" -type f -name '*.apk' | head -n 1)"
+          test -n "$APK" && test -s "$APK"
+          test "$(find "$RUNNER_TEMP/ai2" -type f -name '*.apk' | wc -l)" -eq 1
+          cp "$APK" GunIzi-AI2-Test-v0.10.0.apk
+          sha256sum GunIzi-AI2-Test-v0.10.0.apk
+      - name: Verify separate package identity and version
+        run: |
+          set -euo pipefail
+          unzip -tq GunIzi-AI2-Test-v0.10.0.apk | tail -n 2
+          AAPT="$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          test -n "$AAPT" && test -n "$APKSIGNER"
+          "$AAPT" dump badging GunIzi-AI2-Test-v0.10.0.apk | head -n 1 | tee package.txt
+          grep -F "name='com.gunizi.app.ai2'" package.txt
+          grep -F "versionCode='11'" package.txt
+          grep -F "versionName='0.10.0-test'" package.txt
+          "$APKSIGNER" verify GunIzi-AI2-Test-v0.10.0.apk
+      - name: Create new GitHub prerelease with exact tested APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          REPO="numandegirmenci/gunizi-android"
+          TAG="test-v0.10.0"
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "::error::Test release already exists; refusing to overwrite original APK"
+            exit 1
+          fi
+          gh release create "$TAG" GunIzi-AI2-Test-v0.10.0.apk \
+            --repo "$REPO" \
+            --target 62de367682421187f9b76d3921bb95dae0207798 \
+            --title "Günİzi AI 2.0 v0.10.0 • Yeni Ekran ve Kısa Ses Motoru (TEST)" \
+            --prerelease \
+            --notes-file release-notes/v0.10.0.md
+          gh release view "$TAG" --repo "$REPO" --json url,assets,isPrerelease
