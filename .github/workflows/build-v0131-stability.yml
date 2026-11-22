@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/build-v0131-memory.yml'
+      - '.github/workflows/build-v0131-stability.yml'
       - 'app/src/main/java/com/gunizi/app/**'
       - 'app/src/test/java/com/gunizi/app/**'
       - 'app/build.gradle'
