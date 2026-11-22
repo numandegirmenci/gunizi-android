@@ -1,4 +1,4 @@
-# Günİzi Android • v0.7 kaynak kodu (Deneysel)
+# Günİzi Android • v0.8.0 – Yapay Zeka Öncelikli (Deneysel)
 
 **Durum:** Android debug APK deneysel; gerçek cihazda 9 saatlik yük testi henüz yapılmadı.
 
@@ -12,6 +12,40 @@
 
 
 Günİzi, Türkçe çevrimdışı ses kaydı ve yerel yapay zeka ile günlük rapor amaçlayan Android uygulamasıdır.
+
+## Günİzi Yapay Zeka • v0.8.0
+
+**Amaç:** 9 saatlik çalışma gününü sadece kısaltmak değil; konuşulan her önemli
+konuyu, kararları, görevleri, sorumluları ve açık kalan maddeleri kaynak saatleriyle
+**Samsung tarzı ayrıntılı konu kartlarına** dönüştürmek. Yapay zeka verileri
+otomatik çıkarır ama bunlar doğrulama gerektiren önerilerdir.
+
+**Kullanıcı talimatları:** Rapor ekranında "Yapay zeka neye dikkat etsin?" alanı
+vardır. Kullanıcı kendisi için önemli kurumları, projeleri, tarihleri, riskleri ve
+takip edilmesi gereken görevleri yazabilir. Talimatlar yalnızca cihazda saklanır.
+
+**Yerel model seçenekleri:** Türkçe Whisper small (denge) ve **Whisper
+Large-v3-Turbo Q5 (yüksek kalite)**; Türkçe rapor için Qwen3 1.7B veya Qwen3 4B.
+Modeller açık onayla bir kez indirilir ve dosyalar SHA-256 ile doğrulanır.
+Büyük modellerde yeterli RAM ve şarj gerekir.
+
+**Uzun kayıt yöntemi:** 5 dakikalık ses parçaları, kalıcı işlem kontrol noktaları,
+tüm parçaların ayrı konu tablosu ve birleştirilmiş gün raporu. Böylece önceki
+sürümün konu raporundaki ilk ~9500 karakter sınırlaması kaldırılmıştır.
+Döküm, HTML konu kartları, CSV tablo ve ayrıntılı TXT raporu üretilir.
+
+**Notlarım:** Kullanıcı rapordan taslak açabilir, düzenleyip **Notlarıma kaydet**
+diyebilir, TXT dosyasını seçili klasöre koyabilir veya Android paylaşım ekranıyla
+**Samsung Notes** / diğer not uygulamalarına gönderebilir.
+Notlar uygulamanın özel alanındadır, kaldırmada silinebilir.
+
+**Sınırlamalar:** Android 15+ uzun çalışan yerel işlem sınırlamaları,
+mikrofon erişimi, konuşma kalitesi, farklı konuşmacılar ve kişilerin adları
+hata yaratabilir. 9 saatlik canlı cihaz yük testi henüz tamamlanmadı.
+
+[AI teknik tasarımı](docs/AI_DESIGN.md) ·
+[v0.8 sürüm notları](release-notes/v0.8.0.md) ·
+[Silmeden güncelleme rehberi](docs/UPDATE_SETUP.md)
 
 ## Ekran tasarımı
 Ana ekran artık tek uzun liste değil: **Kayıt, Mesai, Rapor, Ayarlar** olmak üzere dört kompakt sekme bulunur.
