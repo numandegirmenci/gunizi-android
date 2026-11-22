@@ -250,6 +250,10 @@ public final class MainActivity extends Activity {
         overview.addView(topicTable);
         topicTable.setOnClickListener(v->startActivity(new Intent(this,ReportTableActivity.class)));
         gap(overview,7);
+        Button memory=button("Günlük iş hafızam • Bana kalanlar ve beklediklerim",true);
+        overview.addView(memory);
+        memory.setOnClickListener(v->startActivity(new Intent(this,WorkMemoryActivity.class)));
+        gap(overview,7);
         Button savedNotes=button("Notlarım",false);
         overview.addView(savedNotes);
         savedNotes.setOnClickListener(v->startActivity(new Intent(this,UserNotesActivity.class)));
