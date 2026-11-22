@@ -284,28 +284,32 @@ public final class MainActivity extends Activity {
     }
     private void settingsTab(){
         LinearLayout updates=card("Uygulama güncellemeleri");
-        boolean testBuild=getPackageName().endsWith(".test")||getPackageName().endsWith(".ai2")||getPackageName().endsWith(".ai3")||getPackageName().endsWith(".ai4")||getPackageName().endsWith(".ai5")||getPackageName().endsWith(".ai6")||getPackageName().endsWith(".ai7")||getPackageName().endsWith(".ai8")||getPackageName().endsWith(".ai9")||getPackageName().endsWith(".ai10");
-        muted(updates,testBuild?
-            "Bu bağımsız Günİzi kurulumudur. Önceki uygulamanın kayıtlarına ve "+
-            "modellerine dokunmaz. Otomatik güncelleme yalnızca kalıcı imzalı ana yayın içindir.":
-            "Yeni sürümleri GitHub Releases üzerinden arka planda kontrol eder. "+
-            "Wi-Fi bağlantısında APK'yı indirebilir. Kurulumu her zaman sen onaylarsın.");
-        gap(updates,9);
-        Switch auto=new Switch(this);auto.setText("Otomatik güncelleme kontrolü");
+        boolean independent=AppUpdateWorker.independent(this);
+        muted(updates,independent?
+            "Yeni GitHub sürümlerini takip edebilirsin. Bu bağımsız paket diğer APK'nın "+
+            "üzerine otomatik yüklenmez; kayıtların korunur.":
+            "GitHub Releases üzerinden yeni sürümleri kontrol eder. Uyumlu ve "+
+            "doğrulanmış APK varsa Wi-Fi'de indirebilir; kurulumu sen onaylarsın.");
+        gap(updates,7);
+        Switch auto=new Switch(this);
+        auto.setText("Yeni sürümleri otomatik kontrol et");
         auto.setTextColor(WHITE);
-        auto.setChecked(!testBuild&&AppUpdateWorker.enabled(this));
-        auto.setEnabled(!testBuild);
-        updates.addView(auto);
-        auto.setOnCheckedChangeListener((v,on)->AppUpdateWorker.enable(this,on));
-        gap(updates,8);
-        Button update=button(testBuild?"Günİzi Test • Yeni APK'lar GitHub Actions'ta":
-            "Güncellemeleri kontrol et",false);
-        updates.addView(update);
-        update.setOnClickListener(v->{
-            if(testBuild)startActivity(new Intent(Intent.ACTION_VIEW,
-                Uri.parse("https://github.com/numandegirmenci/gunizi-android/releases")));
-            else startActivity(new Intent(this,UpdateActivity.class));
+        auto.setTextSize(14);
+        auto.setChecked(AppUpdateWorker.enabled(this));
+        auto.setEnabled(true);
+        updates.addView(auto,new LinearLayout.LayoutParams(-1,dp(51)));
+        auto.setOnCheckedChangeListener((v,on)->{
+            AppUpdateWorker.enable(this,on);
+            toast(on?"Sürüm kontrolü açıldı. Uygun olduğunda GitHub kontrol edilecek.":
+                "Otomatik sürüm kontrolü kapatıldı.");
         });
+        gap(updates,7);
+        Button update=button("Sürüm kontrolü",false);
+        update.setOnClickListener(v->startActivity(new Intent(this,UpdateActivity.class)));
+        Button releases=button("GitHub Releases",false);
+        releases.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,
+            Uri.parse(AppUpdateWorker.RELEASES))));
+        pair(updates,update,releases);
 
         LinearLayout models=card("Yapay zeka modelleri");
         muted(models,"Whisper ve Qwen3 indirmeleri burada yönetilir. İndirme arka planda ilerler; "+
