@@ -63,6 +63,18 @@ public final class ModelSettingsActivity extends Activity {
         panel.setVisibility(open?View.VISIBLE:View.GONE);
         trigger.setText(open?"Diğer modelleri gizle ▲":"Diğer modeller ve ayarlar ▼");
     }
+    private void confirmPreset(String title,String speech,String summary,String help){
+        new AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage("Konuşma: "+AiModelStore.label(speech)+"\n"+
+                "Özet: "+AiModelStore.label(summary)+"\n\n"+
+                "Bu işlem seçtiğin modelleri değiştirir. "+
+                "Önceki modeller silinmez, yeniden indirilmeleri gerekmez. Devam edilsin mi?")
+            .setNegativeButton("Vazgeç",null)
+            .setPositiveButton("Bu modelleri seç",(dialog,which)->
+                select(speech,summary,help))
+            .show();
+    }
     private void select(String speech,String summary,String help){
         analysis.speechModel(speech);preferences.aiModel(summary);
         presetHint.setText(help);
@@ -78,12 +90,12 @@ public final class ModelSettingsActivity extends Activity {
         root.setPadding(dp(16),dp(18),dp(16),dp(25));
         scroll.addView(root);setContentView(scroll);
 
-        text(root,"Yapay zeka modelleri",23,true);
-        text(root,"Önce kullanım amacını seç. Modeller bir kez indirilir; ses kayıtları telefonunda kalır.",13,false);
+        text(root,"Model merkezi",23,true);
+        text(root,"Seçili modellerin korunur. Yeni model seçersen değişiklik senden onay alınarak yapılır.",12,false);
 
         LinearLayout adviser=card(root);
-        text(adviser,"Hangi model bana uygun?",17,true);
-        text(adviser,"Öneriler başlangıç noktasıdır; kesin işlem süresi cihazın hızına, sese ve ısınmaya bağlıdır.",12,false);
+        text(adviser,"Kullanıma göre öneriler",16,true);
+        text(adviser,"Modeli değiştirmek zorunda değilsin. Hız, RAM ve konuşma kalitesi değişebilir.",12,false);
         android.app.ActivityManager manager=(android.app.ActivityManager)getSystemService(ACTIVITY_SERVICE);
         android.app.ActivityManager.MemoryInfo memory=new android.app.ActivityManager.MemoryInfo();
         if(manager!=null)manager.getMemoryInfo(memory);
@@ -100,16 +112,18 @@ public final class ModelSettingsActivity extends Activity {
         horizontal.addView(chips);adviser.addView(horizontal);
         presetHint=text(adviser,"5 dakikalık bir kayıt için Dengeli seçeneğiyle başlayabilirsin.",12,false);
         Button quick=chip(chips,"5 dk · Dengeli");
-        quick.setOnClickListener(v->select(AiModelStore.WHISPER_Q5,AiModelStore.QWEN,
+        quick.setOnClickListener(v->confirmPreset("Dengeli model seçimi",
+            AiModelStore.WHISPER_Q5,AiModelStore.QWEN,
             "Kısa kayıtlar için daha hafif indirme ve bellek kullanımı. Önce metni kontrol et."));
         Button clear=chip(chips,"5–60 dk · Ayrıntılı");
-        clear.setOnClickListener(v->select(
+        clear.setOnClickListener(v->confirmPreset("Ayrıntılı model seçimi",
             lowerRam?AiModelStore.WHISPER_Q5:AiModelStore.WHISPER_TURBO_Q8,
             lowerRam?AiModelStore.QWEN:AiModelStore.GEMMA,
             lowerRam?"RAM kapasiten nedeniyle hafif seçenekler seçildi. İstersen diğer modelleri ayrıca deneyebilirsin.":
                 "Ayrıntılı analiz için daha büyük modeller seçildi. İşlem süresi ve RAM tüketimi artabilir."));
         Button longAudio=chip(chips,"1 saat+ · Ekonomik");
-        longAudio.setOnClickListener(v->select(AiModelStore.WHISPER_Q5,AiModelStore.QWEN,
+        longAudio.setOnClickListener(v->confirmPreset("Uzun kayıt modeli",
+            AiModelStore.WHISPER_Q5,AiModelStore.QWEN,
             "Uzun kayıtları parçalara bölerek, daha az yer kaplayan modellerle denemek için. Şarj önerilir."));
         text(adviser,"İpucu: Sadece konuşmayı yazıya dökmek istiyorsan ikinci modeli indirmen gerekmez.",12,false);
 
@@ -172,10 +186,8 @@ public final class ModelSettingsActivity extends Activity {
         });
         summaryMore.setOnClickListener(v->toggle(summaryAdvanced,summaryMore));
 
-        LinearLayout foot=card(root);
-        text(foot,"İndirme hakkında",15,true);
-        text(foot,"İndirmeler bildirimde izlenir ve kesilirse kaldığı yerden sürdürülmeye çalışılır. Wi-Fi ve yeterli boş alan önerilir.",12,false);
-        button(foot,"Durumu yenile",false).setOnClickListener(v->refresh());
+        text(root,"İndirmeler bildirimde takip edilir. Model dosyaları ve seçimin sen değiştirene kadar korunur.",12,false);
+        button(root,"Durumu yenile",false).setOnClickListener(v->refresh());
         // Restore selections after wiring listeners. Neither preset nor screen opening starts a download.
         String s=analysis.speechModel(),m=preferences.aiModel();
         speechChoices.check(AiModelStore.WHISPER_TURBO_Q8.equals(s)?turboQ8.getId():
