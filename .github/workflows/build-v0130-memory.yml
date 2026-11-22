@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/build-v0130-memory.yml'
+      - 'app/src/main/java/com/gunizi/app/**'
+      - 'app/src/test/java/com/gunizi/app/**'
+      - 'app/build.gradle'
   workflow_dispatch:
 
 permissions:
@@ -12,7 +15,7 @@ permissions:
 
 concurrency:
   group: gunizi-0130-validation
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
