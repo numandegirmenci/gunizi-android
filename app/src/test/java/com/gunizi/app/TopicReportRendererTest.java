@@ -38,11 +38,11 @@ public class TopicReportRendererTest {
         assertTrue(rows.get(0).parts[1].contains("oluşturulamadı"));
     }
     @Test public void twelveHundredRowLimitDoesNotDiscardLongWorkday(){
-        StringBuilder payload=new StringBuilder("[[GUNIZI_TABLO_BASLA]]\\n");
+        StringBuilder payload=new StringBuilder("[[GUNIZI_TABLO_BASLA]]\n");
         for(int i=0;i<1505;i++){
-            payload.append("00:00:01\\tKonu").append(i)
-                .append("\\tAyrıntı ").append(i)
-                .append("\\tBelirtilmedi\\tBelirtilmedi\\tBelirtilmedi\\n");
+            payload.append("00:00:01\tKonu").append(i)
+                .append("\tAyrıntı ").append(i)
+                .append("\tBelirtilmedi\tBelirtilmedi\tBelirtilmedi\n");
         }
         payload.append("[[GUNIZI_TABLO_BITIR]]");
         List<TopicReportRenderer.Entry> rows=TopicReportRenderer.parse(payload.toString());
@@ -54,7 +54,7 @@ public class TopicReportRendererTest {
         assertEquals(-1L,TopicReportRenderer.timestampMs("Belirtilmedi"));
         assertEquals(-1L,TopicReportRenderer.timestampMs("01:68:03"));
         assertTrue(TopicReportRenderer.html(TopicReportRenderer.parse(
-            "[[GUNIZI_TABLO_BASLA]]\\n00:00:03\\tKonu\\tKonuşma\\tKarar\\tBelirtilmedi\\tBelirtilmedi\\n[[GUNIZI_TABLO_BITIR]]"),"Kayıt")
+            "[[GUNIZI_TABLO_BASLA]]\n00:00:03\tKonu\tKonuşma\tKarar\tBelirtilmedi\tBelirtilmedi\n[[GUNIZI_TABLO_BITIR]]"),"Kayıt")
             .contains("gunizi://listen?ms=3000"));
     }
 
