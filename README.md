@@ -1,21 +1,24 @@
-# Günİzi Android • v0.9.1 – Yerel Yapay Zeka Tanılama (Deneysel)
+# Günİzi
 
-**Durum:** Android debug APK deneysel; gerçek cihazda 9 saatlik yük testi henüz yapılmadı.
+**Günİzi**, Android'de geçmişe dönük ses kaydı, mesai kaydı, Türkçe konuşma dökümü ve cihaz içinde yapay zeka destekli özet hazırlama uygulamasıdır. Ses kayıtlarının işlenmesi yerel olarak yapılır; modeller yalnızca kullanıcı isterse indirilir.
 
-> **Yayın durumu (22 Kasım 2026):** v0.6.0, GitHub Releases'e yüklenmiş son test APK'dır. 
-> v0.7.0'da sürüm bildirimi, değişiklik listesi ve silmeden güncelleme için imza kontrolü kodu vardır. 
-> v0.7.0 **henüz imzalı Release olarak yayımlanmadı**. Önce kalıcı imza anahtarı GitHub Secrets'a yüklenmeli. 
-> Kurulum: [Silmeden güncelleme rehberi](docs/UPDATE_SETUP.md) ve [v0.7 yenilikleri](release-notes/v0.7.0.md).
->
-> **Eski test APK'sı sorunu:** Önceki debug imzalama anahtarı GitHub runner ile değiştiyse mevcut kurulumun üzerine yeni APK yüklenemez. İlk kalıcı imzalı sürüme geçerken bir kerelik geçiş gerekebilir. Bundan sonra aynı anahtarla imzalanan sürümler mevcut uygulamanın üzerine yüklenir.
+## Günİzi v0.12.0 — Canlı konuşma akışı
 
+- Konuşmalar, ses bölümleri tamamlandıkça **zaman damgalı ve aşağı doğru sıralanan satırlar** halinde görünür.
+- **İçeriğe gir** ile analiz devam ederken konuşma dökümü açılır; **Canlı takip** ile yeni metne otomatik kaydırma kontrol edilir.
+- Konuşma bulunmayan VAD bölümlerinde yanlış metin üretimini azaltan kontrol.
+- Telefon RAM kapasitesini dikkate alan model önerileri ve isteğe bağlı alternatif uygulamada ses açma.
+- Aranabilir **Notlarım**, kompakt ayarlar, kaynak ses/kayıt eşleşmesi ve açık rızaya dayalı paylaşım.
 
+**Kaynak ve sürüm notları:** [v0.12.0 değişiklikleri](release-notes/v0.12.0.md)
 
-Günİzi, Türkçe çevrimdışı ses kaydı ve yerel yapay zeka ile günlük rapor amaçlayan Android uygulamasıdır.
+**APK derlemesi:** [Günİzi v0.12.0 Android APK — GitHub Actions](https://github.com/numandegirmenci/gunizi-android/actions/runs/44986054092) → `Artifacts / GunIzi-v0.12.0-APK`. Build, Android APK imza doğrulaması ve JVM testleri başarılıdır. GitHub Releases oluşturma aşaması GitHub Actions token yetkisi nedeniyle HTTP 403 verdi; Release yüklemesi bu nedenle tamamlanmadı.
 
+> **Kurulum güvenliği:** Actions'taki APK `com.gunizi.app.ai6` kimliğiyle ayrı kurulur; mevcut Günİzi kayıtlarını ve modellerini silmeden yan yana çalışır. Bu dosya önceki uygulamanın üzerine yüklenen kalıcı imzalı güncelleme değildir. Eski uygulamayı kaldırmayın. Kalıcı üretim imza anahtarı tanımlandığında aynı `com.gunizi.app` kimliğiyle resmî sürüm yayımlanabilir.
 
+**Durum:** APK derlenmiştir fakat cihaz üzerinde saatlerce süren gerçek ses işleme testi tamamlanmamıştır. İşleme hızı ve doğruluğu telefon, RAM, model ve ses kalitesine göre değişir. Açık kaynak atıfları [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) içindedir.
 
-
+## Önceki geliştirme sürümleri
 
 ## v0.11.1 • Canlı durum ve kararlılık testi
 
