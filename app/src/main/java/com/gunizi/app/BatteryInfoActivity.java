@@ -57,13 +57,13 @@ public final class BatteryInfoActivity extends Activity{
         update(work,selected,0.8);
         label("Pil maliyeti bileşenleri",20,true);
         label("1. Mikrofon: açık kaldığı sürece güç kullanır.\n"
-            +"2. Opus sıkıştırması: mesai modunda işlemci kullanır.\n"
+            +"2. Opus sıkıştırması: iki modda da işlemci kullanır.\n"
             +"3. Şifreleme ve diske yazma: aralıklı ek enerji tüketir.\n"
             +"4. Yerel konuşma tanıma: işlenirken yüksek işlemci yükü oluşturabilir.\n"
             +"5. Özet çıkarma: uzun kayıtlar için işlem süresi ve sıcaklık artabilir.\n"
             +"6. Ekran ve diğer uygulamalar: toplam pil düşüşünü etkiler.",14,false);
         label("Pil tasarrufu yaklaşımı",20,true);
-        label("Günlük otomatik rapor şarjdayken hazırlanır. RAM geçmişi ise yalnızca Sürekli Kayıt modunda tutulur. "
+        label("Günlük otomatik rapor şarjdayken hazırlanır. İsteğe bağlı kayıt yalnızca sen başlattığında çalışır. "
             +"Pil koruma ayarları mikrofonun arka planda kesin çalışmasını garanti etmez.",14,false);
     }
     private String format(double v){return String.format(Locale.forLanguageTag("tr-TR"),"%.1f",v);}
@@ -75,7 +75,7 @@ public final class BatteryInfoActivity extends Activity{
     }
     private void update(double work,double selected,double rate){
         output.setText("Varsayım: saatlik %"+format(rate)+" ek pil\n"
-            +"Mesai: %"+format(rate*work)+" · Sürekli: %"+format(rate*24)+"\n"
-            +"Fark: +"+format(rate*(24-work))+" yüzde puanı (yalnızca örnek)");
+            +"Mesai: %"+format(rate*work)+" · Seçili kayıt: %"+format(rate*selected)+"\n"
+            +"Aradaki fark: "+format(rate*Math.abs(work-selected))+" yüzde puanı (yalnızca örnek)");
     }
 }
