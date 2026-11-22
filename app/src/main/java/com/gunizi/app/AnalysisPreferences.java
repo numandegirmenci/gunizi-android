@@ -24,6 +24,15 @@ final class AnalysisPreferences {
         if(s.length()>1500)s=s.substring(0,1500);
         p.edit().putString("focus",s.isEmpty()?DEFAULT:s).apply();
     }
+    String speechModel(){
+        String id=p.getString("speech_model",AiModelStore.WHISPER);
+        return AiModelStore.WHISPER_TURBO.equals(id)?id:AiModelStore.WHISPER;
+    }
+    void speechModel(String id){
+        if(!AiModelStore.WHISPER.equals(id)&&!AiModelStore.WHISPER_TURBO.equals(id))
+            throw new IllegalArgumentException("Konuşma modeli");
+        p.edit().putString("speech_model",id).apply();
+    }
     boolean includeDetails(){return p.getBoolean("details",true);}
     void includeDetails(boolean v){p.edit().putBoolean("details",v).apply();}
     boolean separateTasks(){return p.getBoolean("tasks",true);}
