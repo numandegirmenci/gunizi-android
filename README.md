@@ -15,6 +15,26 @@ Günİzi, Türkçe çevrimdışı ses kaydı ve yerel yapay zeka ile günlük ra
 
 
 
+
+## Günİzi v0.11 • CallVault native yapay zeka (TEST)
+
+Bu sürümde **CallVault'un gerçek native whisper.cpp + Silero VAD +
+llama.cpp kodları** doğrudan ve commit'e sabitlenmiş bir Git
+submodule üzerinden Günİzi'ye bağlandı. Önceki hazır Whisper/Llama Android
+kütüphaneleri kaldırıldı. Varsayılan özet modeli Gemma 4 E2B (2,62 GB);
+Whisper seçenekleri Small Q5 ve Turbo Q8 dahil.
+
+**Arayüz:** Kayıt oynatma, zaman çizelgesi, konuşma metni veya ayrıntılı
+konu/karar tablosu, gerçek işlem durumu, Metin / Konular / Notlarım
+sekmeleri. Geçmiş ve Mesai kayıt mantığı korunur.
+
+Bu, gerçek kod güncellemesidir; fakat native modelin Samsung'da
+uçtan uca çalışması cihaz testinden önce garanti edilemez.
+
+- [v0.11.0 ayrıntılı sürüm notları](release-notes/v0.11.0.md)
+- [Kaynak ve derleme mimarisi](docs/CALLVAULT_NATIVE_INTEGRATION.md)
+- [GPL-3.0 ve atıflar](THIRD_PARTY_NOTICES.md)
+
 ## AI 2.0 Test v0.10.0 — Çalışan ilk uygulama güncellemesi
 
 Yeni AI 2.0 planının ilk **gerçek uygulama kodu** GitHub'a işlendi:
