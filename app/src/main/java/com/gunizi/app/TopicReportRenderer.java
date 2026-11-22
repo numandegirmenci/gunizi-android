@@ -49,7 +49,7 @@ final class TopicReportRenderer {
         for(String h:COLUMNS)s.append('"').append(h).append('"').append(';');
         s.append('\n');
         for(Entry e:entries){
-            for(String cell:e.parts)s.append('"').append(cell.replace(""",""""))
+            for(String cell:e.parts)s.append('"').append(cell.replace(String.valueOf((char)34),String.valueOf((char)34)+String.valueOf((char)34)))
                 .append('"').append(';');
             s.append('\n');
         }
@@ -57,7 +57,7 @@ final class TopicReportRenderer {
     }
     private static String esc(String s){
         return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
-            .replace(""","&quot;").replace("'","&#39;");
+            .replace(String.valueOf((char)34),"&quot;").replace("'","&#39;");
     }
     static String html(List<Entry> entries,String name){
         StringBuilder s=new StringBuilder();
