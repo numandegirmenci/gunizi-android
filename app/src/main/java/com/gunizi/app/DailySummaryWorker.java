@@ -21,7 +21,7 @@ import java.util.List;
 public final class DailySummaryWorker extends Worker {
     private static final String CH="gunizi_ai_progress_v2";
     public static final String URI="sourceUri",NAME="sourceName",MODE="analysisMode";
-    public static final String TRANSCRIPT="transcript",REPORT="report";
+    public static final String TRANSCRIPT="transcript",REPORT="report",TEXT_REPORT="text_report";
     private static final int ACTIVE_NOTICE=206,FINISHED_NOTICE=207;
     private volatile long lastNotification=0;
     public DailySummaryWorker(@NonNull Context c,@NonNull WorkerParameters params){super(c,params);}
@@ -71,12 +71,48 @@ public final class DailySummaryWorker extends Worker {
             .putString("analysisStage",charging?
                 "Şarj ve pil koşullarını bekliyor":"İşlem sıraya alındı")
             .putInt("analysisPercent",0)
+            .putLong("analysisStartedAt",System.currentTimeMillis())
+            .putLong("analysisProgressAt",System.currentTimeMillis())
             .putString("analysisPreview","")
             .putInt("analysisPartsDone",0).putInt("analysisPartsTotal",0)
             .putString("summaryError","").apply();
         WorkManager.getInstance(c).enqueueUniqueWork(
             "gunizi-analysis-"+mode+"-"+Integer.toHexString(uri.toString().hashCode()),
             ExistingWorkPolicy.REPLACE,task);
+    }
+    /** Summarize a stored local transcript; do not reload Whisper. */
+    public static boolean queueFromTranscript(Context c){
+        android.content.SharedPreferences prefs=c.getSharedPreferences("gunizi",Context.MODE_PRIVATE);
+        String local=prefs.getString("transcriptInternal",null);
+        String name=prefs.getString("transcriptSource",null);
+        if(local==null||name==null||!AiModelStore.ready(c,new Prefs(c).aiModel()))
+            return false;
+        try{
+            File dir=new File(c.getNoBackupFilesDir(),"transcripts").getCanonicalFile();
+            File file=new File(local).getCanonicalFile();
+            if(!file.getPath().startsWith(dir.getPath()+File.separator)||
+               !file.isFile()||file.length()==0)return false;
+        }catch(IOException e){return false;}
+        AnalysisPreferences a=new AnalysisPreferences(c);
+        Data data=new Data.Builder().putString(NAME,name).putString(MODE,TEXT_REPORT)
+            .putString("transcriptPath",local)
+            .putString("analysisFocus",a.focus())
+            .putString("speechModel",a.speechModel())
+            .putString("languageModel",new Prefs(c).aiModel()).build();
+        OneTimeWorkRequest request=new OneTimeWorkRequest.Builder(DailySummaryWorker.class)
+            .setInputData(data)
+            .setConstraints(new Constraints.Builder().setRequiresBatteryNotLow(true).build())
+            .addTag("gunizi-local-summary").build();
+        long now=System.currentTimeMillis();
+        prefs.edit().putString("analysisSource",name)
+            .putString("analysisMode",TEXT_REPORT)
+            .putString("analysisStage","Hazır konuşma dökümü Qwen3 için sırada")
+            .putInt("analysisPercent",0)
+            .putLong("analysisStartedAt",now).putLong("analysisProgressAt",now)
+            .putString("summaryError","").putString("analysisPreview","").apply();
+        WorkManager.getInstance(c).enqueueUniqueWork("gunizi-text-summary",
+            ExistingWorkPolicy.REPLACE,request);
+        return true;
     }
     private void progress(int percent,String message,String source){
         int n=Math.max(0,Math.min(100,percent));
@@ -86,6 +122,7 @@ public final class DailySummaryWorker extends Worker {
         Context c=getApplicationContext();
         c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
             .putString("analysisStage",message).putInt("analysisPercent",n)
+            .putLong("analysisProgressAt",System.currentTimeMillis())
             .putString("analysisSource",source).apply();
         long time=SystemClock.elapsedRealtime();
         if(time-lastNotification>=1800||n==0||n==100){
@@ -126,8 +163,11 @@ public final class DailySummaryWorker extends Worker {
         if(mode==null)mode=REPORT;
         if(speech==null)speech=new AnalysisPreferences(c).speechModel();
         if(language==null)language=new Prefs(c).aiModel();
-        if(uriString==null||fileName==null||!AiModelStore.ready(c,speech)||
-           (REPORT.equals(mode)&&!AiModelStore.ready(c,language)))return Result.failure();
+        boolean useExistingText=TEXT_REPORT.equals(mode);
+        if(fileName==null||(!useExistingText&&uriString==null)||
+           (!useExistingText&&!AiModelStore.ready(c,speech))||
+           ((REPORT.equals(mode)||useExistingText)&&!AiModelStore.ready(c,language)))
+            return Result.failure();
         ensureChannel(c);
         final String selectedMode=mode;
         final String source=fileName;
@@ -136,30 +176,48 @@ public final class DailySummaryWorker extends Worker {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING:
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC;
             setForegroundAsync(new ForegroundInfo(ACTIVE_NOTICE,
-                notice(source,"Konuşma modeli başlatılıyor",0,true),type)).get();
+                notice(source,useExistingText?"Kaydedilen konuşma metni açılıyor":
+                    "Konuşma modeli hazırlanıyor",0,true),type)).get();
             AiProgress listener=(percent,message)->progress(percent,message,source);
             String base=fileName.replaceAll("(?i)\\.(ogg|opus|wav|m4a|mp3|aac)$","");
             File cacheFolder=new File(c.getNoBackupFilesDir(),"ai_drafts");
             cacheFolder.mkdirs();
             File transcriptCache=new File(cacheFolder,
-                safe(base)+"_"+speech+"_"+Integer.toHexString(uriString.hashCode())+".txt");
+                safe(base)+"_"+speech+"_"+Integer.toHexString(
+                    (uriString==null?"saved-transcript":uriString).hashCode())+".txt");
             String transcript;
-            if(transcriptCache.isFile()&&transcriptCache.length()>50){
-                transcript=new String(Files.readAllBytes(transcriptCache.toPath()),StandardCharsets.UTF_8);
-                listener.update(70,"Önceki konuşma dökümü bulundu");
+            if(useExistingText){
+                listener.update(70,"Konuşma metni okunuyor • Whisper tekrar çalıştırılmıyor");
+                String local=getInputData().getString("transcriptPath");
+                String saved=c.getSharedPreferences("gunizi",Context.MODE_PRIVATE)
+                    .getString("transcriptInternal","");
+                if(local==null||!local.equals(saved))
+                    throw new IOException("Kayıtlı döküm yolu değişmiş");
+                File allowed=new File(c.getNoBackupFilesDir(),"transcripts").getCanonicalFile();
+                File existing=new File(local).getCanonicalFile();
+                if(!existing.getPath().startsWith(allowed.getPath()+File.separator)||
+                   !existing.isFile()||existing.length()>8L*1024*1024)
+                    throw new IOException("Konuşma dökümü bulunamadı");
+                transcript=new String(Files.readAllBytes(existing.toPath()),StandardCharsets.UTF_8);
+                if(transcript.trim().isEmpty())throw new IOException("Konuşma dökümü boş");
             }else{
-                transcript=WhisperDailyTranscriber.transcribe(c,Uri.parse(uriString),speech,listener);
-                try(FileOutputStream out=new FileOutputStream(transcriptCache)){
-                    out.write(transcript.getBytes(StandardCharsets.UTF_8));out.getFD().sync();
+                if(transcriptCache.isFile()&&transcriptCache.length()>50){
+                    transcript=new String(Files.readAllBytes(transcriptCache.toPath()),StandardCharsets.UTF_8);
+                    listener.update(70,"Önceki konuşma dökümü bulundu");
+                }else{
+                    transcript=WhisperDailyTranscriber.transcribe(c,Uri.parse(uriString),speech,listener);
+                    try(FileOutputStream out=new FileOutputStream(transcriptCache)){
+                        out.write(transcript.getBytes(StandardCharsets.UTF_8));out.getFD().sync();
+                    }
                 }
+                listener.update(70,"Konuşmalar yazıya döküldü; sonuç kaydediliyor");
+                File internal=writeInternal(c,base,transcript);
+                c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
+                    .putString("transcriptInternal",internal.getAbsolutePath())
+                    .putString("transcriptSource",fileName).apply();
             }
-            listener.update(70,"Konuşmalar yazıya döküldü; sonuç kaydediliyor");
-            File internal=writeInternal(c,base,transcript);
-            c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
-                .putString("transcriptInternal",internal.getAbsolutePath())
-                .putString("transcriptSource",fileName).apply();
             Uri folder=new Prefs(c).folder();
-            if(folder!=null)ExportManager.writeText(c,folder,
+            if(folder!=null&&!useExistingText)ExportManager.writeText(c,folder,
                 "GÜNİZİ • TAM TÜRKÇE KONUŞMA DÖKÜMÜ\n"+transcript,
                 "GunIzi_Dokum_"+base+".txt");
             if(TRANSCRIPT.equals(selectedMode)){

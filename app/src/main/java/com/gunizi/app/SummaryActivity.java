@@ -19,11 +19,11 @@ public final class SummaryActivity extends Activity {
         WHITE=0xfff0f7ff,MUTED=0xffa2b4c9,CYAN=0xff38d4ca;
     private String chosenMode=DailySummaryWorker.REPORT;
     private ProgressBar progress;
-    private TextView stage,source,progressText,modelState,preview;
+    private TextView stage,source,progressText,modelState,preview,elapsed;
     private EditText focus;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable tick=new Runnable(){
-        @Override public void run(){refresh();handler.postDelayed(this,1800);}
+        @Override public void run(){refresh();handler.postDelayed(this,1000);}
     };
     private int dp(int n){return Math.round(getResources().getDisplayMetrics().density*n);}
     private GradientDrawable bg(int color){
@@ -70,10 +70,26 @@ public final class SummaryActivity extends Activity {
         text(analyze,"1 • Ne yapmak istiyorsun?",18,true);
         text(analyze,"Konuşmayı Yazıya Dök: yalnızca Whisper gerekir. "+
             "Özetle + Tablo: Whisper ve Qwen3 gerekir; konu, karar ve görevleri de çıkarır.",13,false);
-        Button transcribe=button(analyze,"Konuşmayı Yazıya Dök",true);
+        Button transcribe=button(analyze,"Konuşma metnini çıkar",true);
         transcribe.setOnClickListener(v->choose(DailySummaryWorker.TRANSCRIPT));
-        Button summarize=button(analyze,"Özetle + Ayrıntılı Konu Tablosu",false);
+        Button summarize=button(analyze,"Ses kaydını özetle ve tablolaştır",false);
         summarize.setOnClickListener(v->choose(DailySummaryWorker.REPORT));
+        Button existing=button(analyze,"Çıkarılan konuşma metnini özetle ve tablolaştır",false);
+        existing.setOnClickListener(v->{
+            new AnalysisPreferences(this).focus(focus.getText().toString());
+            if(!AiModelStore.ready(this,new Prefs(this).aiModel())){
+                new AlertDialog.Builder(this).setTitle("Qwen3 modeli gerekli")
+                    .setMessage("Metni konu tablosuna çevirmek için Qwen3 modelinin indirilmiş olması gerekiyor.")
+                    .setNegativeButton("Vazgeç",null)
+                    .setPositiveButton("Model ayarları",(d,w2)->
+                        startActivity(new Intent(this,ModelSettingsActivity.class))).show();
+            }else if(!DailySummaryWorker.queueFromTranscript(this)){
+                new AlertDialog.Builder(this).setTitle("Konuşma metni bulunamadı")
+                    .setMessage("Önce 'Konuşma metnini çıkar' ile bir ses kaydını işle. "+
+                        "Daha sonra Whisper'ı tekrar yüklemeden metni özetleyebilirsin.")
+                    .setPositiveButton("Tamam",null).show();
+            }else refresh();
+        });
 
         LinearLayout tracker=card(root);
         text(tracker,"2 • Canlı işlem durumu",18,true);
@@ -84,6 +100,7 @@ public final class SummaryActivity extends Activity {
             android.content.res.ColorStateList.valueOf(CYAN));
         tracker.addView(progress,new LinearLayout.LayoutParams(-1,dp(12)));
         progressText=text(tracker,"%0",13,true);
+        elapsed=text(tracker,"Geçen süre: 00:00:00",13,false);
         text(tracker,"Son okunan / incelenen bölüm",14,true);
         preview=text(tracker,"Henüz işlenen konuşma yok.",13,false);
         text(tracker,"Döküm sırasında: ses parçaları çözümlenir. "+
@@ -188,6 +205,19 @@ public final class SummaryActivity extends Activity {
             "İşlem başlatmak için yukarıdan bir seçenek seç.":phase);
         progress.setProgress(percent);
         progressText.setText("%"+percent);
+        long started=p.getLong("analysisStartedAt",0);
+        if(started>0){
+            long secs=Math.max(0,(System.currentTimeMillis()-started)/1000);
+            elapsed.setText("Geçen süre: "+String.format(java.util.Locale.ROOT,
+                "%02d:%02d:%02d",secs/3600,(secs/60)%60,secs%60));
+            long last=p.getLong("analysisProgressAt",0);
+            boolean loading=phase.contains("model")||phase.contains("Model");
+            if(loading&&last>0&&System.currentTimeMillis()-last>90000){
+                stage.setText(phase+"\nModel açılışı beklenenden uzun sürdü. "+
+                    "Bellek veya işlemci sınırı olabilir. İlerleme başlamazsa "+
+                    "işlemi durdurup Whisper small ile dene.");
+            }
+        }else elapsed.setText("Geçen süre: 00:00:00");
         String excerpt=p.getString("analysisPreview","");
         preview.setText(excerpt.isEmpty()?"Analiz başladığında burada kaynak metin ve konu açıklaması görünecek.":excerpt);
         new Thread(()->{

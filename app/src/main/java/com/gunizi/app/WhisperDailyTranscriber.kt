@@ -29,6 +29,7 @@ object WhisperDailyTranscriber {
                     contentSize(context, audio)))
             checkpoint.mkdirs()
             val model = Whisper.loadModel(context, AiModelStore.speechFile(context, speechModel).absolutePath)
+            progress.update(1, "Whisper modeli açıldı • Ses bölümleri hazırlanıyor")
             val resultText = StringBuilder()
             var count = 0
             var index = 0
