@@ -34,9 +34,13 @@ public final class AppUpdateWorker extends Worker {
         if(!dir.exists())dir.mkdirs();
         return new File(dir,APK);
     }
+    /** Side-by-side builds may CHECK releases but must never download or install
+     * another package ID's APK as an in-place update.
+     */
+    static boolean independent(Context c){
+        return !"com.gunizi.app".equals(c.getPackageName());
+    }
     static void schedule(Context c){
-        // A debug side-by-side test app must never install a release APK for the other package.
-        if(c.getPackageName().endsWith(".test")||c.getPackageName().endsWith(".ai2")||c.getPackageName().endsWith(".ai3")||c.getPackageName().endsWith(".ai4"))return;
         if(!enabled(c)){
             WorkManager.getInstance(c).cancelUniqueWork(WORK);
             WorkManager.getInstance(c).cancelUniqueWork(WORK+"-initial");return;
@@ -126,6 +130,21 @@ public final class AppUpdateWorker extends Worker {
                 .putString("releaseNotes",release.optString("body","").substring(0,
                     Math.min(12000,release.optString("body","").length()))).apply();
             return "Günİzi güncel • "+tag;
+        }
+        // Checking updates is available in every installation. Installing an
+        // incompatible release is not: package identity and signing must match.
+        if(independent(c)){
+            android.content.SharedPreferences pref=c.getSharedPreferences(PREF,Context.MODE_PRIVATE);
+            String notes=release.optString("body","");
+            if(notes.length()>12000)notes=notes.substring(0,12000);
+            pref.edit().putInt("remoteCode",remote).putString("remoteTag",tag)
+                .putString("releaseUrl",release.optString("html_url",RELEASES))
+                .putString("releaseNotes",notes).putString("releaseSummary",shortNotes(notes))
+                .putInt("downloadVersion",0).apply();
+            File old=packageFile(c);
+            if(old.exists())old.delete();
+            if(background)showUpdateNotice(c,tag,remote,false,notes);
+            return "Yeni sürüm: "+tag+" • Bağımsız kurulum: GitHub'dan indirilebilir; mevcut kurulumun üzerine yüklenmez.";
         }
         JSONArray assets=release.optJSONArray("assets");
         JSONObject candidate=null;
