@@ -296,6 +296,25 @@ public final class MainActivity extends Activity {
         gap(storage,7);
         Button recover=button("Şifreli yedekleri kurtar",false);storage.addView(recover);
         recover.setOnClickListener(v->send(RecorderService.ACTION_RECOVER));
+        LinearLayout recordingNotice=card("Telefon görüşmeleri");
+        muted(recordingNotice,"Günİzi normal mikrofon izniyle hücresel aramaların iki tarafını "+
+            "güvenilir şekilde kaydedemez. Telefonunun kendi arama kaydı işlevi "+
+            "destekleniyorsa onu kullanabilirsin. Görüşmeleri kaydetmek için gerekli "+
+            "bilgilendirme ve izinleri gözetmelisin.");
+        LinearLayout notice=card("Sessiz kayıt bildirimi");
+        muted(notice,"Kayıt sırasında Android güvenlik gereği mikrofon bildirimini "+
+            "gösterir. Günİzi bildirimi sessiz tutar; bildirim sırasını Samsung belirler.");
+        gap(notice,8);
+        Button quiet=button("Kayıt bildirim ayarlarını aç",false);notice.addView(quiet);
+        quiet.setOnClickListener(v->{
+            Intent intent=new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
+            intent.putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName());
+            intent.putExtra(Settings.EXTRA_CHANNEL_ID,"gunizi_recording_quiet_v2");
+            try{startActivity(intent);}catch(Exception e){
+                startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()));
+            }
+        });
         LinearLayout battery=card("Pil ve gizlilik");
         Button compare=button("Pil tüketimi karşılaştırması",false);battery.addView(compare);
         compare.setOnClickListener(v->startActivity(new Intent(this,BatteryInfoActivity.class)));
