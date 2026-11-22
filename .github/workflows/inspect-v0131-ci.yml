@@ -1,0 +1,23 @@
+name: Inspect Günİzi 0.13.1 CI
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-v0131-ci.yml'
+permissions:
+  actions: read
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record latest hotfix run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RUN="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build-v0131-stability.yml/runs?per_page=6" --jq '.workflow_runs | map(select(.head_branch == "main")) | first | "\(.id) \(.status) \(.conclusion) \(.head_sha) \(.html_url)"')"
+          test -n "$RUN"
+          echo "$RUN"
+          CONTENT="$(printf '%s\n' "$RUN" | base64 -w 0)"
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/docs/GUNIZI_0131_CI_RUN.txt" -f message="Record Günİzi stabilization CI run for validation" -f content="$CONTENT"
