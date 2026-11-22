@@ -1,12 +1,6 @@
 name: Günİzi v0.11.2 UX Test APK
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/build-v0112-ux-test.yml'
-      - 'app/src/main/java/com/gunizi/app/**'
-      - 'app/build.gradle'
   workflow_dispatch:
 
 permissions:
