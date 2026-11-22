@@ -2,6 +2,24 @@
 
 **Günİzi**, Android'de geçmişe dönük ses kaydı, mesai kaydı, Türkçe konuşma dökümü ve cihaz içinde yapay zeka destekli özet hazırlama uygulamasıdır. Ses kayıtlarının işlenmesi yerel olarak yapılır; modeller yalnızca kullanıcı isterse indirilir.
 
+## Günİzi v0.13.0 — Kanıtlı günlük iş hafızası
+
+**Hedef:** Uzun ses kaydından “Bugün ne konuşuldu?”, “Hangi işler bana kaldı?”, “Kimden dönüş bekliyorum?”, “Neler sonuçlandı?” sorularına kaynakla ilişkilendirilmiş yanıtlar hazırlamak.
+
+- Ses içeriğinin SHA-256 kimliği + analiz UUID'si sayesinde aynı isimli kayıtlar farklı sonuç dosyalarına yazılır.
+- Konuşma dökümü arayüzü dokuz saatlik kaydı tek büyük TextView olarak yenilemek yerine sadece dosyaya eklenen yeni satırları okur, ListView ile sanal satır kullanır.
+- Karar, görev, konuşma ve durumlar özel iş hafızası klasöründe kayıt bazında saklanır. Kullanıcıya düşen işler, beklenen yanıtlar ve sonuçlananlar için kullanıcı onayı ayrıca tutulur.
+- Kaynak zamanı bilinen satıra dokunulduğunda ilgili ses bölümünü dinleme sayfası açılır. Bilinmeyen zaman için bağlantı uydurulmaz.
+- İkinci aşama hiyerarşik yerel özetleme ve kontrol noktaları; tabloda 1200 satırlık sessiz kesme kaldırılmıştır. **Yapay zeka çıkarımı hata içerebilir; eksiksizlik garantisi değildir.**
+- Geçmiş dinleme modunda tamamlanmış geçici Opus parçaları Android Keystore AES-GCM ile şifrelenir. Konuşma motorunda WAV ara dosyaları yerine bellek içi PCM kullanılır. Aktif olarak kaydedilen dosyanın MediaRecorder tarafından doğrudan şifreli üretilmediği özellikle not edilmelidir.
+- [v0.13.0 teknik değişiklik ve veri güvenliği notları](release-notes/v0.13.0.md)
+
+**Doğrulama / APK:** [Günİzi 0.13.0 GitHub Actions derlemesi](https://github.com/numandegirmenci/gunizi-android/actions/workflows/build-v0130-memory.yml) — yalnızca başarıyla sonuçlanan derlemelerin Artifacts bölümündeki APK'lar kullanılmalı. Debug APK `com.gunizi.app.ai7` kimliğiyle ayrı kurulur; önceki kayıtları silmeyin.
+
+**Kalıcı güncelleme:** Resmi `com.gunizi.app` paketinin veri silmeden güncellenebilmesi için aynı özel imza anahtarının GitHub Secrets üzerinden sağlanması gerekir. Şu anda bunun tamamlandığı iddia edilmiyor.
+
+---
+
 ## Günİzi v0.12.0 — Canlı konuşma akışı
 
 - Konuşmalar, ses bölümleri tamamlandıkça **zaman damgalı ve aşağı doğru sıralanan satırlar** halinde görünür.
