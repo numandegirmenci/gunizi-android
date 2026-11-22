@@ -48,7 +48,7 @@ object FullDaySummarizer {
             // spending another native generation pass to restate the same content.
             val audioDuration=preferences.getLong("analysisAudioDuration",0L)
             val fast=audioDuration in 1L..(8*60_000L) &&
-                parts.size<=3 && !preferences.getBoolean("aiDetailedSummary",false)
+                !preferences.getBoolean("aiDetailedSummary",false)
             preferences.edit()
                 .putBoolean("analysisFastSummary",fast)
                 .putLong("analysisLlmTotalMs",0L)
@@ -71,7 +71,7 @@ object FullDaySummarizer {
                         ?:throw IllegalStateException("Önceki JSON özeti okunamadı: bölüm ${index+1}")
                 }else{
                     val prompt=buildPrompt(part,boundedFocus,fast)
-                    val output=LlamaNative.generate(ptr,prompt,if(fast)1050 else 1650,4,SummaryGrammar.JSON)
+                    val output=LlamaNative.generate(ptr,prompt,if(fast)1300 else 1650,4,SummaryGrammar.JSON)
                     val parsed=CallSummary.parse(output)
                         ?:throw IllegalStateException("Gemma/Qwen geçerli JSON üretemedi: bölüm ${index+1}")
                     val partial=File(checkpointFolder,checkpoint.name+".partial")
@@ -108,7 +108,7 @@ object FullDaySummarizer {
             val report=StringBuilder("GÜNİZİ • GÜNLÜK KONU VE KARAR RAPORU\n")
             report.append("Model: ").append(AiModelStore.label(languageModel)).append("\n")
             report.append("Motor: CallVault llama.cpp • Kaynak: yerel konuşma metni\n\n")
-            report.append("GÜNÜN BÜTÜNLEŞTİRİLMİŞ ÖZETİ (sesle doğrulanmalı)\n")
+            report.append(if(fast) "KISA KAYIT • BÖLÜM ÖZETLERİ (sesle doğrulanmalı)\n"\n                else "GÜNÜN BÜTÜNLEŞTİRİLMİŞ ÖZETİ (sesle doğrulanmalı)\n")
             report.append(unifiedText).append("\n\n")
             report.append("GÜNÜN ÖZETİ / BÖLÜM KAYITLARI\n")
             summaries.forEachIndexed{index,part->
