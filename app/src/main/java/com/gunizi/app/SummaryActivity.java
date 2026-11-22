@@ -173,26 +173,38 @@ public final class SummaryActivity extends Activity {
         Button notes=resultTab(tabs,"Notlarım");
         notes.setOnClickListener(v->{
             Intent i=new Intent(this,UserNotesActivity.class);
-            i.putExtra("openLatestReport",true);startActivity(i);
+            startActivity(i);
         });
         text(result,"Notlarını düzenleyebilir, onayınla Samsung Notes'a paylaşabilirsin.",12,false);
 
-        LinearLayout preferences=card(root);
-        text(preferences,"ANALİZ TERCİHİM",16,true);
-        text(preferences,"Örneğin alınan kararlar, sorumlular, mağaza açılışları ve "+
-            "bekleyen konular. Bu talimat yalnızca özetleme için kullanılır.",12,false);
-        focus=new EditText(this);focus.setText(new AnalysisPreferences(this).focus());
+        // Advanced controls are available but no longer fill the first screen.
+        LinearLayout advanced=card(root);
+        Button toggleAdvanced=button(advanced,"Tercihler ve model ayarları ▼",false);
+        LinearLayout advancedBody=new LinearLayout(this);
+        advancedBody.setOrientation(LinearLayout.VERTICAL);
+        advancedBody.setVisibility(View.GONE);
+        advanced.addView(advancedBody);
+        toggleAdvanced.setOnClickListener(v->{
+            boolean open=advancedBody.getVisibility()!=View.VISIBLE;
+            advancedBody.setVisibility(open?View.VISIBLE:View.GONE);
+            toggleAdvanced.setText(open?"Tercihler ve model ayarlarını gizle ▲":
+                "Tercihler ve model ayarları ▼");
+        });
+        text(advancedBody,"ÖZETTE NELERE DİKKAT EDİLSİN?",14,true);
+        text(advancedBody,"Örneğin kararlar, sorumlular ve bekleyen işler. Yalnızca özetleme için kullanılır.",12,false);
+        focus=new EditText(this);
+        focus.setText(new AnalysisPreferences(this).focus());
         focus.setTextColor(WHITE);focus.setHintTextColor(MUTED);
-        focus.setTextSize(14);focus.setMinLines(2);focus.setMaxLines(7);
-        preferences.addView(focus);
-        Button save=button(preferences,"Tercihimi kaydet",false);
-        save.setOnClickListener(v->{saveFocus();
-            Toast.makeText(this,"Tercih kaydedildi.",Toast.LENGTH_SHORT).show();});
-
-        LinearLayout models=card(root);
-        text(models,"KULLANILAN MODELLER",16,true);
-        modelStatus=text(models,"Model durumu kontrol ediliyor.",12,false);
-        Button settings=button(models,"Model seçimi • Whisper / Gemma / Qwen",false);
+        focus.setHint("Hangi konular öncelikli?");
+        focus.setTextSize(14);focus.setMinLines(2);focus.setMaxLines(5);
+        advancedBody.addView(focus);
+        Button save=button(advancedBody,"Analiz tercihimi kaydet",false);
+        save.setOnClickListener(v->{
+            saveFocus();Toast.makeText(this,"Tercih kaydedildi.",Toast.LENGTH_SHORT).show();
+        });
+        text(advancedBody,"MODEL DURUMU",14,true);
+        modelStatus=text(advancedBody,"Model durumu kontrol ediliyor.",12,false);
+        Button settings=button(advancedBody,"Model önerileri ve indirmeler",false);
         settings.setOnClickListener(v->
             startActivity(new Intent(this,ModelSettingsActivity.class)));
         refreshStatus();
