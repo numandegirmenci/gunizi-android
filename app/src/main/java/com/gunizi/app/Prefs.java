@@ -11,14 +11,15 @@ import java.time.ZoneId;
 /** A one-time setup; no sensitive audio stored in preferences. */
 final class Prefs {
     static final String MODE_WORK = "work";
+    static final String MODE_HISTORY = "history";
     static final String MODE_MANUAL = "manual";
     static final String MODE_CONTINUOUS = "continuous";
-    static final ZoneId ZONE = ZoneId.of("Europe/Istanbul");
+    static final ZoneId ZONE = ZoneId.systemDefault();
     private final SharedPreferences p;
     Prefs(Context c) { p = c.getSharedPreferences("gunizi", Context.MODE_PRIVATE); }
     String mode() {
         String v=p.getString("mode",MODE_WORK);
-        return MODE_CONTINUOUS.equals(v)?MODE_MANUAL:v;
+        return (MODE_CONTINUOUS.equals(v)||MODE_MANUAL.equals(v))?MODE_HISTORY:v;
     }
     void mode(String x) { p.edit().putString("mode", x).apply(); }
     String aiModel(){
@@ -32,10 +33,11 @@ final class Prefs {
     }
     int durationMinutes() {
         int n=p.getInt("manual_minutes",15);
-        return (n==15||n==60||n==360)?n:15;
+        return (n==1||n==5||n==15||n==60||n==120||n==240||n==360)?n:15;
     }
     void durationMinutes(int value){
-        if(value!=15&&value!=60&&value!=360)throw new IllegalArgumentException("Süre: 15, 60 veya 360 dakika");
+        if(value!=1&&value!=5&&value!=15&&value!=60&&value!=120&&value!=240&&value!=360)
+            throw new IllegalArgumentException("Geçerli geçmiş seçimi 1–360 dk");
         p.edit().putInt("manual_minutes",value).apply();
     }
     int startHour() { return p.getInt("sh", 8); }
@@ -51,7 +53,7 @@ final class Prefs {
         return LocalTime.of(startHour(),startMinute()).isBefore(LocalTime.of(endHour(),endMinute()));
     }
     boolean inWorkWindow() {
-        LocalDateTime dt=LocalDateTime.now(ZONE);
+        LocalDateTime dt=LocalDateTime.now(); // current phone time and time zone
         LocalTime t=dt.toLocalTime();
         return isDayEnabled(dt.getDayOfWeek()) && validRange()
             && !t.isBefore(LocalTime.of(startHour(),startMinute()))
