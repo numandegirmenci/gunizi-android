@@ -71,6 +71,8 @@ public final class DailySummaryWorker extends Worker {
             .putString("analysisStage",charging?
                 "Şarj ve pil koşullarını bekliyor":"İşlem sıraya alındı")
             .putInt("analysisPercent",0)
+            .putString("analysisPreview","")
+            .putInt("analysisPartsDone",0).putInt("analysisPartsTotal",0)
             .putString("summaryError","").apply();
         WorkManager.getInstance(c).enqueueUniqueWork(
             "gunizi-analysis-"+mode+"-"+Integer.toHexString(uri.toString().hashCode()),
