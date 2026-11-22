@@ -1,4 +1,4 @@
-# Günİzi Android • v0.9.0 – Yapay Zeka İş Akışları (Deneysel)
+# Günİzi Android • v0.9.1 – Yerel Yapay Zeka Tanılama (Deneysel)
 
 **Durum:** Android debug APK deneysel; gerçek cihazda 9 saatlik yük testi henüz yapılmadı.
 
@@ -12,6 +12,19 @@
 
 
 Günİzi, Türkçe çevrimdışı ses kaydı ve yerel yapay zeka ile günlük rapor amaçlayan Android uygulamasıdır.
+
+## v0.9.1 • Konuşma metni, metinden tablo ve gerçek durum takibi
+
+- Geçmiş ses sayacı her saniye ilerler, önceki sürümlerdeki canlı deneyim korunur.
+- Yapay Zeka ekranında **Konuşma metnini çıkar**, **Ses kaydını özetle ve tablolaştır**
+  ve **Önceden çıkarılan konuşma metnini özetle ve tablolaştır** ayrı işlemlerdir.
+- Model yüklenirken geçen süre gösterilir; 90 saniyeden uzun bekleme için açıklama
+  yapılır ve işlem başarısız/iptal durumları ayrıca gösterilir.
+- `Whisper base` hızlı doğrulama seçeneği eklendi.
+- Ayarlar sonunda **Geliştiren: Numan Değirmenci**, e-posta ve GitHub bağlantısı bulunur.
+- **İlk test için:** 30 saniye–3 dakika ses → Whisper base ile metin → Qwen3 ile tablo.
+
+[Değişiklikler](release-notes/v0.9.1.md) · [Test notları](docs/AI_DEBUG_V091.md)
 
 ## v0.9 • Yapay Zeka alanında anlaşılır çalışma
 
