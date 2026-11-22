@@ -20,7 +20,7 @@ object FullDaySummarizer {
         "Düşünce adımlarını yazma. /no_think"
 
     @JvmStatic
-    fun summarize(context: Context, transcript: String,
+    fun summarize(context: Context, transcript: String, focus: String,
                   progress: AiProgress): String = runBlocking {
         require(AiModelStore.ready(context,PrefSModel(context))) { "Seçilen Qwen3 modeli kurulmamış" }
         if (transcript.isBlank()) return@runBlocking "Anlaşılır konuşma bulunamadı."
@@ -29,21 +29,45 @@ object FullDaySummarizer {
             LlamaConfig(contextSize=4096,threads=4,temperature=0.15f,topP=0.85f,topK=30,seed=17))
         try {
             val parts=splitText(transcript,CHUNK_LIMIT)
-            val folder=File(context.noBackupFilesDir,"ai_checkpoints/"+digest(transcript))
+            val boundedFocus=focus.take(1500)
+            val folder=File(context.noBackupFilesDir,"ai_checkpoints_v2/"+digest(transcript+"|"+boundedFocus))
             folder.mkdirs()
             val notes=ArrayList<String>()
+            val perChunkTables=ArrayList<String>()
+            var unclassified=0
             for ((i,part) in parts.withIndex()) {
                 if (Thread.currentThread().isInterrupted) throw InterruptedException("Özetleme durduruldu")
                 val backup=File(folder,"part_"+i.toString().padStart(4,'0')+".txt")
                 val note=if(backup.isFile()&&backup.length()>30)backup.readText() else {
                     val answer=Llama.complete(model,
-                        prompt="/no_think\nAşağıdaki kayıt parçasındaki önemli olayları, " +
-                            "alınan kararları, sorumluları, verilen sözleri, takip edilecek işleri " +
-                            "ve kaynak saatlerini Türkçe maddelerle özetle. Hiçbir bilgi ekleme.\n\n"+part,
-                        systemPrompt=SYSTEM,maxTokens=420).text.trim()
+                        prompt="/no_think\nSen bir iş günü konuşma analiz asistanısın. "+
+                            "Kullanıcının özellikle ilgilendiği konular: "+boundedFocus+"\n"+
+                            "Önce verilen tüm önemli olayları ve kararları saatleriyle özetle. "+
+                            "Ardından TAM OLARAK [[GUNIZI_BOLUM_TSV]] satırını yaz; "+
+                            "izleyen satırlarda her ayrı konu için 6 TAB ile ayrılmış alan kullan: "+
+                            "Saat | Konu | Konuşulanlar | Kesin karar | Yapılacak iş | Sorumlu. "+
+                            "Bunları TAB karakteriyle ayır; kaynakta söylenmeyen bilgi için "+
+                            "'Belirtilmedi' yaz. Diğer konuşmaları atlama. "+
+                            "Satırları en fazla 10 konu olacak şekilde çıkar. "+
+                            "En sona [[GUNIZI_BOLUM_SON]] ekle. "+
+                            "Tarih/kişi belirsizse uydurma. Konuşmada olmayan olay ekleme.\n\n"+
+                            "KAYNAK DÖKÜM:\n"+part,
+                        systemPrompt=SYSTEM,maxTokens=850).text.trim()
                     backup.writeText(answer);answer
                 }
-                notes.add(note)
+                val startMark="[[GUNIZI_BOLUM_TSV]]"
+                val endMark="[[GUNIZI_BOLUM_SON]]"
+                val pos=note.indexOf(startMark)
+                if(pos>=0){
+                    notes.add(note.substring(0,pos).trim())
+                    val tail=note.substring(pos+startMark.length)
+                    val stop=tail.indexOf(endMark)
+                    val table=if(stop>=0)tail.substring(0,stop)else tail
+                    if(table.isNotBlank()) perChunkTables.add(table.trim()) else unclassified++
+                }else{
+                    notes.add(note)
+                    unclassified++
+                }
                 progress.update(72+(i+1)*20/parts.size,
                     "Qwen3: "+(i+1)+"/"+parts.size+" bölüm yorumlandı")
             }
@@ -70,28 +94,20 @@ object FullDaySummarizer {
                     "Her maddede varsa kaynak saati yaz. Sadece dökümde geçenleri yaz.\n\n"+
                     level.firstOrNull().orEmpty().take(8200),
                 systemPrompt=SYSTEM,maxTokens=1350).text.trim()
-            progress.update(99,"Görüşmeler konu başlıklarına ayrılıyor")
-            val tableText = try {
-                Llama.complete(model,
-                    prompt="/no_think\nAşağıdaki günlük notları konu konu sınıflandır. "+
-                        "HER KONU TEK SATIR: Tam altı sütun, yalnızca sekme (TAB) ile ayrılmış "+
-                        "olmalı. Sütun sırası: SAAT, KONU, KONUŞULANLAR, KARAR, YAPILACAK, SORUMLU. "+
-                        "Boş veya bilinmeyen bilgi için Belirtilmedi yaz. "+
-                        "Yalnızca verilen kanıta dayan, uydurma. "+
-                        "Her farklı ana konuda ayrı satır oluştur; zaman damgalarını koru. "+
-                        "Markdown tablo, açıklama veya sütun başlığı yazma. "+
-                        "En fazla 35 satır üret.\n\n"+(overall+"\n\n"+
-                            notes.joinToString("\n\n")).take(9500),
-                    systemPrompt=SYSTEM,maxTokens=2000).text.trim()
-            } catch (e: Exception) {
-                ""
-            }
+            progress.update(99,"Tüm kayıt parçalarının konu tablosu birleştiriliyor")
+            // All chunks contribute; previously only the first ~9500 chars were examined.
+            // An incomplete extraction is explicitly noted; source transcript remains available.
+            val tableText=perChunkTables.joinToString("\n")
+            val gaps=if(unclassified>0)
+                "\nUYARI: "+unclassified+" kayıt bölümünde otomatik konu satırı çıkarılamadı. "+
+                "Bu bölümlerin ayrıntılı özetlerini ve tam dökümünü kontrol et."
+                else ""
             val detailed=notes.mapIndexed { index, item ->
                 "KAYIT BÖLÜMÜ "+(index+1).toString()+" / "+notes.size+"\n"+item
             }.joinToString("\n\n")
             overall+"\n\n=== GÜN BOYUNCA AYRINTILI PARÇA ÖZETLERİ ===\n\n"+
                 detailed+"\n\n"+TopicReportRenderer.START+"\n"+tableText+
-                "\n"+TopicReportRenderer.END
+                "\n"+TopicReportRenderer.END+"\n"+gaps
         } finally {
             Llama.releaseModel(model)
         }
