@@ -215,8 +215,12 @@ public final class MainActivity extends Activity {
         box.addView(weekdays);gap(box,12);
         action=button("Mesai kaydını etkinleştir",true);box.addView(action);
         action.setOnClickListener(v->{
-            if(RecorderService.running){send(RecorderService.ACTION_STOP);handler.postDelayed(()->show(1),650);}
-            else startWork();
+            if(RecorderService.historyActive){
+                toast("Mesaiyi başlatmadan önce Kayıt sekmesindeki geçmiş dinlemeyi durdur.");
+            }else if(RecorderService.running){
+                send(RecorderService.ACTION_STOP);
+                handler.postDelayed(()->show(1),650);
+            }else startWork();
         });
         gap(box,9);
         muted(box,"Hizmet etkin kaldığı sürece saatleri takip eder. Sistem hizmeti sonlandırırsa kayıt kendiliğinden yeniden başlayamayabilir.");
@@ -374,8 +378,11 @@ public final class MainActivity extends Activity {
             if(substatus!=null)substatus.setText(RecorderService.running?
                 RecorderService.lastEvent:prefs.timeString(true)+"–"+prefs.timeString(false)+
                 " • Telefon saatine göre");
-            if(action!=null)action.setText(RecorderService.running?
-                "Mesai hizmetini durdur":"Mesai kaydını etkinleştir");
+            if(action!=null){
+                action.setText(RecorderService.historyActive?"Önce geçmiş dinlemeyi durdur":
+                    RecorderService.running?"Mesai hizmetini durdur":"Mesai kaydını etkinleştir");
+                action.setEnabled(!RecorderService.historyActive);
+            }
         }
     }
     private static String formatPast(int seconds){

@@ -9,8 +9,8 @@ android {
         applicationId 'com.gunizi.app'
         minSdk 29
         targetSdk 35
-        versionCode 3
-        versionName '0.3-preview'
+        versionCode 4
+        versionName '0.4-history-preview'
     }
     buildTypes {
         release { minifyEnabled false }
