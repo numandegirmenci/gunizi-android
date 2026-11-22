@@ -1,4 +1,4 @@
-# Günİzi Android • v0.4 (Deneysel)
+# Günİzi Android • v0.5 (Deneysel)
 
 **Durum:** Android debug APK deneysel; gerçek cihazda 9 saatlik yük testi henüz yapılmadı.
 
@@ -61,6 +61,45 @@ Her iki model de **Rapor** sekmesinden kullanıcının açık onayıyla indirili
 - Pil karşılaştırma ekranı seçili manuel kayıt süresi ile mesai süresini gösterir; **gerçek ölçümler yerine varsayımsal hesapları açıkça belirtir**.
 - Yerel yapay zeka yoğun CPU/RAM kullanabilir. Otomatik raporlar varsayılan olarak şarj koşulu sağlanınca başlar.
 - Bir cihazın gizlilik ve mikrofon göstergeleri Android tarafından yönetilir; uygulama bunları gizlemez.
+
+## GitHub'dan otomatik sürüm kontrolü (v0.5)
+
+- **Ayarlar → Uygulama güncellemeleri → Otomatik güncelleme kontrolü** varsayılan olarak açıktır.
+- Android WorkManager yaklaşık 12 saatte bir **GitHub Releases / latest** bilgilerini kontrol eder (Android görevi geciktirebilir).
+- Yeni kararlı sürüm varsa bildirim gösterilir. Wi-Fi / ölçüsüz bağlantıda APK ancak GitHub Release SHA-256 digest bilgisi olduğunda otomatik indirilir ve doğrulanır.
+- **Android otomatik/sessiz APK kurulumuna izin vermez.** Kullanıcı bildirimden yükleyiciyi açar ve onaylar.
+- Sadece `main` dalına kaynak kod yüklemek güncelleme yayınlamak değildir: GitHub'da **imzalı bir Release** oluşturulmalıdır.
+- Uygulamaların birbiri üzerine kurulabilmesi için APK'ların **aynı kalıcı anahtarla imzalanması gerekir**. Her GitHub Actions debug derlemesinin geçici anahtarı farklı olabilir. Eski debug APK'dan imzalı yayın sürümüne doğrudan güncelleme mümkün olmayabilir.
+
+### Tek seferlik imza kurulumu (gerekli)
+
+GitHub deposu **Settings → Secrets and variables → Actions** altında dört özel secret tanımlanmalı:
+
+- `GUNIZI_KEYSTORE_BASE64`: kişisel release keystore dosyasının Base64 içeriği
+- `GUNIZI_KEYSTORE_PASSWORD`: keystore şifresi
+- `GUNIZI_KEY_ALIAS`: anahtar takma adı
+- `GUNIZI_KEY_PASSWORD`: anahtar şifresi
+
+**Keystore'u veya parolasını herkese açık GitHub deposuna ASLA yükleme.** Key kaybolursa sonraki güncellemeler eski kurulumların üzerine yüklenemez. `.github/workflows/release-apk.yml` dosyası kalıcı anahtarı GitHub secrets üzerinden kullanarak imzalı APK üretir. Secrets tanımlanmadan çalıştırılırsa güvenli biçimde hata verir.
+
+Secret kurulumundan sonra `v0.5.0` gibi bir git etiketi yayınlandığında **Signed Android Release** workflow tetiklenir, imzalı APK GitHub Releases'e yüklenir. APK'nın `versionCode` değeri bir öncekinden yüksek tutulmalı. Kayıt ve modellerin silinmemesi için cihazdaki sürümle yeni sürümün imzası eşleşmelidir.
+
+## Konu konu günlük özet tablosu (v0.5)
+
+Yerel **Whisper + seçilen Qwen3** modelleri kuruluysa tamamlanan ses dosyası işlem sırasında 5 dakikalık bölümler halinde yazıya çevrilir, konu başlıkları ve saatler çıkarılır. Raporun yanında şu dosyalar oluşur:
+
+- `GunIzi_Ozet_*.txt`: genel ve ayrıntılı günlük rapor
+- `GunIzi_Dokum_*.txt`: algılanan konuşmanın tam dökümü
+- `GunIzi_KonuTablosu_*.html`: telefon veya bilgisayarda açılan konu tablosu
+- `GunIzi_KonuTablosu_*.csv`: Excel'e aktarılabilen konu tablosu
+
+**Rapor → Konu konu rapor tablosu** ekranında aynı konu tablosunun yerel bir kopyası gösterilir. Sütunlar **Saat / Aralık, Konu, Konuşulanlar, Alınan karar, Takip edilecek iş, Sorumlu**. Model bir konuyu sınıflandıramazsa gerçek dışı karar veya sorumlu uydurulmaz. Modellerin gerçek telefonda tüm gün çalışması henüz uçtan uca doğrulanmadı.
+
+## Bildirimler ve telefon görüşmeleri
+
+- Mikrofon aktifken foreground bildirimini Android zorunlu tutar. Günİzi bunu **sessiz, düşük öncelikli** gösterir; "Daha fazla bildirim" konumunu Samsung belirler.
+- Ayarlar'da doğrudan kanal bildirim ayarlarına gitme seçeneği bulunur.
+- Normal üçüncü taraf uygulamalar hücresel aramanın iki tarafını güvenilir biçimde kaydedemez. Bu yetki genellikle sistem arama uygulamasıyla sınırlıdır. Günİzi arama sesi kaydı özelliği olduğunu iddia etmez.
 
 ## APK derleme
 **GitHub Actions → Android Debug APK → son başarılı çalışma → Artifacts → GunIzi-debug-apk**.
