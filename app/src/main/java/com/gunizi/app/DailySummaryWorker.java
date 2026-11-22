@@ -41,7 +41,7 @@ public final class DailySummaryWorker extends Worker {
             .setOnlyAlertOnce(true).setOngoing(true).setContentIntent(open).build();
     }
     static void queue(Context c,Uri uri,String name,boolean charging){
-        if(uri==null||!AiModelStore.ready(c,AiModelStore.WHISPER)||!AiModelStore.ready(c,AiModelStore.QWEN))return;
+        if(uri==null||!AiModelStore.ready(c,AiModelStore.WHISPER)||!AiModelStore.ready(c,new Prefs(c).aiModel()))return;
         Data data=new Data.Builder().putString(URI,uri.toString()).putString(NAME,name).build();
         Constraints.Builder constraints=new Constraints.Builder().setRequiresBatteryNotLow(true);
         if(charging)constraints.setRequiresCharging(true);
@@ -55,7 +55,7 @@ public final class DailySummaryWorker extends Worker {
         Context c=getApplicationContext();
         String address=getInputData().getString(URI);
         String fileName=getInputData().getString(NAME);
-        if(address==null||fileName==null||!AiModelStore.ready(c,AiModelStore.WHISPER)||!AiModelStore.ready(c,AiModelStore.QWEN))
+        if(address==null||fileName==null||!AiModelStore.ready(c,AiModelStore.WHISPER)||!AiModelStore.ready(c,new Prefs(c).aiModel()))
             return Result.failure();
         ensureChannel(c);
         try{

@@ -182,7 +182,7 @@ public final class RecorderService extends Service {
                 android.net.Uri saved=ExportManager.writeFile(getApplicationContext(),
                     prefs.folder(),audio,audio.getName(),"audio/ogg");
                 if(AiModelStore.ready(getApplicationContext(),AiModelStore.WHISPER)&&
-                   AiModelStore.ready(getApplicationContext(),AiModelStore.QWEN))
+                   AiModelStore.ready(getApplicationContext(),new Prefs(getApplicationContext()).aiModel()))
                     DailySummaryWorker.queue(getApplicationContext(),saved,audio.getName(),true);
                 stateText="Kayıt klasöre kaydedildi";
                 lastEvent=audio.getName();

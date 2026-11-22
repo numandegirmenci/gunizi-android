@@ -21,6 +21,15 @@ final class Prefs {
         return MODE_CONTINUOUS.equals(v)?MODE_MANUAL:v;
     }
     void mode(String x) { p.edit().putString("mode", x).apply(); }
+    String aiModel(){
+        String selected=p.getString("ai_model",AiModelStore.QWEN4);
+        return AiModelStore.QWEN.equals(selected)?AiModelStore.QWEN:AiModelStore.QWEN4;
+    }
+    void aiModel(String model){
+        if(!AiModelStore.QWEN.equals(model)&&!AiModelStore.QWEN4.equals(model))
+            throw new IllegalArgumentException("Model");
+        p.edit().putString("ai_model",model).apply();
+    }
     int durationMinutes() {
         int n=p.getInt("manual_minutes",15);
         return (n==15||n==60||n==360)?n:15;
