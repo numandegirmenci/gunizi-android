@@ -50,14 +50,16 @@ final class AiModelStore {
             WHISPER.equals(which)?400L:QWEN4.equals(which)?2100L:1000L;
         return f.isFile()&&marker.isFile()&&f.length()>min*1024*1024;
     }
-    static void fetch(Context c,String which,Status listener){
-        new Thread(()->{
+    static void downloadBlocking(Context c,String which,Status listener)throws Exception {
             final boolean w=WHISPER.equals(which)||WHISPER_TURBO.equals(which);
             final boolean turbo=WHISPER_TURBO.equals(which);
             File target=turbo?whisperTurbo(c):w?whisper(c):
                 QWEN4.equals(which)?qwen4(c):qwen(c);
             String expected=turbo?TURBO_SHA:w?W_SHA:QWEN4.equals(which)?Q4_SHA:Q_SHA;
             String url=turbo?TURBO_URL:w?W_URL:QWEN4.equals(which)?Q4_URL:Q_URL;
+            if(!WHISPER.equals(which)&&!WHISPER_TURBO.equals(which)&&
+               !QWEN.equals(which)&&!QWEN4.equals(which))
+                throw new IllegalArgumentException("Geçersiz model");
             long limit=turbo?750L*1024*1024:
                 w?600L*1024*1024:QWEN4.equals(which)?3100L*1024*1024:1600L*1024*1024;
             File part=new File(target.getAbsolutePath()+".part");
@@ -89,6 +91,8 @@ final class AiModelStore {
                     FileOutputStream out=new FileOutputStream(part,append)){
                     byte[] buf=new byte[64*1024];int n,old=-1;long size=already;
                     while((n=in.read(buf))!=-1){
+                        if(Thread.currentThread().isInterrupted())
+                            throw new InterruptedException("İndirme durduruldu");
                         size+=n;
                         if(size>limit)throw new IOException("Beklenmeyen model boyutu");
                         out.write(buf,0,n);
@@ -107,16 +111,17 @@ final class AiModelStore {
                 StringBuilder hex=new StringBuilder();
                 for(byte b:digest.digest())hex.append(String.format(Locale.ROOT,"%02x",b&255));
                 if(!expected.equals(hex.toString()))throw new IOException("Model SHA-256 doğrulaması başarısız");
+                if(target.exists()&&!target.delete())
+                    throw new IOException("Önceki model dosyası silinemedi");
                 if(!part.renameTo(target))throw new IOException("Model yerleştirilemedi");
                 File marker=new File(target.getParentFile(),target.getName()+".verified");
                 try(FileOutputStream out=new FileOutputStream(marker)){
                     out.write(expected.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
                 }
                 status(listener,(w?"Whisper":"Qwen3")+" modeli kullanıma hazır ✓",true);
-            }catch(Exception e){status(listener,"Model hatası: "+e.getMessage(),false);}
-        },"GunIzi-Download-"+which).start();
+            }catch(Exception e){throw e;}
     }
     private static void status(Status callback,String txt,boolean done){
-        new Handler(Looper.getMainLooper()).post(()->callback.onStatus(txt,done));
+        callback.onStatus(txt,done);
     }
 }
