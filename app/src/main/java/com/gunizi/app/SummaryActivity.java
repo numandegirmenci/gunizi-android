@@ -53,6 +53,15 @@ public final class SummaryActivity extends Activity {
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);
         p.bottomMargin=dp(14);parent.addView(c,p);return c;
     }
+    private Button resultTab(LinearLayout container,String name){
+        Button b=new Button(this);b.setText(name);b.setAllCaps(false);
+        b.setTextColor(WHITE);b.setTextSize(13);
+        b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        b.setBackground(bg(0xff22364a));
+        LinearLayout.LayoutParams tab=new LinearLayout.LayoutParams(0,dp(62),1);
+        tab.setMargins(0,0,dp(6),0);
+        container.addView(b,tab);return b;
+    }
     private Button button(LinearLayout parent,String name,boolean primary){
         Button b=new Button(this);b.setText(name);b.setAllCaps(false);b.setTextSize(15);
         b.setTypeface(Typeface.DEFAULT,primary?Typeface.BOLD:Typeface.NORMAL);
@@ -154,15 +163,19 @@ public final class SummaryActivity extends Activity {
         LinearLayout result=card(root);
         text(result,"04   SONUÇLARIN",16,true);
         text(result,"Metin ve konu tablosu birbirinden bağımsız kaydedilir.",12,false);
-        transcriptButton=button(result,"Konuşma metni • Görüntüle",false);
+        LinearLayout tabs=new LinearLayout(this);
+        tabs.setOrientation(LinearLayout.HORIZONTAL);
+        result.addView(tabs,new LinearLayout.LayoutParams(-1,-2));
+        transcriptButton=resultTab(tabs,"Metin");
         transcriptButton.setOnClickListener(v->startActivity(new Intent(this,TranscriptActivity.class)));
-        reportButton=button(result,"Konu tablosu • Kararlar ve görevler",false);
+        reportButton=resultTab(tabs,"Konular ve kararlar");
         reportButton.setOnClickListener(v->startActivity(new Intent(this,ReportTableActivity.class)));
-        Button notes=button(result,"Notlarıma ekle / Samsung Notes",false);
+        Button notes=resultTab(tabs,"Notlarım");
         notes.setOnClickListener(v->{
             Intent i=new Intent(this,UserNotesActivity.class);
             i.putExtra("openLatestReport",true);startActivity(i);
         });
+        text(result,"Notlarını düzenleyebilir, onayınla Samsung Notes'a paylaşabilirsin.",12,false);
 
         LinearLayout preferences=card(root);
         text(preferences,"05   ANALİZ TERCİHİM",16,true);

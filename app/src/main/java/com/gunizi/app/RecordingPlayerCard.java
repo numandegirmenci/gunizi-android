@@ -50,6 +50,8 @@ final class RecordingPlayerCard extends LinearLayout {
         metadata.setTextSize(12);metadata.setTextColor(MUTED);
         LayoutParams mp=new LayoutParams(-1,-2);mp.topMargin=dp(5);addView(metadata,mp);
         seek=new SeekBar(c);seek.setEnabled(false);
+        seek.setProgressTintList(android.content.res.ColorStateList.valueOf(TEAL));
+        seek.setThumbTintList(android.content.res.ColorStateList.valueOf(TEAL));
         LayoutParams sp=new LayoutParams(-1,dp(42));sp.topMargin=dp(10);addView(seek,sp);
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             @Override public void onStartTrackingTouch(SeekBar bar){userSeeking=true;}
