@@ -84,6 +84,16 @@ public final class ModelSettingsActivity extends Activity {
         LinearLayout adviser=card(root);
         text(adviser,"Hangi model bana uygun?",17,true);
         text(adviser,"Öneriler başlangıç noktasıdır; kesin işlem süresi cihazın hızına, sese ve ısınmaya bağlıdır.",12,false);
+        android.app.ActivityManager manager=(android.app.ActivityManager)getSystemService(ACTIVITY_SERVICE);
+        android.app.ActivityManager.MemoryInfo memory=new android.app.ActivityManager.MemoryInfo();
+        if(manager!=null)manager.getMemoryInfo(memory);
+        final double ramGb=memory.totalMem>0?memory.totalMem/(1024d*1024d*1024d):0d;
+        final boolean lowerRam=ramGb>0&&ramGb<8d;
+        text(adviser,ramGb>0?
+            "Bu telefon: yaklaşık "+String.format(java.util.Locale.ROOT,"%.1f",ramGb)+
+            " GB RAM · "+(lowerRam?"Hafif modellerle başlaman önerilir.":"Ayrıntılı modeller denenebilir."):
+            "Telefon RAM bilgisi okunamadı. Hafif modelle başlaman önerilir.",12,false);
+
         HorizontalScrollView horizontal=new HorizontalScrollView(this);
         horizontal.setHorizontalScrollBarEnabled(false);
         LinearLayout chips=new LinearLayout(this);chips.setOrientation(LinearLayout.HORIZONTAL);
@@ -93,8 +103,11 @@ public final class ModelSettingsActivity extends Activity {
         quick.setOnClickListener(v->select(AiModelStore.WHISPER_Q5,AiModelStore.QWEN,
             "Kısa kayıtlar için daha hafif indirme ve bellek kullanımı. Önce metni kontrol et."));
         Button clear=chip(chips,"5–60 dk · Ayrıntılı");
-        clear.setOnClickListener(v->select(AiModelStore.WHISPER_TURBO_Q8,AiModelStore.GEMMA,
-            "Daha ayrıntılı döküm ve rapor denemek için. Büyük modeller daha fazla bellek ve zaman isteyebilir."));
+        clear.setOnClickListener(v->select(
+            lowerRam?AiModelStore.WHISPER_Q5:AiModelStore.WHISPER_TURBO_Q8,
+            lowerRam?AiModelStore.QWEN:AiModelStore.GEMMA,
+            lowerRam?"RAM kapasiten nedeniyle hafif seçenekler seçildi. İstersen diğer modelleri ayrıca deneyebilirsin.":
+                "Ayrıntılı analiz için daha büyük modeller seçildi. İşlem süresi ve RAM tüketimi artabilir."));
         Button longAudio=chip(chips,"1 saat+ · Ekonomik");
         longAudio.setOnClickListener(v->select(AiModelStore.WHISPER_Q5,AiModelStore.QWEN,
             "Uzun kayıtları parçalara bölerek, daha az yer kaplayan modellerle denemek için. Şarj önerilir."));
