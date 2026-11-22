@@ -33,16 +33,13 @@ public final class AiModelDownloadWorker extends Worker {
     static boolean valid(String s){
         return AiModelStore.WHISPER_BASE.equals(s)||
             AiModelStore.WHISPER.equals(s)||
+            AiModelStore.WHISPER_Q5.equals(s)||
+            AiModelStore.WHISPER_TURBO_Q8.equals(s)||
             AiModelStore.WHISPER_TURBO.equals(s)||
-            AiModelStore.QWEN.equals(s)||AiModelStore.QWEN4.equals(s);
+            AiModelStore.QWEN.equals(s)||AiModelStore.QWEN4.equals(s)||
+            AiModelStore.GEMMA.equals(s);
     }
-    private String label(String model){
-        if(AiModelStore.WHISPER_TURBO.equals(model))return "Whisper Large v3 Turbo";
-        if(AiModelStore.WHISPER_BASE.equals(model))return "Whisper base";
-        if(AiModelStore.WHISPER.equals(model))return "Whisper small";
-        if(AiModelStore.QWEN4.equals(model))return "Qwen3-4B";
-        return "Qwen3-1.7B";
-    }
+    private String label(String model){return AiModelStore.label(model);}
     private void channel(){
         NotificationChannel n=new NotificationChannel(CHANNEL,
             "Günİzi • Model indirmeleri",NotificationManager.IMPORTANCE_LOW);

@@ -196,10 +196,10 @@ public final class SummaryActivity extends Activity {
         },"GunIzi-AudioCheck").start();
     }
     private void missingModel(boolean speech){
-        new AlertDialog.Builder(this).setTitle(speech?"Whisper gerekli":"Qwen3 gerekli")
+        new AlertDialog.Builder(this).setTitle(speech?"Whisper gerekli":"Yerel özet modeli gerekli")
             .setMessage(speech?"Konuşma metni için Whisper modelini indir.":
                 "Konuşma metni yalnızca Whisper ile çıkarılır; ancak "+
-                "konu/karar tablosu için Qwen3 modelinin kurulması gerekir.")
+                "konu/karar tablosu için Gemma veya Qwen modelinin kurulması gerekir.")
             .setNegativeButton("Vazgeç",null)
             .setPositiveButton("Model ayarları",(d,w)->
                 startActivity(new Intent(this,ModelSettingsActivity.class))).show();
@@ -252,7 +252,7 @@ public final class SummaryActivity extends Activity {
         android.content.SharedPreferences p=getSharedPreferences(PREF,MODE_PRIVATE);
         String speech=new AnalysisPreferences(this).speechModel(),qwen=new Prefs(this).aiModel();
         modelStatus.setText("Whisper: "+(AiModelStore.ready(this,speech)?"Hazır ✓":"İndirilmeli")+
-            "  •  Qwen3: "+(AiModelStore.ready(this,qwen)?"Hazır ✓":"İndirilmeli"));
+            "  •  Özet modeli: "+(AiModelStore.ready(this,qwen)?"Hazır ✓":"İndirilmeli"));
         String stageKey=AiStageMetrics.stage(this);
         String current=p.getString("analysisStage","");
         String error=p.getString("summaryError","");

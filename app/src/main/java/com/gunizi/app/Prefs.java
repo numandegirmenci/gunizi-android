@@ -23,11 +23,13 @@ final class Prefs {
     }
     void mode(String x) { p.edit().putString("mode", x).apply(); }
     String aiModel(){
-        String selected=p.getString("ai_model",AiModelStore.QWEN4);
-        return AiModelStore.QWEN.equals(selected)?AiModelStore.QWEN:AiModelStore.QWEN4;
+        String selected=p.getString("ai_model",AiModelStore.GEMMA);
+        return AiModelStore.QWEN.equals(selected)||AiModelStore.QWEN4.equals(selected)?
+            selected:AiModelStore.GEMMA;
     }
     void aiModel(String model){
-        if(!AiModelStore.QWEN.equals(model)&&!AiModelStore.QWEN4.equals(model))
+        if(!AiModelStore.QWEN.equals(model)&&!AiModelStore.QWEN4.equals(model)&&
+           !AiModelStore.GEMMA.equals(model))
             throw new IllegalArgumentException("Model");
         p.edit().putString("ai_model",model).apply();
     }

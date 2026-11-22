@@ -57,41 +57,69 @@ public final class ModelSettingsActivity extends Activity {
         LinearLayout speech=card(root);
         text(speech,"1. Konuşmayı yazıya dökme",18,true);
         RadioGroup speechChoices=new RadioGroup(this);speechChoices.setOrientation(RadioGroup.VERTICAL);
-        RadioButton base=new RadioButton(this),small=new RadioButton(this),turbo=new RadioButton(this);
-        base.setId(View.generateViewId());
-        small.setId(View.generateViewId());turbo.setId(View.generateViewId());
-        base.setText("Whisper base • Hızlı deneme (~148 MB)");
-        small.setText("Whisper small • Dengeli (~488 MB)");
-        turbo.setText("Whisper Large v3 Turbo Q5 • Uyumluluk deneyi (~574 MB)");
-        base.setTextColor(WHITE);small.setTextColor(WHITE);turbo.setTextColor(WHITE);
-        speechChoices.addView(base);speechChoices.addView(small);
-        speechChoices.addView(turbo);speech.addView(speechChoices);
-        speechChoices.check(AiModelStore.WHISPER_TURBO.equals(analysis.speechModel())?
-            turbo.getId():AiModelStore.WHISPER_BASE.equals(analysis.speechModel())?
-            base.getId():small.getId());
+        RadioButton base=new RadioButton(this),small=new RadioButton(this),
+            compact=new RadioButton(this),turbo=new RadioButton(this),
+            turboQ8=new RadioButton(this);
+        base.setId(View.generateViewId());small.setId(View.generateViewId());
+        compact.setId(View.generateViewId());turbo.setId(View.generateViewId());
+        turboQ8.setId(View.generateViewId());
+        base.setText("Whisper Base • 148 MB · Hafif");
+        compact.setText("Whisper Small Q5 • 190 MB · Hızlı");
+        small.setText("Whisper Small • 488 MB · Klasik");
+        turbo.setText("Whisper Turbo Q5 • 574 MB · Klasik");
+        turboQ8.setText("Whisper Turbo Q8 • 874 MB · CallVault önerisi");
+        for(RadioButton item:new RadioButton[]{base,compact,small,turbo,turboQ8}){
+            item.setTextColor(WHITE);speechChoices.addView(item);
+        }
+        speech.addView(speechChoices);
+        String chosenSpeech=analysis.speechModel();
+        speechChoices.check(AiModelStore.WHISPER_TURBO_Q8.equals(chosenSpeech)?
+            turboQ8.getId():AiModelStore.WHISPER_TURBO.equals(chosenSpeech)?
+            turbo.getId():AiModelStore.WHISPER_Q5.equals(chosenSpeech)?
+            compact.getId():AiModelStore.WHISPER.equals(chosenSpeech)?
+            small.getId():base.getId());
         speechChoices.setOnCheckedChangeListener((group,checked)->{
-            analysis.speechModel(checked==turbo.getId()?AiModelStore.WHISPER_TURBO:
-                checked==base.getId()?AiModelStore.WHISPER_BASE:AiModelStore.WHISPER);
+            analysis.speechModel(checked==turboQ8.getId()?AiModelStore.WHISPER_TURBO_Q8:
+                checked==turbo.getId()?AiModelStore.WHISPER_TURBO:
+                checked==compact.getId()?AiModelStore.WHISPER_Q5:
+                checked==small.getId()?AiModelStore.WHISPER:AiModelStore.WHISPER_BASE);
             refresh();
         });
-        text(speech,"Kısa kayıt testinde önce base veya small modelini dene. "+
-            "Large Turbo Q5 modelinin mevcut Android motoruyla uyumluluğu henüz doğrulanmadı.",13,false);
+        text(speech,"CallVault whisper.cpp kullanılır. Q8 seçeneği cihazın ARM hızlandırmasından yararlanabilir.",13,false);
+        Switch vad=new Switch(this);
+        vad.setText("Silero VAD • Konuşma olmayan bölümleri atla");
+        vad.setTextColor(WHITE);
+        vad.setChecked(getSharedPreferences("gunizi",MODE_PRIVATE)
+            .getBoolean("aiSileroVad",true));
+        vad.setOnCheckedChangeListener((v,checked)->
+            getSharedPreferences("gunizi",MODE_PRIVATE).edit()
+                .putBoolean("aiSileroVad",checked).apply());
+        speech.addView(vad);
+        text(speech,"Silero APK içinde bulunur. Özellikle uzun sessizliklerde faydalı olabilir; "+
+            "gerekirse konuşma kaybını kontrol etmek için kapatabilirsin.",12,false);
         whisperStatus=text(speech,"Hazırlanıyor…",13,false);
         whisperButton=button(speech,"Konuşma modelini indir");
         whisperButton.setOnClickListener(v->confirm(analysis.speechModel()));
         LinearLayout language=card(root);
         text(language,"2. Ayrıntılı özet ve konu tablosu",18,true);
         RadioGroup choices=new RadioGroup(this);choices.setOrientation(RadioGroup.VERTICAL);
-        RadioButton compact=new RadioButton(this),strong=new RadioButton(this);
-        compact.setId(View.generateViewId());strong.setId(View.generateViewId());
-        compact.setText("Qwen3-1.7B • Dengeli (~1,28 GB)");
-        strong.setText("Qwen3-4B • Ayrıntılı (~2,5 GB)");
-        compact.setTextColor(WHITE);strong.setTextColor(WHITE);
-        choices.addView(compact);choices.addView(strong);language.addView(choices);
+        RadioButton compactSummary=new RadioButton(this),
+            strong=new RadioButton(this),gemma=new RadioButton(this);
+        compactSummary.setId(View.generateViewId());
+        strong.setId(View.generateViewId());gemma.setId(View.generateViewId());
+        gemma.setText("Gemma 4 E2B QAT • 2,62 GB · CallVault önerisi");
+        compactSummary.setText("Qwen3-1.7B • 1,28 GB · Alternatif");
+        strong.setText("Qwen3-4B • 2,5 GB · Alternatif");
+        for(RadioButton item:new RadioButton[]{gemma,compactSummary,strong}){
+            item.setTextColor(WHITE);choices.addView(item);
+        }
+        language.addView(choices);
         choices.check(AiModelStore.QWEN4.equals(preferences.aiModel())?
-            strong.getId():compact.getId());
+            strong.getId():AiModelStore.QWEN.equals(preferences.aiModel())?
+            compactSummary.getId():gemma.getId());
         choices.setOnCheckedChangeListener((group,checked)->{
-            preferences.aiModel(checked==strong.getId()?AiModelStore.QWEN4:AiModelStore.QWEN);
+            preferences.aiModel(checked==strong.getId()?AiModelStore.QWEN4:
+                checked==compactSummary.getId()?AiModelStore.QWEN:AiModelStore.GEMMA);
             refresh();
         });
         qwenStatus=text(language,"Hazırlanıyor…",13,false);
@@ -109,10 +137,7 @@ public final class ModelSettingsActivity extends Activity {
     }
     private void confirm(String model){
         if(AiModelStore.ready(this,model))return;
-        String label=AiModelStore.WHISPER_TURBO.equals(model)?"Whisper Large v3 Turbo":
-            AiModelStore.WHISPER_BASE.equals(model)?"Whisper base":
-            AiModelStore.WHISPER.equals(model)?"Whisper small":
-            AiModelStore.QWEN4.equals(model)?"Qwen3-4B":"Qwen3-1.7B";
+        String label=AiModelStore.label(model);
         new AlertDialog.Builder(this).setTitle(label+" indirilsin mi?")
             .setMessage("İndirme bildirimde ilerleyecek ve uygulamadan çıkınca devam etmeyi "+
                 "deneyecek. Bağlantı koparsa kalan kısmı tekrar indirmeden sürdürmeyi dener.")
@@ -133,10 +158,7 @@ public final class ModelSettingsActivity extends Activity {
             button.setText("Model zaten kurulu");button.setEnabled(false);return;
         }
         button.setEnabled(true);button.setText("İndirmeyi başlat / sürdür");
-        File target=AiModelStore.WHISPER_TURBO.equals(model)?AiModelStore.whisperTurbo(this):
-            AiModelStore.WHISPER_BASE.equals(model)?AiModelStore.whisperBase(this):
-            AiModelStore.WHISPER.equals(model)?AiModelStore.whisper(this):
-            AiModelStore.QWEN4.equals(model)?AiModelStore.qwen4(this):AiModelStore.qwen(this);
+        File target=AiModelStore.file(this,model);
         File part=new File(target.getAbsolutePath()+".part");
         if(part.exists())state.setText("İndirilen: "+(part.length()/1048576)+" MB • Devam edilebilir");
         else state.setText("Henüz indirilmedi");

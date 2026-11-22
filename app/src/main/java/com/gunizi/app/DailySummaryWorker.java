@@ -109,7 +109,7 @@ public final class DailySummaryWorker extends Worker {
         long now=System.currentTimeMillis();
         prefs.edit().putString("analysisSource",name)
             .putString("analysisMode",TEXT_REPORT)
-            .putString("analysisStage","Hazır konuşma dökümü Qwen3 için sırada")
+            .putString("analysisStage","Hazır konuşma metni yerel özet için sırada")
             .putInt("analysisPercent",0)
             .putLong("analysisStartedAt",now).putLong("analysisProgressAt",now)
             .putString("summaryError","").putString("analysisPreview","")
@@ -251,7 +251,7 @@ public final class DailySummaryWorker extends Worker {
             }
             String focus=getInputData().getString("analysisFocus");
             if(focus==null||focus.trim().isEmpty())focus=AnalysisPreferences.DEFAULT;
-            listener.update(71,"Qwen3 ile kararlar ve konular inceleniyor");
+            listener.update(71,"CallVault llama.cpp ile kararlar ve konular inceleniyor");
             String summary=FullDaySummarizer.summarize(c,transcript,focus,language,listener);
             listener.update(99,"Konu tablosu, notlar ve rapor kaydediliyor");
             String report="GÜNİZİ • YEREL YAPAY ZEKA GÜNLÜK RAPORU\n"+
