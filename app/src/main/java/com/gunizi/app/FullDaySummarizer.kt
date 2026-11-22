@@ -56,7 +56,8 @@ object FullDaySummarizer {
                 .putLong("analysisLlmMergeMs",0L)
                 .apply()
             context.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
-                .putInt("analysisPartsTotal",totalSteps(parts.size)).putInt("analysisPartsDone",0)
+                .putInt("analysisPartsTotal",if(fast)parts.size else totalSteps(parts.size))
+                .putInt("analysisPartsDone",0)
                 .putLong("analysisLastAdvanceAt",System.currentTimeMillis()).apply()
             val summaries=ArrayList<CallSummary>(parts.size)
             val rows=ArrayList<String>()
@@ -71,7 +72,8 @@ object FullDaySummarizer {
                         ?:throw IllegalStateException("Önceki JSON özeti okunamadı: bölüm ${index+1}")
                 }else{
                     val prompt=buildPrompt(part,boundedFocus,fast)
-                    val output=LlamaNative.generate(ptr,prompt,if(fast)1300 else 1650,4,SummaryGrammar.JSON)
+                    // Preserve the full original generation budget for the selected model.
+                    val output=LlamaNative.generate(ptr,prompt,1650,4,SummaryGrammar.JSON)
                     val parsed=CallSummary.parse(output)
                         ?:throw IllegalStateException("Gemma/Qwen geçerli JSON üretemedi: bölüm ${index+1}")
                     val partial=File(checkpointFolder,checkpoint.name+".partial")
@@ -82,7 +84,8 @@ object FullDaySummarizer {
                 summaries.add(data)
                 rows.addAll(topicRows(data,part))
                 context.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
-                    .putInt("analysisPartsDone",index+1).putInt("analysisPartsTotal",totalSteps(parts.size))
+                    .putInt("analysisPartsDone",index+1)
+                    .putInt("analysisPartsTotal",if(fast)parts.size else totalSteps(parts.size))
                     .putLong("analysisLastAdvanceAt",System.currentTimeMillis())
                     .putString("analysisPreview",
                         data.summary.replace("\n"," ").take(530)).apply()
@@ -108,7 +111,10 @@ object FullDaySummarizer {
             val report=StringBuilder("GÜNİZİ • GÜNLÜK KONU VE KARAR RAPORU\n")
             report.append("Model: ").append(AiModelStore.label(languageModel)).append("\n")
             report.append("Motor: CallVault llama.cpp • Kaynak: yerel konuşma metni\n\n")
-            report.append(if(fast) "KISA KAYIT • BÖLÜM ÖZETLERİ (sesle doğrulanmalı)\n"\n                else "GÜNÜN BÜTÜNLEŞTİRİLMİŞ ÖZETİ (sesle doğrulanmalı)\n")
+            report.append(
+                if(fast) "KISA KAYIT • BÖLÜM ÖZETLERİ (sesle doğrulanmalı)\n"
+                else "GÜNÜN BÜTÜNLEŞTİRİLMİŞ ÖZETİ (sesle doğrulanmalı)\n"
+            )
             report.append(unifiedText).append("\n\n")
             report.append("GÜNÜN ÖZETİ / BÖLÜM KAYITLARI\n")
             summaries.forEachIndexed{index,part->
