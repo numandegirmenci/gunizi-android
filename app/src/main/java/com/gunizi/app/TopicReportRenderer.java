@@ -36,7 +36,7 @@ final class TopicReportRenderer {
             if(cols[1].equalsIgnoreCase("Konu")||cols[0].equalsIgnoreCase("Saat")
                 ||cols[0].matches("[- :]+"))continue;
             results.add(new Entry(cols));
-            if(results.size()>=1200)break;
+            // Preserve every extracted row. Large reports are grouped and initially collapsed.
         }
         if(results.isEmpty())
             results.add(new Entry(new String[]{"Belirsiz","Konu tablosu oluşturulamadı",
@@ -123,21 +123,42 @@ final class TopicReportRenderer {
          .append("</b>Karar ifadesi</div><div class='stat'><b>").append(tasks)
          .append("</b>Takip ifadesi</div></div>");
         for(java.util.List<Entry> group:grouped.values()){
-            s.append("<details open><summary>").append(esc(group.get(0).parts[1]))
+            s.append("<details><summary>").append(esc(group.get(0).parts[1]))
              .append("<small>").append(group.size())
              .append(" görüşme bölümü</small></summary><div class='scroll'><table>")
              .append("<thead><tr><th>Saat</th><th>Konuşulanlar</th><th>Karar</th>")
              .append("<th>Yapılacak</th><th>Sorumlu</th></tr></thead><tbody>");
             for(Entry e:group){
                 s.append("<tr>");
-                for(int index:new int[]{0,2,3,4,5})
-                    s.append("<td>").append(esc(e.parts[index])).append("</td>");
+                for(int index:new int[]{0,2,3,4,5}){
+                    s.append("<td>").append(esc(e.parts[index]));
+                    if(index==0){
+                        long moment=timestampMs(e.parts[0]);
+                        if(moment>=0)
+                            s.append(" <a style='color:#3bdbc9' href='gunizi://listen?ms=")
+                                .append(moment).append("'>Ses bölümünü dinle</a>");
+                    }
+                    s.append("</td>");
+                }
                 s.append("</tr>");
             }
             s.append("</tbody></table></div></details>");
         }
         return s.append("<p class='muted'>Otomatik konuşma tanıma ve özetleme hatalı olabilir.</p>")
             .append("</body></html>").toString();
+    }
+    static long timestampMs(String value){
+        if(value==null)return -1;
+        java.util.regex.Matcher m=java.util.regex.Pattern
+            .compile("(?<!\\\\d)(\\\\d{2}):(\\\\d{2}):(\\\\d{2})(?!\\\\d)")
+            .matcher(value);
+        if(!m.find())return -1;
+        try{
+            long h=Long.parseLong(m.group(1)),min=Long.parseLong(m.group(2)),
+                sec=Long.parseLong(m.group(3));
+            if(min>=60||sec>=60||h>24)return -1;
+            return ((h*60+min)*60+sec)*1000L;
+        }catch(Exception ignored){return -1;}
     }
     static File saveInternal(Context c,String html,String filename)throws IOException{
         File root=new File(c.getNoBackupFilesDir(),"reports");
