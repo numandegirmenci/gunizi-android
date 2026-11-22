@@ -24,11 +24,14 @@ public final class SummaryActivity extends Activity {
     private String selectedName="Ses kaydı";
     private String pendingAction;
     private RecordingPlayerCard playback;
-    private TextView sourceInfo,stage,preview,progressLabel,elapsed,phaseInfo,modelStatus;
-    private ProgressBar progressBar;
-    private Button cancel,transcriptButton,reportButton;
+    private TextView sourceInfo,modelStatus;
+    private AiLiveStatusCard liveStatus;
+    private Button transcriptButton,reportButton;
     private EditText focus;
     private final AtomicBoolean statusRefreshing=new AtomicBoolean(false);
+    private volatile WorkInfo.State observedJobState;
+    private volatile String observedJobId;
+    private long lastJobPollElapsed=0;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable timer=new Runnable(){
         @Override public void run(){refreshStatus();handler.postDelayed(this,1000);}
@@ -131,33 +134,18 @@ public final class SummaryActivity extends Activity {
             }else refreshStatus();
         });
 
-        LinearLayout tracking=card(root);
-        text(tracking,"03   CANLI İŞLEM DURUMU",16,true);
-        stage=text(tracking,"Henüz analiz başlatılmadı.",15,true);
-        phaseInfo=text(tracking,"İşlem aşaması ve kaynak bilgisi burada görünür.",12,false);
-        progressBar=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
-        progressBar.setMax(100);
-        progressBar.setProgressTintList(android.content.res.ColorStateList.valueOf(TEAL));
-        tracking.addView(progressBar,new LinearLayout.LayoutParams(-1,dp(10)));
-        LinearLayout metrics=new LinearLayout(this);metrics.setOrientation(LinearLayout.HORIZONTAL);
-        progressLabel=text(metrics,"Başlamadı",12,true);
-        elapsed=text(metrics,"00:00:00",12,true);
-        LinearLayout.LayoutParams l=new LinearLayout.LayoutParams(0,-2,1);
-        progressLabel.setLayoutParams(l);
-        elapsed.setGravity(Gravity.END);metrics.addView(new android.view.View(this),
-            new LinearLayout.LayoutParams(0,1,0));
-        tracking.addView(metrics);
-        text(tracking,"SON OKUNAN KONUŞMA",12,true);
-        preview=text(tracking,"Henüz konuşma çözümlenmedi.",13,false);
-        preview.setMaxLines(4);
-        cancel=button(tracking,"Analizi durdur",false);
-        cancel.setOnClickListener(v->new AlertDialog.Builder(this)
+        liveStatus=new AiLiveStatusCard(this);
+        LinearLayout.LayoutParams statusLp=new LinearLayout.LayoutParams(-1,-2);
+        statusLp.bottomMargin=dp(14);
+        root.addView(liveStatus,statusLp);
+        liveStatus.onCancelClick(v->new AlertDialog.Builder(this)
             .setTitle("Analiz durdurulsun mu?")
-            .setMessage("Kaynak ses korunur. Tamamlanmış parçalar mümkün olduğunda kullanılabilir.")
+            .setMessage("Kaynak ses kaydı silinmez. Tamamlanan bölümlerin "+
+                "kontrol noktaları korunur.")
             .setNegativeButton("Vazgeç",null)
             .setPositiveButton("Durdur",(d,w)->{
                 WorkManager.getInstance(this).cancelAllWorkByTag("gunizi-local-summary");
-                stage.setText("İptal istendi");
+                refreshStatus();
             }).show());
 
         LinearLayout result=card(root);
@@ -279,70 +267,43 @@ public final class SummaryActivity extends Activity {
         },"GunIzi-SourcePreflight").start();
     }
     private void refreshStatus(){
-        if(stage==null)return;
+        if(liveStatus==null)return;
         android.content.SharedPreferences p=getSharedPreferences(PREF,MODE_PRIVATE);
-        String speech=new AnalysisPreferences(this).speechModel(),qwen=new Prefs(this).aiModel();
-        modelStatus.setText(AiModelStore.label(speech)+": "+
-            (AiModelStore.ready(this,speech)?"Hazır ✓":"İndirilmeli")+"\n"+
-            AiModelStore.label(qwen)+": "+
-            (AiModelStore.ready(this,qwen)?"Hazır ✓":"İndirilmeli")+"\n"+
+        String speech=new AnalysisPreferences(this).speechModel(),
+            llm=new Prefs(this).aiModel();
+        String text=AiModelStore.label(speech)+": "+
+            (AiModelStore.ready(this,speech)?"Hazır ✓":"İndirilmeli")+"\\n"+
+            AiModelStore.label(llm)+": "+
+            (AiModelStore.ready(this,llm)?"Hazır ✓":"İndirilmeli")+"\\n"+
             "Motor: CallVault whisper.cpp / llama.cpp • Silero VAD "+
-            (getSharedPreferences(PREF,MODE_PRIVATE).getBoolean("aiSileroVad",true)?"açık":"kapalı"));
-        String stageKey=AiStageMetrics.stage(this);
-        String current=p.getString("analysisStage","");
-        String error=p.getString("summaryError","");
-        String filename=p.getString("analysisSource","");
-        boolean running=p.getLong("analysisStartedAt",0)>p.getLong("analysisCompletedAt",0);
-        stage.setText(!error.isEmpty()?"İşlem başarısız":current.isEmpty()?
-            "Henüz işlem başlatılmadı":current);
-        String phaseText=AiStageMetrics.displayStage(stageKey);
-        phaseInfo.setText(phaseText+(filename.isEmpty()?"":"  •  "+filename));
-        int percent=p.getInt("analysisPercent",0);
-        boolean loading=AiStageMetrics.MODEL_LOADING.equals(stageKey)||
-            AiStageMetrics.LLM_LOADING.equals(stageKey);
-        if(loading&&running){
-            progressBar.setIndeterminate(true);
-            progressLabel.setText("Model hazırlanıyor • Yüzde hesaplanamıyor");
-        }else{
-            progressBar.setIndeterminate(false);progressBar.setProgress(percent);
-            progressLabel.setText(running?"%"+percent+" işlendi":percent==100?"Tamamlandı":
-                error.isEmpty()?"Bekliyor":"Başarısız");
+            (p.getBoolean("aiSileroVad",true)?"açık":"kapalı");
+        if(!text.contentEquals(modelStatus.getText()))
+            modelStatus.setText(text);
+        String workId=p.getString("analysisWorkId",null);
+        if(workId==null||!workId.equals(observedJobId)){
+            observedJobId=workId;observedJobState=null;
+            lastJobPollElapsed=0;
         }
-        long started=p.getLong("analysisStartedAt",0),completed=p.getLong("analysisCompletedAt",0);
-        long seconds=started<=0?0:Math.max(0,((completed>0?completed:
-            System.currentTimeMillis())-started)/1000);
-        elapsed.setText(String.format(Locale.ROOT,"%02d:%02d:%02d",
-            seconds/3600,(seconds/60)%60,seconds%60));
-        long loadingFor=AiStageMetrics.stageMs(this);
-        if(loading&&running&&loadingFor>90000)
-            phaseInfo.setText(phaseText+" • "+AiStageMetrics.displayTime(loadingFor)+
-                " • Uzun sürüyor; model uyumluluğu veya bellek sorunu olabilir.");
-        preview.setText(p.getString("analysisPreview","").isEmpty()?
-            "Konuşmalar işlendikçe burada kısa bir bölüm görünecek.":
-            p.getString("analysisPreview",""));
+        liveStatus.render(p,observedJobState);
         transcriptButton.setEnabled(p.getString("transcriptInternal",null)!=null);
         reportButton.setEnabled(p.getString("latestHtmlReport",null)!=null);
-        String job=p.getString("analysisWorkId",null);
-        if(job!=null&&statusRefreshing.compareAndSet(false,true)){
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(workId!=null&&now-lastJobPollElapsed>=3500L&&
+            statusRefreshing.compareAndSet(false,true)){
+            lastJobPollElapsed=now;
             new Thread(()->{
                 try{
                     WorkInfo info=WorkManager.getInstance(this)
-                        .getWorkInfoById(java.util.UUID.fromString(job)).get();
-                    if(info!=null)runOnUiThread(()->{
-                        if(isFinishing()||isDestroyed())return;
-                        String now=getSharedPreferences(PREF,MODE_PRIVATE)
-                            .getString("analysisWorkId","");
-                        if(!job.equals(now))return;
-                        if(info.getState()==WorkInfo.State.ENQUEUED)
-                            stage.setText("İşlem sırada • Android koşulları bekleniyor");
-                        else if(info.getState()==WorkInfo.State.FAILED)
-                            stage.setText("Analiz başarısız • Ayrıntıları kontrol et");
-                        else if(info.getState()==WorkInfo.State.CANCELLED)
-                            stage.setText("İşlem iptal edildi");
-                        else if(info.getState()==WorkInfo.State.SUCCEEDED)
-                            stage.setText("İşlem tamamlandı");
-                        cancel.setEnabled(info.getState()==WorkInfo.State.RUNNING||
-                            info.getState()==WorkInfo.State.ENQUEUED);
+                        .getWorkInfoById(java.util.UUID.fromString(workId)).get();
+                    if(info==null)return;
+                    runOnUiThread(()->{
+                        if(isFinishing()||isDestroyed()||liveStatus==null)return;
+                        String current=getSharedPreferences(PREF,MODE_PRIVATE)
+                            .getString("analysisWorkId",null);
+                        if(!workId.equals(current))return;
+                        observedJobState=info.getState();
+                        liveStatus.render(getSharedPreferences(PREF,MODE_PRIVATE),
+                            observedJobState);
                     });
                 }catch(Exception ignored){}
                 finally{statusRefreshing.set(false);}
