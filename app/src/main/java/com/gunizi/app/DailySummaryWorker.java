@@ -161,7 +161,7 @@ public final class DailySummaryWorker extends Worker {
     @Override public void onStopped(){
         super.onStopped();
         CallVaultWhisperEngine.cancel();
-        try{com.baba.callvault.summary.LlamaNative.requestAbort();}
+        try{com.baba.callvault.summary.LlamaNative.INSTANCE.requestAbort();}
         catch(Throwable ignored){}
     }
     @NonNull @Override public Result doWork(){
