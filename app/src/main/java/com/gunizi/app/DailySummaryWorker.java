@@ -75,6 +75,8 @@ public final class DailySummaryWorker extends Worker {
             .putLong("analysisProgressAt",System.currentTimeMillis())
             .putString("analysisPreview","")
             .putInt("analysisPartsDone",0).putInt("analysisPartsTotal",0)
+            .putString("analysisWorkId",task.getId().toString())
+            .putLong("analysisCompletedAt",0)
             .putString("summaryError","").apply();
         WorkManager.getInstance(c).enqueueUniqueWork(
             "gunizi-analysis-"+mode+"-"+Integer.toHexString(uri.toString().hashCode()),
@@ -109,7 +111,9 @@ public final class DailySummaryWorker extends Worker {
             .putString("analysisStage","Hazır konuşma dökümü Qwen3 için sırada")
             .putInt("analysisPercent",0)
             .putLong("analysisStartedAt",now).putLong("analysisProgressAt",now)
-            .putString("summaryError","").putString("analysisPreview","").apply();
+            .putString("summaryError","").putString("analysisPreview","")
+            .putString("analysisWorkId",request.getId().toString())
+            .putLong("analysisCompletedAt",0).apply();
         WorkManager.getInstance(c).enqueueUniqueWork("gunizi-text-summary",
             ExistingWorkPolicy.REPLACE,request);
         return true;
@@ -220,6 +224,9 @@ public final class DailySummaryWorker extends Worker {
             if(folder!=null&&!useExistingText)ExportManager.writeText(c,folder,
                 "GÜNİZİ • TAM TÜRKÇE KONUŞMA DÖKÜMÜ\n"+transcript,
                 "GunIzi_Dokum_"+base+".txt");
+            if(transcript.trim().isEmpty())
+                throw new IOException("Kaydın içinde anlaşılır konuşma bulunamadı. "+
+                    "Kaydı dinleyip daha hafif Whisper modeliyle tekrar dene.");
             if(TRANSCRIPT.equals(selectedMode)){
                 finish(c,"Konuşma dökümü hazır","Yazıya dökülen konuşma: "+fileName);
                 return Result.success();
@@ -247,21 +254,38 @@ public final class DailySummaryWorker extends Worker {
             }
             finish(c,"Günlük rapor hazır","Konu tablosu ve özet: "+fileName);
             return Result.success();
+        }catch(OutOfMemoryError oom){
+            return failure(c,source,"Model açılırken RAM yetersiz kaldı. "+
+                "Whisper base veya small seçip yeniden dene.");
+        }catch(LinkageError nativeError){
+            return failure(c,source,"Yerel konuşma motoru başlatılamadı: "+
+                nativeError.getClass().getSimpleName());
         }catch(Exception e){
             if(isStopped())return Result.failure();
             String message=(e.getMessage()==null?e.getClass().getSimpleName():e.getMessage());
             c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
                 .putString("summaryError",message)
-                .putString("analysisStage","Hata: "+message).apply();
+                .putString("analysisStage","Hata: "+message)
+                .putLong("analysisCompletedAt",System.currentTimeMillis()).apply();
             c.getSystemService(NotificationManager.class).notify(FINISHED_NOTICE+1,
                 notice(source,"İşlem tamamlanamadı: "+message,0,false));
             return Result.failure();
         }
     }
+    private Result failure(Context c,String source,String detail){
+        c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
+            .putString("summaryError",detail)
+            .putString("analysisStage","Hata: "+detail)
+            .putLong("analysisCompletedAt",System.currentTimeMillis()).apply();
+        c.getSystemService(NotificationManager.class).notify(FINISHED_NOTICE+1,
+            notice(source,"İşlem tamamlanamadı: "+detail,0,false));
+        return Result.failure();
+    }
     private void finish(Context c,String title,String message){
         c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
             .putString("summaryLast",message).putString("summaryError","")
-            .putInt("analysisPercent",100).putString("analysisStage",title).apply();
+            .putInt("analysisPercent",100).putString("analysisStage",title)
+            .putLong("analysisCompletedAt",System.currentTimeMillis()).apply();
         c.getSystemService(NotificationManager.class).notify(FINISHED_NOTICE,
             notice(title,message,100,false));
     }

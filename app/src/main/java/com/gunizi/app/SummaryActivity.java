@@ -206,8 +206,9 @@ public final class SummaryActivity extends Activity {
         progress.setProgress(percent);
         progressText.setText("%"+percent);
         long started=p.getLong("analysisStartedAt",0);
+        long completed=p.getLong("analysisCompletedAt",0);
         if(started>0){
-            long secs=Math.max(0,(System.currentTimeMillis()-started)/1000);
+            long secs=Math.max(0,((completed>0?completed:System.currentTimeMillis())-started)/1000);
             elapsed.setText("Geçen süre: "+String.format(java.util.Locale.ROOT,
                 "%02d:%02d:%02d",secs/3600,(secs/60)%60,secs%60));
             long last=p.getLong("analysisProgressAt",0);
@@ -220,30 +221,39 @@ public final class SummaryActivity extends Activity {
         }else elapsed.setText("Geçen süre: 00:00:00");
         String excerpt=p.getString("analysisPreview","");
         preview.setText(excerpt.isEmpty()?"Analiz başladığında burada kaynak metin ve konu açıklaması görünecek.":excerpt);
-        new Thread(()->{
+        String workId=p.getString("analysisWorkId",null);
+        if(workId!=null)new Thread(()->{
             try{
-                List<WorkInfo> jobs=WorkManager.getInstance(this)
-                    .getWorkInfosByTag("gunizi-local-summary").get();
-                WorkInfo found=null;
-                for(WorkInfo job:jobs){
-                    if(job.getState()==WorkInfo.State.RUNNING){found=job;break;}
-                    if(job.getState()==WorkInfo.State.ENQUEUED)found=job;
-                }
-                if(found==null)return;
-                final WorkInfo selected=found;
+                WorkInfo job=WorkManager.getInstance(this)
+                    .getWorkInfoById(java.util.UUID.fromString(workId)).get();
+                if(job==null)return;
                 runOnUiThread(()->{
                     if(isFinishing()||isDestroyed()||stage==null)return;
-                    if(selected.getState()==WorkInfo.State.ENQUEUED){
-                        stage.setText("İşlem sırada • pil veya şarj koşulu bekleniyor");
-                    }else{
-                        String txt=selected.getProgress().getString("stage");
-                        int value=selected.getProgress().getInt("percent",percent);
-                        if(txt!=null)stage.setText(txt);
+                    if(job.getState()==WorkInfo.State.ENQUEUED){
+                        stage.setText("İşlem sırada • Android görev/pil koşulları bekleniyor");
+                    }else if(job.getState()==WorkInfo.State.RUNNING){
+                        String current=job.getProgress().getString("stage");
+                        if(current!=null&&!current.isEmpty()&&
+                            !stage.getText().toString().contains("beklenenden uzun"))
+                            stage.setText(current);
+                        int value=job.getProgress().getInt("percent",percent);
                         progress.setProgress(value);progressText.setText("%"+value);
+                    }else if(job.getState()==WorkInfo.State.FAILED){
+                        String why=getSharedPreferences("gunizi",MODE_PRIVATE)
+                            .getString("summaryError","");
+                        stage.setText(why.isEmpty()?
+                            "İşlem başarısız oldu. Android görevi durdurmuş olabilir. "+
+                            "Whisper base veya small ile tekrar dene.":"Hata: "+why);
+                    }else if(job.getState()==WorkInfo.State.CANCELLED){
+                        stage.setText("Analiz iptal edildi. Kaynak ses korunuyor.");
+                    }else if(job.getState()==WorkInfo.State.SUCCEEDED){
+                        stage.setText(getSharedPreferences("gunizi",MODE_PRIVATE)
+                            .getString("analysisStage","Tamamlandı"));
+                        progress.setProgress(100);progressText.setText("%100");
                     }
                 });
             }catch(Exception ignored){}
-        },"GunIzi-AIStatus").start();
+        },"GunIzi-AIWorkStatus").start();
     }
     @Override protected void onResume(){super.onResume();handler.post(tick);}
     @Override protected void onPause(){handler.removeCallbacks(tick);super.onPause();}

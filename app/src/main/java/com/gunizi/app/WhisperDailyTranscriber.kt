@@ -42,6 +42,8 @@ object WhisperDailyTranscriber {
                     if (checkpointFile.exists()) {
                         current = checkpointFile.readText(Charsets.UTF_8)
                     } else {
+                        progress.update(1,
+                            "Whisper açık • Bölüm ${index + 1} konuşmaya dönüştürülüyor")
                         val output = runBlocking {
                             Whisper.transcribe(model, file.absolutePath,
                                 WhisperConfig(language = "tr", threads = 4))
