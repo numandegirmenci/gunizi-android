@@ -37,7 +37,8 @@ public final class AudioEvidenceActivity extends Activity {
         SharedPreferences p=getSharedPreferences("gunizi",MODE_PRIVATE);
         boolean known=source!=null&&(source.equals(p.getString("transcriptSourceUri",""))||
             source.equals(p.getString("lastReportSourceUri",""))||
-            source.equals(p.getString("aiSelectedSourceUri","")));
+            source.equals(p.getString("aiSelectedSourceUri",""))||
+            WorkMemoryStore.hasSource(this,source));
         if(!known){notice.setText("Kayıt doğrulanamadı. Ses bağlantısı açılmadı.");return;}
         Uri uri=Uri.parse(source);
         notice.setText("Ses hazırlanıyor…");
