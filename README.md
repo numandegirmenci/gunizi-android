@@ -1,6 +1,6 @@
 # Günİzi Android • v0.3 (Deneysel)
 
-**Durum:** Android debug APK üretiliyor; gerçek cihazda 9 saatlik yük testi henüz yapılmadı.
+**Durum:** Android debug APK deneysel; gerçek cihazda 9 saatlik yük testi henüz yapılmadı.
 
 Günİzi, Türkçe çevrimdışı ses kaydı ve yerel yapay zeka ile günlük rapor amaçlayan Android uygulamasıdır.
 
@@ -29,11 +29,12 @@ Ana ekran artık tek uzun liste değil: **Kayıt, Mesai, Rapor, Ayarlar** olmak 
 Bu prototipte artık iki ayrı model katmanı bulunmaktadır:
 
 1. **Whisper small multilingual**: yaklaşık 488 MB. Türkçe dahil çevrimdışı konuşma tanıma.
-2. **Qwen3-1.7B Q4_K_M**: yaklaşık 1,28 GB. Yerel dil modeli ile üretken Türkçe özetleme.
+2. **Qwen3-1.7B Q4_K_M**: yaklaşık 1,28 GB; dengeli çalışma. **Qwen3-4B Q4_K_M**: yaklaşık 2,5 GB; güçlü cihazlarda daha ayrıntılı özetleme seçeneği.
 
 Her iki model de **Rapor** sekmesinden kullanıcının açık onayıyla indirilir. Özgün model indirme URL'leri:
 - Whisper: https://huggingface.co/ggerganov/whisper.cpp
-- Qwen3: https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF
+- Qwen3 1.7B: https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF
+- Qwen3 4B: https://huggingface.co/ggml-org/Qwen3-4B-GGUF
 
 İndirme sonrasında SHA-256 dosya bütünlüğü doğrulanır. Kayıt, çözümleme ve özetleme sırasında ses veya döküm hiçbir internet sunucusuna gönderilmez.
 
@@ -41,7 +42,7 @@ Her iki model de **Rapor** sekmesinden kullanıcının açık onayıyla indirili
 - Android MediaCodec ile ses **akış halinde çözülür** ve beşer dakikalık geçici WAV parçaları oluşturulur.
 - Whisper, parçaları tek tek Türkçe metne dönüştürür; saatler korunur.
 - Tam döküm kaydedilir; model hatası özetlemeden önce oluşsa bile verinin korunması hedeflenir.
-- Qwen3, zaman damgalı metni parçalara ayırarak özetler ve sonra parçaları birleştirerek genel rapor hazırlar.
+- Seçilen Qwen3 modeli, zaman damgalı metni parçalara ayırarak özetler ve sonra parçaları birleştirerek genel rapor hazırlar. Parça özetleri genel rapora eklenir.
 - Ara Qwen3 özetleri uygulamanın özel alanında kontrol noktası olarak saklanır.
 - Sonuç: **günün özeti + kronoloji + kararlar + yapılacaklar + bekleyenler + tam konuşma dökümü**.
 - İşlem saatler sürebilir. Android'in arka plan çalışma sınırları veya ısı/pil kısıtlamaları yüzünden durdurulabilir. Cihazda uçtan uca doğrulama henüz yapılmadı.
