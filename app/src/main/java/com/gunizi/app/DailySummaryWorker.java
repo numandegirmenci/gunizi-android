@@ -46,22 +46,23 @@ public final class DailySummaryWorker extends Worker {
         if(working)builder.setProgress(100,Math.max(0,Math.min(100,percent)),false);
         return builder.build();
     }
-    public static void queue(Context c,Uri uri,String name,boolean charging){
-        queue(c,uri,name,charging,REPORT);
+    public static boolean queue(Context c,Uri uri,String name,boolean charging){
+        return queue(c,uri,name,charging,REPORT);
     }
-    public static void queue(Context c,Uri uri,String name,boolean charging,String mode){
-        if(uri==null)return;
+    public static boolean queue(Context c,Uri uri,String name,boolean charging,String mode){
+        if(uri==null)return false;
         if(!TRANSCRIPT.equals(mode)&&!REPORT.equals(mode))throw new IllegalArgumentException("Analiz modu");
         AnalysisPreferences p=new AnalysisPreferences(c);
         Prefs settings=new Prefs(c);
-        if(!AiModelStore.ready(c,p.speechModel()))return;
-        if(REPORT.equals(mode)&&!AiModelStore.ready(c,settings.aiModel()))return;
+        if(!AiModelStore.ready(c,p.speechModel()))return false;
+        if(REPORT.equals(mode)&&!AiModelStore.ready(c,settings.aiModel()))return false;
         Data data=new Data.Builder().putString(URI,uri.toString()).putString(NAME,name)
             .putString(MODE,mode).putString("analysisFocus",p.focus())
             .putString("speechModel",p.speechModel())
             .putString("languageModel",settings.aiModel()).build();
-        Constraints.Builder constraints=new Constraints.Builder()
-            .setRequiresBatteryNotLow(true);
+        // A user-tapped action must run now, even in Battery Saver. Only explicitly
+        // deferred background jobs wait for charging.
+        Constraints.Builder constraints=new Constraints.Builder();
         if(charging)constraints.setRequiresCharging(true);
         OneTimeWorkRequest task=new OneTimeWorkRequest.Builder(DailySummaryWorker.class)
             .setConstraints(constraints.build()).setInputData(data)
@@ -73,13 +74,14 @@ public final class DailySummaryWorker extends Worker {
                 "Şarj ve pil koşullarını bekliyor":"İşlem sıraya alındı")
             .putString("analysisPhase",AiStageMetrics.QUEUED)
             .putLong("analysisPhaseStartElapsed",SystemClock.elapsedRealtime())
-            .putLong("analysisStartedElapsed",SystemClock.elapsedRealtime())
+            .putLong("analysisStartedElapsed",0L)
+            .putLong("analysisQueuedAt",System.currentTimeMillis())
             .putLong("analysisAudioProcessedMs",0L)
             .putInt("analysisChunkIndex",0).putInt("analysisChunkTotal",0)
             .putInt("analysisNativePercent",0)
             .putLong("analysisLastAdvanceAt",System.currentTimeMillis())
             .putInt("analysisPercent",0)
-            .putLong("analysisStartedAt",System.currentTimeMillis())
+            .putLong("analysisStartedAt",0L)
             .putLong("analysisProgressAt",System.currentTimeMillis())
             .putString("analysisPreview","")
             .putInt("analysisPartsDone",0).putInt("analysisPartsTotal",0)
@@ -88,8 +90,18 @@ public final class DailySummaryWorker extends Worker {
             .putString("summaryError","").apply();
         LiveTranscriptStore.begin(c,task.getId().toString(),uri.toString());
         // Only one native AI pipeline runs at once: llama.cpp and whisper.cpp share RAM.
-        WorkManager.getInstance(c).enqueueUniqueWork(
-            "gunizi-single-ai-job",ExistingWorkPolicy.REPLACE,task);
+        try {
+            WorkManager.getInstance(c).enqueueUniqueWork(
+                "gunizi-single-ai-job",ExistingWorkPolicy.REPLACE,task);
+            return true;
+        }catch(Exception error){
+            c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
+                .putString("summaryError","Android iş kuyruğu başlatılamadı: "+error.getClass().getSimpleName())
+                .putString("analysisPhase",AiStageMetrics.ERROR)
+                .putString("analysisStage","Analiz kuyruğa alınamadı")
+                .putLong("analysisCompletedAt",System.currentTimeMillis()).apply();
+            return false;
+        }
     }
     /** Summarize a stored local transcript; do not reload Whisper. */
     public static boolean queueFromTranscript(Context c){
@@ -112,7 +124,6 @@ public final class DailySummaryWorker extends Worker {
             .putString("languageModel",new Prefs(c).aiModel()).build();
         OneTimeWorkRequest request=new OneTimeWorkRequest.Builder(DailySummaryWorker.class)
             .setInputData(data)
-            .setConstraints(new Constraints.Builder().setRequiresBatteryNotLow(true).build())
             .addTag("gunizi-local-summary").build();
         long now=System.currentTimeMillis();
         prefs.edit().putString("analysisSource",name)
@@ -202,8 +213,15 @@ public final class DailySummaryWorker extends Worker {
         if(fileName==null||(!useExistingText&&uriString==null)||
            (!useExistingText&&!AiModelStore.ready(c,speech))||
            ((REPORT.equals(mode)||useExistingText)&&!AiModelStore.ready(c,language)))
-            return Result.failure();
+            return failure(c,fileName==null?"Ses kaydı":fileName,
+                "Kayıt ya da gerekli yerel model bulunamadı. Model ayarlarını kontrol et.");
         ensureChannel(c);
+        c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
+            .putLong("analysisStartedAt",System.currentTimeMillis())
+            .putLong("analysisStartedElapsed",SystemClock.elapsedRealtime())
+            .putString("analysisStage","Android işlemi başlattı · Ses hazırlanıyor")
+            .putString("analysisPhase",AiStageMetrics.PREFLIGHT)
+            .putLong("analysisLastAdvanceAt",System.currentTimeMillis()).apply();
         final String selectedMode=mode;
         final String source=fileName;
         try{
