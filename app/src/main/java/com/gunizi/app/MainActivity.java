@@ -267,9 +267,9 @@ public final class MainActivity extends Activity {
         models.addView(modelSettings);
         modelSettings.setOnClickListener(v->startActivity(new Intent(this,ModelSettingsActivity.class)));
         LinearLayout updates=card("Uygulama güncellemeleri");
-        boolean testBuild=getPackageName().endsWith(".test")||getPackageName().endsWith(".ai2")||getPackageName().endsWith(".ai3")||getPackageName().endsWith(".ai4");
+        boolean testBuild=getPackageName().endsWith(".test")||getPackageName().endsWith(".ai2")||getPackageName().endsWith(".ai3")||getPackageName().endsWith(".ai4")||getPackageName().endsWith(".ai5")||getPackageName().endsWith(".ai6");
         muted(updates,testBuild?
-            "Bu bağımsız Günİzi Test uygulamasıdır. Ana uygulamanın kayıtlarına ve "+
+            "Bu bağımsız Günİzi kurulumudur. Önceki uygulamanın kayıtlarına ve "+
             "modellerine dokunmaz. Otomatik güncelleme yalnızca kalıcı imzalı ana yayın içindir.":
             "Yeni sürümleri GitHub Releases üzerinden arka planda kontrol eder. "+
             "Wi-Fi bağlantısında APK'yı indirebilir. Kurulumu her zaman sen onaylarsın.");
@@ -286,7 +286,7 @@ public final class MainActivity extends Activity {
         updates.addView(update);
         update.setOnClickListener(v->{
             if(testBuild)startActivity(new Intent(Intent.ACTION_VIEW,
-                Uri.parse("https://github.com/numandegirmenci/gunizi-android/actions")));
+                Uri.parse("https://github.com/numandegirmenci/gunizi-android/releases")));
             else startActivity(new Intent(this,UpdateActivity.class));
         });
 
