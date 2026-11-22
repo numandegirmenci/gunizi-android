@@ -24,7 +24,8 @@ public final class MainActivity extends Activity {
     private Prefs prefs;
     private LinearLayout page,nav;
     private TextView status,substatus,folderLabel;
-    private Button action;
+    private Button action,saveHistoryButton;
+    private HistoryGaugeView historyGauge;
     private int tab=0;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable heartbeat=new Runnable(){
@@ -96,50 +97,90 @@ public final class MainActivity extends Activity {
         gap(box,5);substatus=label("",13,MUTED,false);box.addView(substatus);
     }
     private void recordTab(){
-        LinearLayout box=card(null);
-        box.addView(label("İsteğe Bağlı Kayıt",19,WHITE,true));
-        gap(box,8);muted(box,"Bir süre seçip başlat. Süre dolunca kayıt otomatik durur ve klasöre kaydedilir.");
-        gap(box,11);statusCard(box);gap(box,12);
-        LinearLayout times=row();final int[] durations={15,60,360};
-        final String[] titles={"15 dk","1 saat","6 saat"};
-        for(int i=0;i<3;i++){
-            int index=i;
-            Button b=button(titles[i],false);
-            b.setTextColor(prefs.durationMinutes()==durations[i]?CYAN:WHITE);
-            b.setBackground(drawable(prefs.durationMinutes()==durations[i]?0xff254d59:EDGE));
-            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(49),1);
-            if(i<2)p.rightMargin=dp(8);
-            times.addView(b,p);
-            b.setOnClickListener(v->{
-                if(RecorderService.recording){
-                    toast("Süreyi değiştirmeden önce kaydı tamamla.");return;
-                }
-                prefs.durationMinutes(durations[index]);show(0);
-            });
-        }
-        box.addView(times);gap(box,12);
-        action=button("Kaydı başlat",true);box.addView(action);
+        LinearLayout intro=card("Geçmiş Kaydı");
+        muted(intro,"Dinlemeyi açtığında sesler geçici geçmişe eklenir. "+
+            "İstediğin anda son 1 dakika ile son 6 saat arasındaki birikmiş sesi kaydedebilirsin.");
+        gap(intro,7);
+        muted(intro,"Bu ekran gelecekteki süreyi kaydetmez: seçimin, dinlemenin "+
+            "başladığı andan itibaren biriken GEÇMİŞ sese uygulanır.");
+
+        LinearLayout live=card("Canlı geçmiş");
+        historyGauge=new HistoryGaugeView(this);
+        live.addView(historyGauge,new LinearLayout.LayoutParams(-1,dp(220)));
+        status=label("Dinleme kapalı",22,CYAN,true);
+        live.addView(status);gap(live,4);
+        substatus=label("Dinlemeyi açınca sayaç ilerler.",13,MUTED,false);
+        live.addView(substatus);gap(live,12);
+        action=button("Dinlemeyi aç",true);
+        live.addView(action);
         action.setOnClickListener(v->{
-            if(RecorderService.running){
-                send(RecorderService.ACTION_STOP);
-                handler.postDelayed(()->show(0),650);
-            }else startManual();
+            if(RecorderService.historyActive){
+                new AlertDialog.Builder(this)
+                    .setTitle("Geçmiş dinlemeyi durdur")
+                    .setMessage("Henüz kaydetmediğin geçici geçmiş temizlenecek. Devam edilsin mi?")
+                    .setNegativeButton("Vazgeç",null)
+                    .setPositiveButton("Durdur",(d,w)->{
+                        send(RecorderService.ACTION_STOP);
+                        handler.postDelayed(()->show(0),750);
+                    }).show();
+            }else{
+                if(RecorderService.running){
+                    toast("Önce Mesai kaydını durdur. Aynı anda iki mod açılamaz.");return;
+                }
+                startHistory();
+            }
         });
-        gap(box,9);
-        muted(box,"Kayıt yalnızca sen başlattığında çalışır. Önceki saatlere ait sesler geri getirilemez.");
-        LinearLayout folder=card("Kayıt konumu");
-        folderLabel=label(prefs.folder()==null?"Klasör seçilmedi":"Klasör seçildi ✓",13,
-            prefs.folder()==null?0xffedb46f:CYAN,true);
-        folder.addView(folderLabel);
-        gap(folder,8);
-        Button pick=button("Klasörü seç / değiştir",false);
+
+        LinearLayout choose=card("Geçmişten ne kadarını kaydetmek istersin?");
+        muted(choose,"Seçilen süre geriye doğrudur. Henüz o kadar geçmiş birikmediyse "+
+            "kullanılabilen süre kaydedilir.");
+        gap(choose,12);
+        int[] minutes={1,5,15,60,120,240,360};
+        String[] titles={"1 dk","5 dk","15 dk","1 saat","2 saat","4 saat","6 saat"};
+        for(int startIndex=0;startIndex<minutes.length;startIndex+=4){
+            LinearLayout row=row();
+            for(int i=startIndex;i<Math.min(startIndex+4,minutes.length);i++){
+                final int duration=minutes[i];
+                Button b=button(titles[i],false);
+                b.setTextSize(12);
+                b.setTextColor(prefs.durationMinutes()==duration?CYAN:WHITE);
+                b.setBackground(drawable(prefs.durationMinutes()==duration?0xff244d57:EDGE));
+                LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(0,dp(46),1);
+                if(i<Math.min(startIndex+4,minutes.length)-1)cell.rightMargin=dp(7);
+                row.addView(b,cell);
+                b.setOnClickListener(v->{
+                    prefs.durationMinutes(duration);
+                    show(0);
+                });
+            }
+            choose.addView(row);
+            gap(choose,8);
+        }
+        saveHistoryButton=button("Son "+formatDuration(prefs.durationMinutes())+" kaydet",true);
+        choose.addView(saveHistoryButton);
+        saveHistoryButton.setOnClickListener(v->{
+            if(!RecorderService.historyActive){toast("Önce dinlemeyi aç.");return;}
+            if(RecorderService.historyHeldSeconds<1){toast("Henüz geçmiş birikmedi.");return;}
+            if(prefs.folder()==null){toast("Önce bir kayıt klasörü seç.");return;}
+            send(RecorderService.ACTION_SAVE_HISTORY);
+            toast("Biriken geçmiş kaydediliyor. Dinleme devam eder.");
+        });
+        gap(choose,6);
+        muted(choose,"Kaydetmek, dinlemeyi sonlandırmaz. En fazla son 6 saat korunur.");
+
+        LinearLayout folder=card("Kayıt klasörü");
+        folderLabel=label(prefs.folder()==null?"Klasör seçilmedi":"Kayıt klasörü hazır ✓",
+            13,prefs.folder()==null?0xffedb46f:CYAN,true);
+        folder.addView(folderLabel);gap(folder,8);
+        Button pick=button("Klasör seç / değiştir",false);
         folder.addView(pick);pick.setOnClickListener(v->chooseFolder());
-        LinearLayout hint=card("Pil bilgisi");
-        muted(hint,"15 dk / 1 saat / 6 saat boyunca mikrofon ve Opus sıkıştırması çalışır. "
-            +"Kaydı kapattığında mikrofon durur.");
-        gap(hint,7);
-        Button estimate=button("Ayrıntılı pil karşılaştırması",false);hint.addView(estimate);
-        estimate.setOnClickListener(v->startActivity(new Intent(this,BatteryInfoActivity.class)));
+        gap(folder,4);
+        muted(folder,"Gizlilik: Dinleme sırasında sesler sıkıştırılmış şekilde geçici uygulama "+
+            "bellek alanına yazılır. 'Kaydet' demedikçe seçilen klasöre aktarılmaz. "+
+            "Dinlemeyi durdurunca kaydedilmeyen parçalar silinir.");
+    }
+    private static String formatDuration(int m){
+        return m<60?m+" dakikayı":m/60+" saati";
     }
     private void workTab(){
         LinearLayout box=card("Mesai Kaydı");
@@ -270,8 +311,8 @@ public final class MainActivity extends Activity {
             prefs.folder(uri);show(tab);toast("Kayıt klasörü belirlendi.");
         }catch(Exception e){toast("Klasör hatası: "+e.getMessage());}
     }
-    private void startManual(){
-        prefs.mode(Prefs.MODE_MANUAL);startServiceAction(RecorderService.ACTION_START_MANUAL);
+    private void startHistory(){
+        prefs.mode(Prefs.MODE_HISTORY);startServiceAction(RecorderService.ACTION_START_HISTORY);
     }
     private void startWork(){
         prefs.mode(Prefs.MODE_WORK);
@@ -284,7 +325,9 @@ public final class MainActivity extends Activity {
         if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},MIC);return;
         }
-        if(prefs.folder()==null){toast("Önce kayıt klasörünü seç.");return;}
+        if(!RecorderService.ACTION_START_HISTORY.equals(actionName)&&prefs.folder()==null){
+            toast("Önce kayıt klasörünü seç.");return;
+        }
         try{
             startForegroundService(new Intent(this,RecorderService.class).setAction(actionName));
             handler.postDelayed(this::refresh,900);
@@ -298,26 +341,47 @@ public final class MainActivity extends Activity {
         super.onRequestPermissionsResult(request,names,results);
         if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED){
             if(request==MIC){
-                if(tab==0)startManual();
+                if(tab==0)startHistory();
                 else if(tab==1)startWork();
                 else toast("Mikrofon izni verildi. Kayıt kendiliğinden başlamaz.");
             }else toast("Bildirim izni verildi.");
         }else toast("İzin verilmedi.");show(tab);
     }
     private void refresh(){
-        if(status==null||substatus==null)return;
-        if(RecorderService.running){
-            boolean modeMatch=tab==0?Prefs.MODE_MANUAL.equals(prefs.mode()):
-                Prefs.MODE_WORK.equals(prefs.mode());
-            status.setText(modeMatch?RecorderService.stateText:"Diğer kayıt modu etkin");
-            substatus.setText(RecorderService.lastEvent);
-            if(action!=null)action.setText(tab==0?"Durdur ve kaydet":"Mesai hizmetini durdur");
-        }else{
-            status.setText(tab==0?"Başlatılmadı":"Mesai planı hazır");
-            substatus.setText(tab==0?"Mikrofon şu anda kapalı":
-                prefs.timeString(true)+"–"+prefs.timeString(false)+" • "+Prefs.ZONE.getId());
-            if(action!=null)action.setText(tab==0?"Kaydı başlat":"Mesai kaydını etkinleştir");
+        if(tab==0){
+            boolean active=RecorderService.historyActive;
+            int held=active?RecorderService.historyHeldSeconds:0;
+            if(historyGauge!=null)historyGauge.update(held);
+            if(status!=null)status.setText(active?"Dinleme açık":"Dinleme kapalı");
+            if(substatus!=null)substatus.setText(active?
+                "Kaydedilmiş geçmiş: "+String.format(Locale.ROOT,"%02d:%02d:%02d",
+                    held/3600,(held/60)%60,held%60)+" / 06:00:00":
+                "Dinlemeyi açınca geçmiş birikmeye başlar.");
+            if(action!=null)action.setText(active?"Dinlemeyi durdur":"Dinlemeyi aç");
+            if(saveHistoryButton!=null){
+                int requested=prefs.durationMinutes()*60;
+                int actual=Math.min(requested,held);
+                String label=held==0?"Henüz kaydedilecek geçmiş yok":
+                    actual<requested?"Mevcut "+formatPast(actual)+" kaydet":
+                    "Son "+formatDuration(prefs.durationMinutes())+" kaydet";
+                saveHistoryButton.setText(label);
+                saveHistoryButton.setEnabled(active&&held>0&&prefs.folder()!=null);
+            }
+        }else if(tab==1){
+            if(status!=null)status.setText(RecorderService.historyActive?
+                "Geçmiş dinleme açık":
+                RecorderService.running?RecorderService.stateText:"Mesai planı hazır");
+            if(substatus!=null)substatus.setText(RecorderService.running?
+                RecorderService.lastEvent:prefs.timeString(true)+"–"+prefs.timeString(false)+
+                " • Telefon saatine göre");
+            if(action!=null)action.setText(RecorderService.running?
+                "Mesai hizmetini durdur":"Mesai kaydını etkinleştir");
         }
+    }
+    private static String formatPast(int seconds){
+        if(seconds<60)return seconds+" saniyeyi";
+        if(seconds<3600)return (seconds/60)+" dakikayı";
+        return (seconds/3600)+" saat "+((seconds/60)%60)+" dakikayı";
     }
     private void toast(String message){Toast.makeText(this,message,Toast.LENGTH_LONG).show();}
 }
