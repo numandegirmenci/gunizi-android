@@ -13,6 +13,20 @@
 
 Günİzi, Türkçe çevrimdışı ses kaydı ve yerel yapay zeka ile günlük rapor amaçlayan Android uygulamasıdır.
 
+
+## Günİzi AI 2.0 (v0.10 hazırlığı) — Mimari tasarım
+
+CallVault'un yerel Whisper / VAD / LLM iş akışından yararlanarak Günİzi'nin
+AI mimarisi yeniden tasarlanmıştır. Henüz bir APK / çalışan motor güncellemesi değildir.
+Önce gerçek cihazda %0 model yükleme sorununu teşhis edeceğiz; ardından kaynaklı
+konuşma dökümü, JSON konu/karar/görev analizi ve kaldığı yerden devam mimarisine geçeceğiz.
+
+- [Tam teknik mimari](docs/AI_ARCHITECTURE_V010.md)
+- [Dosya/sınıf bazlı yol haritası ve test kriterleri](docs/AI_MIGRATION_V010.md)
+- [CallVault incelemesi ve lisans notları](docs/CALLVAULT_REVIEW.md)
+
+Geçmiş kaydı, Mesai modu ve mevcut v0.9.1 Test verileri korunacaktır.
+
 ## v0.9.1 • Konuşma metni, metinden tablo ve gerçek durum takibi
 
 - Geçmiş ses sayacı her saniye ilerler, önceki sürümlerdeki canlı deneyim korunur.
