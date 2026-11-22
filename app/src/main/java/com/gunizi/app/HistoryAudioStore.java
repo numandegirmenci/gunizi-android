@@ -29,18 +29,35 @@ final class HistoryAudioStore {
         Segment(File file,long start,long end){this.file=file;this.start=start;this.end=end;}
     }
     private final File dir;
+    private final Context app;
     private final ArrayList<Segment> segments=new ArrayList<>();
     private boolean disposed=false;
     HistoryAudioStore(Context context){
+        app=context.getApplicationContext();
+        File oldEncrypted=new File(context.getNoBackupFilesDir(),"encrypted_rolling_history");
+        if(oldEncrypted.isDirectory()){
+            File[] leftovers=oldEncrypted.listFiles();
+            if(leftovers!=null)for(File file:leftovers)
+                if(file.getName().endsWith(".giz"))file.delete();
+        }
         dir=new File(context.getCacheDir(),"gunizi_rolling_history");
         if(!dir.exists())dir.mkdirs();
         File[] old=dir.listFiles();
         if(old!=null)for(File f:old)if(f.getName().startsWith("rolling_"))f.delete();
     }
-    synchronized void add(File f,long start,long end){
+    synchronized void add(File f,long start,long end)throws IOException{
         if(f==null||!f.isFile()||f.length()<64){if(f!=null)f.delete();return;}
-        segments.add(new Segment(f,start,end));
-        prune(SystemClock.elapsedRealtime());
+        try{
+            File encrypted=CryptoVault.encryptEphemeral(app,f);
+            if(!encrypted.isFile()||encrypted.length()<32)
+                throw new IOException("Şifreli geçici ses doğrulanamadı");
+            if(!f.delete())throw new IOException("Şifresiz kayıt parçası silinemedi");
+            segments.add(new Segment(encrypted,start,end));
+            prune(SystemClock.elapsedRealtime());
+        }catch(Exception ex){
+            if(f.exists())f.delete();
+            throw new IOException("Geçici ses şifrelenemedi; kayıt parçası saklanmadı",ex);
+        }
     }
     synchronized long secondsAvailable(long liveStart){
         long now=SystemClock.elapsedRealtime();
@@ -93,8 +110,11 @@ final class HistoryAudioStore {
             MediaCodec.BufferInfo info=new MediaCodec.BufferInfo();
             for(Segment s:source){
                 MediaExtractor extractor=new MediaExtractor();
+                File audio=null;
                 try{
-                    extractor.setDataSource(s.file.getAbsolutePath());
+                    audio=s.file.getName().endsWith(".giz")?
+                        CryptoVault.decryptToTemp(context,s.file):s.file;
+                    extractor.setDataSource(audio.getAbsolutePath());
                     int track=-1;
                     for(int i=0;i<extractor.getTrackCount();i++){
                         MediaFormat fmt=extractor.getTrackFormat(i);
@@ -126,7 +146,12 @@ final class HistoryAudioStore {
                         }
                         extractor.advance();
                     }
-                }finally{extractor.release();}
+                }catch(IOException e){throw e;}
+                catch(Exception ex){throw new IOException("Şifreli ses açılamadı",ex);}
+                finally{
+                    extractor.release();
+                    if(audio!=null&&!audio.equals(s.file))audio.delete();
+                }
             }
             if(samples==0)throw new IOException("Seçilen aralıkta ses verisi yok");
             if(!started)throw new IOException("Ses kapsayıcısı oluşturulamadı");
