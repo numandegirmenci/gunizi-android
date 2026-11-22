@@ -5,163 +5,221 @@ import android.content.*;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.*;
-import android.view.View;
+import android.view.*;
 import android.widget.*;
 import androidx.work.*;
 import java.io.File;
 import java.util.List;
 
-/** Single, explicit place to select and download offline AI models. */
+/** Compact, task-first offline AI model selection. Downloads remain explicit. */
 public final class ModelSettingsActivity extends Activity {
     private static final int BG=0xff090e1b,PANEL=0xff172031,WHITE=0xfff0f7ff,
         MUTED=0xffa2b4c9,CYAN=0xff38d4ca;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable heartbeat=new Runnable(){
-        @Override public void run(){refresh();handler.postDelayed(this,2500);}
+        @Override public void run(){refresh();handler.postDelayed(this,3500);}
     };
-    private TextView whisperStatus,qwenStatus;
+    private TextView whisperStatus,qwenStatus,selectedSpeech,selectedSummary,presetHint;
     private Button whisperButton,qwenButton;
+    private RadioGroup speechChoices,summaryChoices;
     private AnalysisPreferences analysis;
     private Prefs preferences;
     private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
-    private GradientDrawable panel(){
-        GradientDrawable d=new GradientDrawable();d.setColor(PANEL);d.setCornerRadius(dp(16));return d;
+    private GradientDrawable shape(int color){
+        GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(15));return d;
     }
-    private TextView text(LinearLayout root,String title,int size,boolean bold){
-        TextView t=new TextView(this);t.setText(title);t.setTextColor(bold?WHITE:MUTED);
-        t.setTextSize(size);if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);
-        params.bottomMargin=dp(10);root.addView(t,params);return t;
+    private TextView text(LinearLayout root,String value,int size,boolean strong){
+        TextView t=new TextView(this);t.setText(value);t.setTextSize(size);
+        t.setTextColor(strong?WHITE:MUTED);
+        if(strong)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);
+        p.bottomMargin=dp(7);root.addView(t,p);return t;
     }
-    private LinearLayout card(LinearLayout root){
+    private LinearLayout card(LinearLayout parent){
         LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);
-        c.setBackground(panel());c.setPadding(dp(16),dp(17),dp(16),dp(16));
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(14);
-        root.addView(c,p);return c;
+        c.setPadding(dp(15),dp(15),dp(15),dp(14));c.setBackground(shape(PANEL));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);
+        p.bottomMargin=dp(12);parent.addView(c,p);return c;
     }
-    private Button button(LinearLayout root,String label){
-        Button b=new Button(this);b.setText(label);b.setAllCaps(false);
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(50));
-        p.bottomMargin=dp(8);root.addView(b,p);return b;
+    private Button button(LinearLayout root,String title,boolean primary){
+        Button b=new Button(this);b.setText(title);b.setAllCaps(false);b.setTextSize(14);
+        b.setTextColor(primary?BG:WHITE);b.setBackground(shape(primary?CYAN:0xff27364b));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(46));
+        p.bottomMargin=dp(5);root.addView(b,p);return b;
+    }
+    private Button chip(LinearLayout root,String title){
+        Button b=new Button(this);b.setText(title);b.setAllCaps(false);
+        b.setTextSize(12);b.setTextColor(WHITE);b.setBackground(shape(0xff283b51));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,dp(44));
+        p.rightMargin=dp(8);root.addView(b,p);return b;
+    }
+    private RadioButton option(RadioGroup group,String title){
+        RadioButton b=new RadioButton(this);b.setId(View.generateViewId());
+        b.setText(title);b.setTextColor(WHITE);b.setTextSize(14);
+        b.setPadding(0,dp(3),0,dp(3));group.addView(b);return b;
+    }
+    private void toggle(LinearLayout panel,Button trigger){
+        boolean open=panel.getVisibility()!=View.VISIBLE;
+        panel.setVisibility(open?View.VISIBLE:View.GONE);
+        trigger.setText(open?"Diğer modelleri gizle ▲":"Diğer modeller ve ayarlar ▼");
+    }
+    private void select(String speech,String summary,String help){
+        analysis.speechModel(speech);preferences.aiModel(summary);
+        presetHint.setText(help);
+        updateChoiceChecks();
+        refresh();
     }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
         analysis=new AnalysisPreferences(this);preferences=new Prefs(this);
-        ScrollView scroll=new ScrollView(this);scroll.setBackgroundColor(BG);
-        LinearLayout root=new LinearLayout(this);root.setPadding(dp(17),dp(20),dp(17),dp(30));
-        root.setOrientation(LinearLayout.VERTICAL);scroll.addView(root);setContentView(scroll);
-        text(root,"Yapay Zeka Modelleri",24,true);
-        text(root,"Modeller yalnızca ilk kurulumda internetten indirilir. "
-            +"İndirme sırasında başka uygulamaya geçebilirsin; ilerleme bildirimden takip edilir. "
-            +"Seslerin ve raporların telefondan çıkmaz.",13,false);
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
+        scroll.setBackgroundColor(BG);
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(16),dp(18),dp(16),dp(25));
+        scroll.addView(root);setContentView(scroll);
+
+        text(root,"Yapay zeka modelleri",23,true);
+        text(root,"Önce kullanım amacını seç. Modeller bir kez indirilir; ses kayıtları telefonunda kalır.",13,false);
+
+        LinearLayout adviser=card(root);
+        text(adviser,"Hangi model bana uygun?",17,true);
+        text(adviser,"Öneriler başlangıç noktasıdır; kesin işlem süresi cihazın hızına, sese ve ısınmaya bağlıdır.",12,false);
+        HorizontalScrollView horizontal=new HorizontalScrollView(this);
+        horizontal.setHorizontalScrollBarEnabled(false);
+        LinearLayout chips=new LinearLayout(this);chips.setOrientation(LinearLayout.HORIZONTAL);
+        horizontal.addView(chips);adviser.addView(horizontal);
+        presetHint=text(adviser,"5 dakikalık bir kayıt için Dengeli seçeneğiyle başlayabilirsin.",12,false);
+        Button quick=chip(chips,"5 dk · Dengeli");
+        quick.setOnClickListener(v->select(AiModelStore.WHISPER_Q5,AiModelStore.QWEN,
+            "Kısa kayıtlar için daha hafif indirme ve bellek kullanımı. Önce metni kontrol et."));
+        Button clear=chip(chips,"5–60 dk · Ayrıntılı");
+        clear.setOnClickListener(v->select(AiModelStore.WHISPER_TURBO_Q8,AiModelStore.GEMMA,
+            "Daha ayrıntılı döküm ve rapor denemek için. Büyük modeller daha fazla bellek ve zaman isteyebilir."));
+        Button longAudio=chip(chips,"1 saat+ · Ekonomik");
+        longAudio.setOnClickListener(v->select(AiModelStore.WHISPER_Q5,AiModelStore.QWEN,
+            "Uzun kayıtları parçalara bölerek, daha az yer kaplayan modellerle denemek için. Şarj önerilir."));
+        text(adviser,"İpucu: Sadece konuşmayı yazıya dökmek istiyorsan ikinci modeli indirmen gerekmez.",12,false);
+
         LinearLayout speech=card(root);
-        text(speech,"1. Konuşmayı yazıya dökme",18,true);
-        RadioGroup speechChoices=new RadioGroup(this);speechChoices.setOrientation(RadioGroup.VERTICAL);
-        RadioButton base=new RadioButton(this),small=new RadioButton(this),
-            compact=new RadioButton(this),turbo=new RadioButton(this),
-            turboQ8=new RadioButton(this);
-        base.setId(View.generateViewId());small.setId(View.generateViewId());
-        compact.setId(View.generateViewId());turbo.setId(View.generateViewId());
-        turboQ8.setId(View.generateViewId());
-        base.setText("Whisper Base • 148 MB · Hafif");
-        compact.setText("Whisper Small Q5 • 190 MB · Hızlı");
-        small.setText("Whisper Small • 488 MB · Klasik");
-        turbo.setText("Whisper Turbo Q5 • 574 MB · Klasik");
-        turboQ8.setText("Whisper Turbo Q8 • 874 MB · CallVault önerisi");
-        for(RadioButton item:new RadioButton[]{base,compact,small,turbo,turboQ8}){
-            item.setTextColor(WHITE);speechChoices.addView(item);
-        }
-        speech.addView(speechChoices);
-        String chosenSpeech=analysis.speechModel();
-        speechChoices.check(AiModelStore.WHISPER_TURBO_Q8.equals(chosenSpeech)?
-            turboQ8.getId():AiModelStore.WHISPER_TURBO.equals(chosenSpeech)?
-            turbo.getId():AiModelStore.WHISPER_Q5.equals(chosenSpeech)?
-            compact.getId():AiModelStore.WHISPER.equals(chosenSpeech)?
-            small.getId():base.getId());
-        speechChoices.setOnCheckedChangeListener((group,checked)->{
-            analysis.speechModel(checked==turboQ8.getId()?AiModelStore.WHISPER_TURBO_Q8:
-                checked==turbo.getId()?AiModelStore.WHISPER_TURBO:
-                checked==compact.getId()?AiModelStore.WHISPER_Q5:
-                checked==small.getId()?AiModelStore.WHISPER:AiModelStore.WHISPER_BASE);
+        text(speech,"Konuşmayı yazıya dök",17,true);
+        selectedSpeech=text(speech,"Seçilen konuşma modeli",14,true);
+        whisperStatus=text(speech,"Kontrol ediliyor…",12,false);
+        whisperButton=button(speech,"Modeli indir",true);
+        whisperButton.setOnClickListener(v->confirm(analysis.speechModel()));
+        Button speechMore=button(speech,"Diğer modeller ve ayarlar ▼",false);
+        LinearLayout speechAdvanced=new LinearLayout(this);
+        speechAdvanced.setOrientation(LinearLayout.VERTICAL);
+        speechAdvanced.setVisibility(View.GONE);speech.addView(speechAdvanced);
+        text(speechAdvanced,"Konuşma modeli seçimi",13,true);
+        speechChoices=new RadioGroup(this);speechChoices.setOrientation(RadioGroup.VERTICAL);
+        RadioButton base=option(speechChoices,"Base · 148 MB · Deneme / hafif");
+        RadioButton smallQ5=option(speechChoices,"Small Q5 · 190 MB · Dengeli");
+        RadioButton small=option(speechChoices,"Small · 488 MB · Klasik");
+        RadioButton turboQ5=option(speechChoices,"Turbo Q5 · 574 MB · Ayrıntılı");
+        RadioButton turboQ8=option(speechChoices,"Turbo Q8 · 874 MB · Ayrıntılı / yüksek bellek");
+        speechAdvanced.addView(speechChoices);
+        speechChoices.setOnCheckedChangeListener((group,id)->{
+            analysis.speechModel(id==turboQ8.getId()?AiModelStore.WHISPER_TURBO_Q8:
+                id==turboQ5.getId()?AiModelStore.WHISPER_TURBO:
+                id==smallQ5.getId()?AiModelStore.WHISPER_Q5:
+                id==small.getId()?AiModelStore.WHISPER:AiModelStore.WHISPER_BASE);
             refresh();
         });
-        text(speech,"CallVault whisper.cpp kullanılır. Q8 seçeneği cihazın ARM hızlandırmasından yararlanabilir.",13,false);
-        Switch vad=new Switch(this);
-        vad.setText("Silero VAD • Konuşma olmayan bölümleri atla");
-        vad.setTextColor(WHITE);
+        Switch vad=new Switch(this);vad.setText("Sessiz bölümleri otomatik atla");
+        vad.setTextColor(WHITE);vad.setTextSize(14);
         vad.setChecked(getSharedPreferences("gunizi",MODE_PRIVATE)
             .getBoolean("aiSileroVad",true));
-        vad.setOnCheckedChangeListener((v,checked)->
+        vad.setOnCheckedChangeListener((view,checked)->
             getSharedPreferences("gunizi",MODE_PRIVATE).edit()
                 .putBoolean("aiSileroVad",checked).apply());
-        speech.addView(vad);
-        text(speech,"Silero APK içinde bulunur. Özellikle uzun sessizliklerde faydalı olabilir; "+
-            "gerekirse konuşma kaybını kontrol etmek için kapatabilirsin.",12,false);
-        whisperStatus=text(speech,"Hazırlanıyor…",13,false);
-        whisperButton=button(speech,"Konuşma modelini indir");
-        whisperButton.setOnClickListener(v->confirm(analysis.speechModel()));
-        LinearLayout language=card(root);
-        text(language,"2. Ayrıntılı özet ve konu tablosu",18,true);
-        RadioGroup choices=new RadioGroup(this);choices.setOrientation(RadioGroup.VERTICAL);
-        RadioButton compactSummary=new RadioButton(this),
-            strong=new RadioButton(this),gemma=new RadioButton(this);
-        compactSummary.setId(View.generateViewId());
-        strong.setId(View.generateViewId());gemma.setId(View.generateViewId());
-        gemma.setText("Gemma 4 E2B QAT • 2,62 GB · CallVault önerisi");
-        compactSummary.setText("Qwen3-1.7B • 1,28 GB · Alternatif");
-        strong.setText("Qwen3-4B • 2,5 GB · Alternatif");
-        for(RadioButton item:new RadioButton[]{gemma,compactSummary,strong}){
-            item.setTextColor(WHITE);choices.addView(item);
-        }
-        language.addView(choices);
-        choices.check(AiModelStore.QWEN4.equals(preferences.aiModel())?
-            strong.getId():AiModelStore.QWEN.equals(preferences.aiModel())?
-            compactSummary.getId():gemma.getId());
-        choices.setOnCheckedChangeListener((group,checked)->{
-            preferences.aiModel(checked==strong.getId()?AiModelStore.QWEN4:
-                checked==compactSummary.getId()?AiModelStore.QWEN:AiModelStore.GEMMA);
+        speechAdvanced.addView(vad);
+        text(speechAdvanced,"Uzun sessizliklerde yardımcı olabilir. Konuşma atlandığını düşünürsen kapatıp yeniden dene.",12,false);
+        speechMore.setOnClickListener(v->toggle(speechAdvanced,speechMore));
+
+        LinearLayout summary=card(root);
+        text(summary,"Özet ve yapılacaklar",17,true);
+        selectedSummary=text(summary,"Seçilen özet modeli",14,true);
+        qwenStatus=text(summary,"Kontrol ediliyor…",12,false);
+        qwenButton=button(summary,"Modeli indir",true);
+        qwenButton.setOnClickListener(v->confirm(preferences.aiModel()));
+        Button summaryMore=button(summary,"Diğer modeller ve ayarlar ▼",false);
+        LinearLayout summaryAdvanced=new LinearLayout(this);
+        summaryAdvanced.setOrientation(LinearLayout.VERTICAL);
+        summaryAdvanced.setVisibility(View.GONE);summary.addView(summaryAdvanced);
+        text(summaryAdvanced,"Özet modeli seçimi",13,true);
+        summaryChoices=new RadioGroup(this);summaryChoices.setOrientation(RadioGroup.VERTICAL);
+        RadioButton qwen=option(summaryChoices,"Qwen3 1.7B · 1,28 GB · Hafif");
+        RadioButton gemma=option(summaryChoices,"Gemma 4 E2B · 2,62 GB · Ayrıntılı");
+        RadioButton qwen4=option(summaryChoices,"Qwen3 4B · 2,5 GB · Alternatif");
+        summaryAdvanced.addView(summaryChoices);
+        summaryChoices.setOnCheckedChangeListener((group,id)->{
+            preferences.aiModel(id==qwen4.getId()?AiModelStore.QWEN4:
+                id==qwen.getId()?AiModelStore.QWEN:AiModelStore.GEMMA);
             refresh();
         });
-        qwenStatus=text(language,"Hazırlanıyor…",13,false);
-        qwenButton=button(language,"Özet modelini indir");
-        qwenButton.setOnClickListener(v->confirm(preferences.aiModel()));
-        LinearLayout help=card(root);
-        text(help,"İndirme ve pil",17,true);
-        text(help,"• İndirilen kısmı kaybolmaz: bağlantı kesilirse devam etmeyi dener.\n"
-            +"• Büyük indirmelerde yeterli boş alan ve mümkünse Wi-Fi kullan.\n"
-            +"• İndirme, konuşma çözümleme veya günlük rapor oluşturma işlemi değildir.\n"
-            +"• İndirme sırasında bildirimleri kapatma; Android kısıtlamaları işleri geciktirebilir.",13,false);
-        Button refresh=button(help,"İndirme durumunu yenile");
-        refresh.setOnClickListener(v->refresh());
+        summaryMore.setOnClickListener(v->toggle(summaryAdvanced,summaryMore));
+
+        LinearLayout foot=card(root);
+        text(foot,"İndirme hakkında",15,true);
+        text(foot,"İndirmeler bildirimde izlenir ve kesilirse kaldığı yerden sürdürülmeye çalışılır. Wi-Fi ve yeterli boş alan önerilir.",12,false);
+        button(foot,"Durumu yenile",false).setOnClickListener(v->refresh());
+        // Restore selections after wiring listeners. Neither preset nor screen opening starts a download.
+        String s=analysis.speechModel(),m=preferences.aiModel();
+        speechChoices.check(AiModelStore.WHISPER_TURBO_Q8.equals(s)?turboQ8.getId():
+            AiModelStore.WHISPER_TURBO.equals(s)?turboQ5.getId():
+            AiModelStore.WHISPER_Q5.equals(s)?smallQ5.getId():
+            AiModelStore.WHISPER.equals(s)?small.getId():base.getId());
+        summaryChoices.check(AiModelStore.QWEN4.equals(m)?qwen4.getId():
+            AiModelStore.QWEN.equals(m)?qwen.getId():gemma.getId());
         refresh();
+    }
+    private void updateChoiceChecks(){
+        // Presets update the stored choices; recreate checked state without navigation.
+        if(speechChoices!=null){
+            String s=analysis.speechModel();
+            for(int i=0;i<speechChoices.getChildCount();i++){
+                RadioButton b=(RadioButton)speechChoices.getChildAt(i);
+                String name=b.getText().toString();
+                if((AiModelStore.WHISPER_Q5.equals(s)&&name.startsWith("Small Q5"))||
+                   (AiModelStore.WHISPER_TURBO_Q8.equals(s)&&name.startsWith("Turbo Q8")))
+                    speechChoices.check(b.getId());
+            }
+        }
+        if(summaryChoices!=null){
+            String s=preferences.aiModel();
+            for(int i=0;i<summaryChoices.getChildCount();i++){
+                RadioButton b=(RadioButton)summaryChoices.getChildAt(i);
+                if((AiModelStore.QWEN.equals(s)&&b.getText().toString().startsWith("Qwen3 1.7"))||
+                   (AiModelStore.GEMMA.equals(s)&&b.getText().toString().startsWith("Gemma")))
+                    summaryChoices.check(b.getId());
+            }
+        }
     }
     private void confirm(String model){
         if(AiModelStore.ready(this,model))return;
-        String label=AiModelStore.label(model);
-        new AlertDialog.Builder(this).setTitle(label+" indirilsin mi?")
-            .setMessage("İndirme bildirimde ilerleyecek ve uygulamadan çıkınca devam etmeyi "+
-                "deneyecek. Bağlantı koparsa kalan kısmı tekrar indirmeden sürdürmeyi dener.")
+        new AlertDialog.Builder(this).setTitle(AiModelStore.label(model)+" indirilsin mi?")
+            .setMessage("Model yalnızca cihazına indirilir. İndirme bildirimden izlenebilir; ses veya notların yüklenmez.")
             .setNegativeButton("Vazgeç",null)
             .setPositiveButton("İndir",(d,w)->{
-                AiModelDownloadWorker.enqueue(this,model);
-                refresh();
+                AiModelDownloadWorker.enqueue(this,model);refresh();
             }).show();
     }
     private void refresh(){
+        if(selectedSpeech!=null)selectedSpeech.setText(AiModelStore.label(analysis.speechModel()));
+        if(selectedSummary!=null)selectedSummary.setText(AiModelStore.label(preferences.aiModel()));
         showModel(analysis.speechModel(),whisperStatus,whisperButton);
         showModel(preferences.aiModel(),qwenStatus,qwenButton);
     }
     private void showModel(String model,TextView state,Button button){
         if(state==null||button==null)return;
         if(AiModelStore.ready(this,model)){
-            state.setText("Model hazır ✓ • Çevrimdışı kullanılabilir");
-            button.setText("Model zaten kurulu");button.setEnabled(false);return;
+            state.setText("Hazır ✓ • İnternetsiz kullanılabilir");
+            button.setText("Kurulu ✓");button.setEnabled(false);return;
         }
-        button.setEnabled(true);button.setText("İndirmeyi başlat / sürdür");
+        button.setEnabled(true);button.setText("İndir / sürdür");
         File target=AiModelStore.file(this,model);
         File part=new File(target.getAbsolutePath()+".part");
-        if(part.exists())state.setText("İndirilen: "+(part.length()/1048576)+" MB • Devam edilebilir");
-        else state.setText("Henüz indirilmedi");
+        state.setText(part.exists()?"İndirilen "+(part.length()/1048576)+" MB · Devam edilebilir":"Henüz indirilmedi");
         new Thread(()->{
             try{
                 List<WorkInfo> work=WorkManager.getInstance(this)
@@ -173,21 +231,19 @@ public final class ModelSettingsActivity extends Activity {
                 runOnUiThread(()->{
                     if(isFinishing()||isDestroyed())return;
                     if(!model.equals(analysis.speechModel())&&!model.equals(preferences.aiModel()))return;
-                    if(info.getState()==WorkInfo.State.RUNNING||
-                        info.getState()==WorkInfo.State.ENQUEUED){
-                        state.setText((stage==null?"İndirme sırada":stage)+
-                            (pct>0?" • %"+pct:""));
-                        button.setText("İndirme sürüyor");button.setEnabled(false);
+                    if(info.getState()==WorkInfo.State.RUNNING||info.getState()==WorkInfo.State.ENQUEUED){
+                        state.setText((stage==null?"İndirme sırası bekleniyor":stage)+(pct>0?" · %"+pct:""));
+                        button.setText("İndiriliyor…");button.setEnabled(false);
                     }else if(info.getState()==WorkInfo.State.FAILED){
-                        state.setText("İndirme başarısız. Tekrar deneyebilirsin.");
+                        state.setText("İndirme tamamlanamadı. Yeniden deneyebilirsin.");
                         button.setEnabled(true);
                     }else if(info.getState()==WorkInfo.State.SUCCEEDED&&AiModelStore.ready(this,model)){
-                        state.setText("Model hazır ✓");button.setEnabled(false);
+                        state.setText("Hazır ✓");button.setEnabled(false);
                     }
                 });
             }catch(Exception ignored){}
-        },"GunIzi-ModelUI").start();
+        },"GunIzi-ModelStatus").start();
     }
-    @Override protected void onResume(){super.onResume();handler.post(heartbeat);}
+    @Override protected void onResume(){super.onResume();handler.removeCallbacks(heartbeat);handler.post(heartbeat);}
     @Override protected void onPause(){handler.removeCallbacks(heartbeat);super.onPause();}
 }
