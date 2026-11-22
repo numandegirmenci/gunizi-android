@@ -69,6 +69,7 @@ public final class UpdateActivity extends Activity {
         releases.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,
             Uri.parse(AppUpdateWorker.RELEASES))));
         refresh();
+        check(); // Opening the page explicitly requests a fresh version check.
     }
 
     private void check(){
@@ -85,18 +86,33 @@ public final class UpdateActivity extends Activity {
         android.content.SharedPreferences p=getSharedPreferences(AppUpdateWorker.PREF,MODE_PRIVATE);
         String tag=p.getString("remoteTag","");
         String notes=p.getString("releaseNotes","");
-        if(!tag.isEmpty())headline.setText("Günİzi "+tag);
+        int installed=0;
+        String version="?";
+        try{
+            android.content.pm.PackageInfo info=getPackageManager()
+                .getPackageInfo(getPackageName(),0);
+            installed=(int)info.getLongVersionCode();
+            version=info.versionName;
+        }catch(Exception ignored){}
+        if(!tag.isEmpty())headline.setText("GitHub: "+tag+" • Yüklü: v"+version);
+        else headline.setText("Yüklü Günİzi sürümü: v"+version);
         changes.setText(prettyNotes(notes));
         File file=AppUpdateWorker.packageFile(this);
         int remote=p.getInt("remoteCode",0);
         int saved=p.getInt("downloadVersion",0);
         boolean downloaded=file.isFile()&&file.length()>100_000&&remote>0&&saved==remote;
         install.setEnabled(false);
+        if(remote>0&&remote<=installed){
+            compatibility.setText("Yüklü uygulama zaten yayınlanan sürümle aynı veya daha yeni. "+
+                "Yeni sürüm yayınlandığında güncelleme bildirimi gelecektir.");
+            compatibility.setTextColor(CYAN);
+            install.setText("Güncel sürüm yüklü");return;
+        }
         if(!downloaded){
-            compatibility.setText("Yeni bir APK henüz indirilmedi. "+
-                "Uygun Wi-Fi bağlantısında yeni sürümü kontrol et. "+
-                "Gerekirse GitHub yayın sayfasından açabilirsin.");
-            install.setText("İndirme bekleniyor");
+            compatibility.setText("Yeni sürüm bilgisi alınmış olabilir, ancak doğrulanmış APK "+
+                "henüz indirilmedi. Wi-Fi bağlantısını ve modelden ayrı olan "+
+                "güncelleme indirmesini kontrol et.");
+            install.setText("APK indirme / doğrulama bekleniyor");
             return;
         }
         ReleaseApkValidator.Result result=ReleaseApkValidator.verify(this,file);
@@ -104,7 +120,7 @@ public final class UpdateActivity extends Activity {
         compatibility.setTextColor(result.compatible?CYAN:0xffedb46f);
         install.setEnabled(result.compatible);
         install.setText(result.compatible?
-            "Mevcut uygulamanın üzerine güncelle":"İmza / sürüm uyumsuzluğu");
+            "Uygulamanın üzerine güncelle":"İmza / sürüm uyumsuzluğu");
     }
 
     private static String prettyNotes(String raw){
