@@ -37,8 +37,12 @@ final class HistoryAudioStore {
         File oldEncrypted=new File(context.getNoBackupFilesDir(),"encrypted_rolling_history");
         if(oldEncrypted.isDirectory()){
             File[] leftovers=oldEncrypted.listFiles();
+            // A previous session can still be exporting pinned encrypted segments.
+            // Never delete recent ciphertext just because the schedule opened a new window.
+            long cutoff=System.currentTimeMillis()-24L*60*60*1000;
             if(leftovers!=null)for(File file:leftovers)
-                if(file.getName().endsWith(".giz"))file.delete();
+                if(file.getName().endsWith(".giz")&&file.lastModified()<cutoff)
+                    file.delete();
         }
         dir=new File(context.getCacheDir(),"gunizi_rolling_history");
         if(!dir.exists())dir.mkdirs();
