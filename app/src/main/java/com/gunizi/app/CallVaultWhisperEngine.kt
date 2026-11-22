@@ -155,7 +155,7 @@ object CallVaultWhisperEngine {
                     .putInt("analysisNativePercent",100)
                     .putLong("analysisLastAdvanceAt",System.currentTimeMillis()).apply()
                 AiStageMetrics.enter(context,AiStageMetrics.AUDIO_DECODING)
-                progress.update(progressValue(doneMs,totalMs,0),
+                progress.update(progressValue(doneMs,totalMs,0L,0),
                     "Tamamlanan ses bölümü: $index • "+
                         AiProgressStatus.audioLabel(doneMs,totalMs))
             }
