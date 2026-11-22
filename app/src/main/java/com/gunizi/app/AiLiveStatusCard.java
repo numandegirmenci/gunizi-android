@@ -128,10 +128,6 @@ final class AiLiveStatusCard extends LinearLayout {
         detailToggle=action("İşlem ayrıntılarını göster");
         LinearLayout.LayoutParams dlp=new LinearLayout.LayoutParams(-1,dp(42));
         dlp.topMargin=dp(6);addView(detailToggle,dlp);
-        detailToggle.setOnClickListener(v->{
-            showDetails=!showDetails;detailBox.setVisibility(showDetails?VISIBLE:GONE);
-            detailToggle.setText(showDetails?"Ayrıntıları gizle":"İşlem ayrıntılarını göster");
-        });
         detailBox=new LinearLayout(context);detailBox.setOrientation(VERTICAL);
         detailBox.setPadding(dp(12),dp(12),dp(12),dp(4));
         detailBox.setBackground(shape(0xff111b2a));
@@ -149,6 +145,10 @@ final class AiLiveStatusCard extends LinearLayout {
             }
         });
         detailBox.setVisibility(GONE);
+        detailToggle.setOnClickListener(v->{
+            showDetails=!showDetails;detailBox.setVisibility(showDetails?VISIBLE:GONE);
+            detailToggle.setText(showDetails?"Ayrıntıları gizle":"İşlem ayrıntılarını göster");
+        });
         cancel=action("Analizi durdur");
         LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(48));
         cp.topMargin=dp(10);addView(cancel,cp);
