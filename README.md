@@ -2,6 +2,20 @@
 
 **Günİzi**, Android'de geçmişe dönük ses kaydı, mesai kaydı, Türkçe konuşma dökümü ve cihaz içinde yapay zeka destekli özet hazırlama uygulamasıdır. Ses kayıtlarının işlenmesi yerel olarak yapılır; modeller yalnızca kullanıcı isterse indirilir.
 
+## Günİzi v0.15.0 — Daha hızlı kullanılan, daha kompakt arayüz
+
+**Kayıt, Mesai, Yapay Zeka ve Ayarlar** ekranlarındaki gereksiz dikey sıralama azaltıldı. Kayıt süresi için yatay seçim düğmeleri, analiz ve rapor işlemleri için iki sütunlu kısayollar, ikincil ayarlar için katlanabilir bölümler eklendi. Güncelleme kontrolü ilk sırada ve artık bağımsız kurulumlarda da **açılıp kapatılabiliyor**.
+
+- **Kayıt:** Canlı geçmiş ve kaydetme ilk ekranda, zamanlı plan ayrıntıları katlanabilir.
+- **Yapay Zeka:** Konuşma → Metin / Karar ve görevler yan yana, sonuçlar ikincil ayarlardan önce.
+- **Model merkezi:** Öneriler model değiştirmeden önce onay ister; var olan yüksek kaliteli modeller korunur.
+- **Güncelleme:** Bağımsız paketlerde sürüm kontrolü çalışır; farklı imza veya paketli APK'nın yanlışlıkla mevcut kuruluma yüklenmesi engellenir.
+- **İndirme ve kurulum:** [v0.15.0 değişiklik ve uyumluluk notları](release-notes/v0.15.0.md).
+
+**Önemli:** GitHub Actions debug APK'sı `com.gunizi.app.ai11` kimliğiyle ayrı kurulur; önceki uygulama ve kayıtları otomatik taşınmaz. Üretim paketinin mevcut kurulumun üzerine yüklenmesi aynı kalıcı üretim imzasını gerektirir. Android CI testleri gerçek Samsung pil ve ses analiz testini karşılamaz.
+
+---
+
 ## Günİzi v0.14.0 — Zamanlı Geçmiş Dinleme
 
 **Pil kullanımı için yeni özellik:** Kayıt → Zamanlı geçmiş dinleme alanında, Mesai'den bağımsız **günleri, başlangıç ve bitiş saatlerini** belirle. Planı uygulama açıkken etkinleştir. Seçilen saat aralığı dışında mikrofon kaydı ve Opus kodlama durur; saatleri izleyen düşük sıklıklı ön plan hizmeti çalışmaya devam eder.
