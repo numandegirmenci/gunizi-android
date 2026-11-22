@@ -46,6 +46,13 @@ final class UserNotesStore {
         if(!temp.renameTo(target))throw new IOException("Not yazılamadı");
         return id;
     }
+    static void delete(Context c,String id)throws IOException{
+        if(id==null||!id.matches("[0-9]{13}_[0-9a-f]{8}"))
+            throw new IOException("Not kimliği hatalı");
+        File target=new File(notesDir(c),id+".txt");
+        if(!target.exists())throw new IOException("Not bulunamadı");
+        if(!target.delete())throw new IOException("Not silinemedi");
+    }
     static String readNote(Context c,String id)throws IOException{
         if(id==null||!id.matches("[0-9]{13}_[0-9a-f]{8}"))throw new IOException("Not kimliği hatalı");
         File file=new File(notesDir(c),id+".txt");
