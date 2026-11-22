@@ -84,6 +84,7 @@ public final class DailySummaryWorker extends Worker {
             .putLong("analysisStartedAt",0L)
             .putLong("analysisProgressAt",System.currentTimeMillis())
             .putString("analysisPreview","")
+            .putString("analysisSpeechSource","pending")
             .putInt("analysisPartsDone",0).putInt("analysisPartsTotal",0)
             .putString("analysisWorkId",task.getId().toString())
             .putLong("analysisCompletedAt",0)
@@ -155,6 +156,7 @@ public final class DailySummaryWorker extends Worker {
             .putLong("analysisStartedAt",0L).putLong("analysisProgressAt",now)
             .putString("summaryError","").putString("analysisPreview","")
             .putString("analysisTimeline","").putString("analysisLivePath","")
+            .putString("analysisSpeechSource","saved")
             .putString("analysisLiveSourceUri","")
             .putString("analysisWorkId",request.getId().toString())
             .putLong("analysisCompletedAt",0).apply();
@@ -281,6 +283,8 @@ public final class DailySummaryWorker extends Worker {
                     .getBoolean("aiSileroVad",true)?"1":"0")+"_"+sourceHash+".txt");
             String transcript;
             if(useExistingText){
+                c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
+                    .putString("analysisSpeechSource","saved").apply();
                 listener.update(70,"Konuşma metni okunuyor • Whisper tekrar çalıştırılmıyor");
                 String local=getInputData().getString("transcriptPath");
                 String saved=c.getSharedPreferences("gunizi",Context.MODE_PRIVATE)
@@ -296,9 +300,13 @@ public final class DailySummaryWorker extends Worker {
                 if(transcript.trim().isEmpty())throw new IOException("Konuşma dökümü boş");
             }else{
                 if(transcriptCache.isFile()&&transcriptCache.length()>50){
+                    c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
+                        .putString("analysisSpeechSource","cached").apply();
                     transcript=new String(Files.readAllBytes(transcriptCache.toPath()),StandardCharsets.UTF_8);
                     listener.update(70,"Önceki konuşma dökümü bulundu");
                 }else{
+                    c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
+                        .putString("analysisSpeechSource","native").apply();
                     transcript=SpeechEngineRegistry.transcribe(c,Uri.parse(uriString),speech,listener);
                     try(FileOutputStream out=new FileOutputStream(transcriptCache)){
                         out.write(transcript.getBytes(StandardCharsets.UTF_8));out.getFD().sync();
