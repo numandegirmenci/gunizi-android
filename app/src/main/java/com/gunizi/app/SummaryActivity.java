@@ -285,7 +285,9 @@ public final class SummaryActivity extends Activity {
             AiStageMetrics.EXTRACTING.equals(stage)||
             AiStageMetrics.MERGING.equals(stage))&&
             pref.getLong("analysisCompletedAt",0)==0;
-        if(active){
+        if(active&&observedJobState!=WorkInfo.State.FAILED&&
+            observedJobState!=WorkInfo.State.CANCELLED&&
+            observedJobState!=WorkInfo.State.SUCCEEDED){
             Toast.makeText(this,"Mevcut işlem devam ediyor. Canlı durum hemen aşağıda.",
                 Toast.LENGTH_LONG).show();
             showLiveStatus();return;
@@ -397,6 +399,9 @@ public final class SummaryActivity extends Activity {
              AiStageMetrics.LLM_LOADING.equals(activePhase)||
              AiStageMetrics.EXTRACTING.equals(activePhase)||
              AiStageMetrics.MERGING.equals(activePhase));
+        if(observedJobState==WorkInfo.State.FAILED||
+           observedJobState==WorkInfo.State.CANCELLED||
+           observedJobState==WorkInfo.State.SUCCEEDED)isBusy=false;
         if(transcriptActionButton!=null){
             transcriptActionButton.setEnabled(!isBusy);
             transcriptActionButton.setText(isBusy?"Analiz sürüyor • Canlı durumu izle":
