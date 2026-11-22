@@ -20,4 +20,4 @@ jobs:
           test -n "$RUN"
           echo "$RUN"
           CONTENT="$(printf '%s\n' "$RUN" | base64 -w 0)"
-          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/docs/GUNIZI_0131_CI_RUN.txt" -f message="Record Günİzi stabilization CI run for validation" -f content="$CONTENT"
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/docs/GUNIZI_0131_CI_RUN2.txt" -f message="Record Günİzi stabilization CI run for validation" -f content="$CONTENT"
