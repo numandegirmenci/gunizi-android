@@ -246,7 +246,7 @@ public final class MainActivity extends Activity {
         });
         gap(box,9);
         muted(box,"Hizmet etkin kaldığı sürece saatleri takip eder. Sistem hizmeti sonlandırırsa kayıt kendiliğinden yeniden başlayamayabilir.");
-        LinearLayout folder=card("Otomatik kayıt klasörü");
+        LinearLayout folder=accordion("Kayıt klasörü","Mevcut kayıt konumunu incele veya değiştir",false);
         muted(folder,prefs.folder()==null?
             "Klasör seçilmedi. Ayarlar'dan kayıt klasörünü belirle.":
             "Klasör ayarlandı ✓");
@@ -327,26 +327,28 @@ public final class MainActivity extends Activity {
         permissions.addView(label("Mikrofon  "+(mic?"✓":"izin gerekli")+
             "     Bildirim  "+(note?"✓":"izin gerekli"),13,mic&&note?CYAN:MUTED,false));
         gap(permissions,8);
-        Button microphone=button("Mikrofon izni",false);permissions.addView(microphone);
+        Button microphone=button("Mikrofon izni",false);
         microphone.setOnClickListener(v->{
             if(!mic)requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},MIC);
             else toast("Mikrofon izni var.");
         });
         gap(permissions,7);
-        Button notify=button("Bildirim izni",false);permissions.addView(notify);
+        Button notify=button("Bildirim izni",false);
         notify.setOnClickListener(v->{
             if(!note&&Build.VERSION.SDK_INT>=33)
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFY);
             else toast("Bildirim izni var.");
         });
+        pair(permissions,microphone,notify);
         LinearLayout storage=accordion("Depolama ve yedekleme","Kayıt klasörü • Şifreli yedekler",false);
         folderLabel=label(prefs.folder()==null?"Klasör seçilmedi":"Kayıt klasörü seçildi ✓",14,CYAN,true);
         storage.addView(folderLabel);gap(storage,9);
-        Button choose=button("Kayıt klasörünü değiştir",false);storage.addView(choose);
+        Button choose=button("Kayıt klasörü",false);
         choose.setOnClickListener(v->chooseFolder());
         gap(storage,7);
-        Button recover=button("Şifreli yedekleri kurtar",false);storage.addView(recover);
+        Button recover=button("Şifreli yedekler",false);
         recover.setOnClickListener(v->send(RecorderService.ACTION_RECOVER));
+        pair(storage,choose,recover);
         LinearLayout recordingNotice=accordion("Telefon görüşmeleri","Android mikrofon kısıtları ve bilgilendirme",false);
         muted(recordingNotice,"Günİzi normal mikrofon izniyle hücresel aramaların iki tarafını "+
             "güvenilir şekilde kaydedemez. Telefonunun kendi arama kaydı işlevi "+
@@ -367,15 +369,16 @@ public final class MainActivity extends Activity {
             }
         });
         LinearLayout battery=accordion("Pil ve gizlilik","Pil karşılaştırması ve Samsung ayarları",false);
-        Button compare=button("Pil tüketimi karşılaştırması",false);battery.addView(compare);
+        Button compare=button("Pil tüketimi",false);
         compare.setOnClickListener(v->startActivity(new Intent(this,BatteryInfoActivity.class)));
         gap(battery,7);
-        Button optimize=button("Samsung arka plan / pil ayarları",false);battery.addView(optimize);
+        Button optimize=button("Samsung pil ayarları",false);
         optimize.setOnClickListener(v->{
             try{startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));}
             catch(Exception e){startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.parse("package:"+getPackageName())));}
         });
+        pair(battery,compare,optimize);
         LinearLayout about=accordion("Hakkında • İletişim • Lisanslar",
             "Sürüm, geri bildirim ve açık kaynak lisansları",false);
         about.addView(label("Geliştiren: Numan Değirmenci",15,WHITE,true));
