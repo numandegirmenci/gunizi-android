@@ -1,4 +1,4 @@
-# Günİzi Android • v0.8.0 – Yapay Zeka Öncelikli (Deneysel)
+# Günİzi Android • v0.9.0 – Yapay Zeka İş Akışları (Deneysel)
 
 **Durum:** Android debug APK deneysel; gerçek cihazda 9 saatlik yük testi henüz yapılmadı.
 
@@ -12,6 +12,34 @@
 
 
 Günİzi, Türkçe çevrimdışı ses kaydı ve yerel yapay zeka ile günlük rapor amaçlayan Android uygulamasıdır.
+
+## v0.9 • Yapay Zeka alanında anlaşılır çalışma
+
+**Model indirmeleri ve kayıt klasörü artık Ayarlar altında yönetilir.**
+Yapay Zeka sayfası şu iki işlemi açıkça ayırır:
+- **Konuşmayı Yazıya Dök:** yalnızca Whisper gerekir. Qwen3 olmadan da
+  konuşmanın Türkçe metni alınabilir; döküm cihazda gösterilir ve not uygulamasına paylaşılabilir.
+- **Özetle + Ayrıntılı Tablo:** Whisper ve Qwen3 tam olarak kurulmuş olmalı.
+
+**Canlı işlem paneli** seçilen ses kaydını, iş aşamasını, yüzdeyi, son
+okunan/özetlenen parçadan kısa bir metni ve sonunda sonuç düğmelerini gösterir.
+İndirmeler uygulamanın ekranından bağımsız WorkManager foreground görevi
+olarak sürdürülür, indirme ilerlemesi ve sonuçları bildirimde gösterilir.
+
+**Kullanıcı görselindeki sorun:** Whisper hazırdı ama Qwen3 indirmesi %58'deydi.
+Önceki sürüm iki model kurulu değilken yazıya dökmeyi de kilitliyordu.
+Yeni ayrım bunu düzeltir. Bağlantı kesintisinde .part dosyasını kullanarak
+indirmeyi yeniden deneme davranışı da güçlendirilmiştir.
+
+**Güncelleme ve imza:** Son yayımlanmış test GitHub Release v0.8.0.
+v0.9 kaynak kodu/test derlemesi ile kalıcı imzalı yayın aynı şey değildir.
+Aynı sürüm zaten kuruluysa yeni sürüm bildirimi gelmemesi normaldir.
+GitHub Actions'ın debug imzası değişebilir; uygulamayı silmeden üstüne kurma
+yalnızca imzalar uyumlu olduğunda mümkündür. Önce
+[kalıcı imzalama rehberini](docs/UPDATE_SETUP.md) tamamlayın.
+
+[v0.9 sürüm notları](release-notes/v0.9.0.md) •
+[Yapay zeka v0.9 test planı](docs/AI_UX_V09.md)
 
 ## Günİzi Yapay Zeka • v0.8.0
 
