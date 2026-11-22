@@ -61,6 +61,8 @@ jobs:
           GUNIZI_KEY_ALIAS: ${{ secrets.GUNIZI_KEY_ALIAS }}
           GUNIZI_KEY_PASSWORD: ${{ secrets.GUNIZI_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
+      - name: Run local topic report tests
+        run: gradle --no-daemon :app:testDebugUnitTest
       - name: Verify signing and package identity
         run: |
           set -euo pipefail
