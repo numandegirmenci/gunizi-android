@@ -3,79 +3,71 @@ package com.gunizi.app;
 import android.app.Activity;
 import android.os.Bundle;
 import android.os.BatteryManager;
-import android.os.Build;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.widget.*;
-import java.time.LocalTime;
 import java.util.Locale;
 
-/**
- * Explains mode difference without presenting invented battery measurements.
- * Estimation slider is expressly hypothetical and excludes AI processing.
- */
-public final class BatteryInfoActivity extends Activity{
-    private LinearLayout content;
-    private TextView output;
-    private Prefs prefs;
-    private int dp(int n){return (int)(getResources().getDisplayMetrics().density*n);}
-    @Override public void onCreate(Bundle b){
-        super.onCreate(b);prefs=new Prefs(this);
-        ScrollView scroll=new ScrollView(this);scroll.setBackgroundColor(0xff0b1020);
-        content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(22),dp(28),dp(22),dp(28));
-        scroll.addView(content);setContentView(scroll);
-        label("Pil ve Performans",26,true);
-        label("Günİzi'nin iki modunu karşılaştır. Gerçek tüketim için aynı cihazda birkaç günlük test gerekir.",14,false);
-        BatteryManager battery=getSystemService(BatteryManager.class);
-        int pct=battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
-        label("Şu anki telefon pili: "+(pct>=0?pct+"%":"ölçülemiyor"),17,true);
-        int start=prefs.startHour()*60+prefs.startMinute();
-        int stop=prefs.endHour()*60+prefs.endMinute();
-        double work=Math.max(0,(stop-start)/60.0);
-        label("Mesai Kaydı: "+format(work)+" saat/gün",17,true);
-        double selected=prefs.durationMinutes()/60.0;
-        label("İsteğe Bağlı Kayıt: "+format(selected)+" saat (seçili süre)",17,true);
-        label(work>0&&selected>0?"Mesai modu, seçili isteğe bağlı kayıttan "+format(work/selected)+
-            " kat uzun sürer. Bu pil tüketiminin aynı oranda artacağı anlamına gelmez.":
-            "Geçerli mesai aralığı belirlenmedi.",14,false);
-        label("Teorik Opus arşivi (16 kbps)",17,true);
-        label("Mesai: "+format(work*7.2)+" MB · İsteğe Bağlı: "+
-            format(selected*7.2)+" MB (16 kbps Opus)",14,false);
-        label("Yalnızca kayıt başlatıldığında mikrofon çalışır. İsteğe bağlı kayıtta süre dolunca otomatik kapanır.",13,false);
-        label("Örnek pil senaryosu",20,true);
-        label("Aşağıdaki kaydırıcı, uygulamanın gerçek tüketimi değildir. Yalnızca saatlik ek tüketim varsayımının süre farkına etkisini gösterir.",13,false);
-        SeekBar seek=new SeekBar(this);seek.setMax(19);seek.setProgress(7);content.addView(seek);
-        output=label("",17,true);
-        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            @Override public void onProgressChanged(SeekBar bar,int progress,boolean user){
-                update(work,selected,0.1+progress*0.1);
-            }
-            @Override public void onStartTrackingTouch(SeekBar b){}
-            @Override public void onStopTrackingTouch(SeekBar b){}
-        });
-        update(work,selected,0.8);
-        label("Pil maliyeti bileşenleri",20,true);
-        label("1. Mikrofon: açık kaldığı sürece güç kullanır.\n"
-            +"2. Opus sıkıştırması: iki modda da işlemci kullanır.\n"
-            +"3. Şifreleme ve diske yazma: aralıklı ek enerji tüketir.\n"
-            +"4. Yerel konuşma tanıma: işlenirken yüksek işlemci yükü oluşturabilir.\n"
-            +"5. Özet çıkarma: uzun kayıtlar için işlem süresi ve sıcaklık artabilir.\n"
-            +"6. Ekran ve diğer uygulamalar: toplam pil düşüşünü etkiler.",14,false);
-        label("Pil tasarrufu yaklaşımı",20,true);
-        label("Günlük otomatik rapor şarjdayken hazırlanır. İsteğe bağlı kayıt yalnızca sen başlattığında çalışır. "
-            +"Pil koruma ayarları mikrofonun arka planda kesin çalışmasını garanti etmez.",14,false);
+/** Transparent explanation, without fabricated per-hour battery drain. */
+public final class BatteryInfoActivity extends Activity {
+    private static final int BG=0xff090e1b,PANEL=0xff172031,WHITE=0xfff0f7ff,MUTED=0xffa2b4c9;
+    private LinearLayout page;
+    private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
+    private TextView text(LinearLayout parent,String v,int sz,boolean strong){
+        TextView t=new TextView(this);t.setText(v);t.setTextColor(strong?WHITE:MUTED);
+        t.setTextSize(sz);if(strong)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(9);
+        parent.addView(t,p);return t;
     }
-    private String format(double v){return String.format(Locale.forLanguageTag("tr-TR"),"%.1f",v);}
-    private TextView label(String txt,int size,boolean bold){
-        TextView t=new TextView(this);t.setText(txt);
-        t.setTextColor(bold?Color.WHITE:0xffbac8d8);t.setTextSize(size);
-        if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        t.setPadding(0,dp(10),0,dp(10));content.addView(t);return t;
+    private LinearLayout card(String title){
+        LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);
+        c.setPadding(dp(17),dp(16),dp(17),dp(15));
+        GradientDrawable bg=new GradientDrawable();bg.setColor(PANEL);bg.setCornerRadius(dp(16));
+        c.setBackground(bg);
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(12);
+        page.addView(c,p);text(c,title,17,true);return c;
     }
-    private void update(double work,double selected,double rate){
-        output.setText("Varsayım: saatlik %"+format(rate)+" ek pil\n"
-            +"Mesai: %"+format(rate*work)+" · Seçili kayıt: %"+format(rate*selected)+"\n"
-            +"Aradaki fark: "+format(rate*Math.abs(work-selected))+" yüzde puanı (yalnızca örnek)");
+    @Override public void onCreate(Bundle saved){
+        super.onCreate(saved);Prefs pref=new Prefs(this);
+        ScrollView sc=new ScrollView(this);sc.setBackgroundColor(BG);
+        page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(18),dp(22),dp(18),dp(24));sc.addView(page);setContentView(sc);
+        text(page,"Pil ve Performans",24,true);
+        text(page,"Gerçek tüketim, cihazda kullanım testleriyle ölçülür. "+
+            "Burada kesin pil yüzdesi uydurmadan hangi işlemin neden pil harcadığını açıklıyoruz.",14,false);
+        BatteryManager b=getSystemService(BatteryManager.class);
+        int capacity=b.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+        text(page,capacity>=0?"Şu an telefon pili: %"+capacity:
+            "Pil yüzdesi okunamadı",16,true);
+
+        LinearLayout history=card("Geçmiş Kaydı");
+        text(history,"Dinleme açıkken mikrofon ve Opus sıkıştırması devam eder. "+
+            "1 dakika seçmek, mikrofonun yalnızca 1 dakika çalıştığı anlamına gelmez: "+
+            "seçim, geçmişten dışa aktarılacak süredir.",14,false);
+        text(history,"En fazla 6 saatlik geçici ses geçmişi korunur. "+
+            "Dinlemeyi kapatırsan yeni güç tüketimi durur ve kaydedilmemiş geçmiş temizlenir.",13,false);
+
+        LinearLayout work=card("Mesai Kaydı");
+        int start=pref.startHour()*60+pref.startMinute();
+        int end=pref.endHour()*60+pref.endMinute();
+        int mins=Math.max(0,end-start);
+        text(work,"Planlanan günlük süre: "+(mins/60)+" saat "+(mins%60)+" dakika. "+
+            "Telefonun kendi saatine göre çalışır.",14,false);
+        text(work,"Mesai içinde mikrofon kayıt yapar ve Opus dosyasını kaydeder. "+
+            "Kaydetme ve şifreleme de kısa süre işlemci kullanabilir.",13,false);
+
+        LinearLayout ai=card("Yerel Yapay Zeka");
+        text(ai,"Whisper ile uzun konuşma çözümleme ve Qwen3 ile ayrıntılı "+
+            "özetleme yoğun işlemci, RAM ve pil kullanabilir. "+
+            "Özellikle 9 saatlik kayıtlarda şarjdayken çalıştırılmalıdır.",14,false);
+        text(ai,"Otomatik rapor, şarj koşulları uygun olduğunda başlar. "+
+            "Model seçimi, sıcaklık ve konuşma miktarı işlem süresini etkiler.",13,false);
+
+        LinearLayout note=card("Ne kadar pil harcar?");
+        text(note,"Kesin yüzde gösterebilmek için aynı cihazda gerçek ölçüm gerekir. "+
+            "Genel olarak mikrofonun açık kaldığı süre uzadıkça kayıt tüketimi artar; "+
+            "ağır yerel yapay zeka analizi kısa süreli mikrofon kaydından daha yoğun güç kullanabilir.",14,false);
+        text(note,"Bu ekran şimdilik ölçüm sonucu değil, çalışma mantığının açıklamasıdır.",12,false);
     }
 }
