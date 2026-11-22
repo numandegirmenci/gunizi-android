@@ -26,7 +26,9 @@ public final class SummaryActivity extends Activity {
     private RecordingPlayerCard playback;
     private TextView sourceInfo,modelStatus;
     private AiLiveStatusCard liveStatus;
-    private Button transcriptButton,reportButton;
+    private Button transcriptButton,reportButton,transcriptActionButton,summaryActionButton;
+    private ScrollView pageScroll;
+    private long lastSubmitMs;
     private EditText focus;
     private final AtomicBoolean statusRefreshing=new AtomicBoolean(false);
     private volatile WorkInfo.State observedJobState;
@@ -85,14 +87,15 @@ public final class SummaryActivity extends Activity {
     }
     private void render(){
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
+        pageScroll=scroll;
         scroll.setBackgroundColor(BG);
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(16),dp(24),dp(16),dp(30));scroll.addView(root);
         setContentView(scroll);
         TextView eyebrow=text(root,"GÜNİZİ  /  YEREL YAPAY ZEKA",11,true);
         eyebrow.setTextColor(TEAL);eyebrow.setLetterSpacing(0.13f);
-        text(root,"Kaydını analiz et",25,true);
-        text(root,"Ses kaydını seç, metnini çıkar ve istersen kararları özetle.",13,false);
+        text(root,"Ses analizim",22,true);
+        text(root,"Bir kayıt seç, işlemi başlat ve konuşmaları canlı takip et.",12,false);
         LinearLayout privacy=new LinearLayout(this);
         privacy.setOrientation(LinearLayout.HORIZONTAL);
         TextView privacyBadge=text(privacy,"●  ÇEVRİMDIŞI ANALİZ    •    CİHAZ ÜZERİNDE",11,true);
@@ -105,21 +108,56 @@ public final class SummaryActivity extends Activity {
 
         // Primary screen: recording playback and source, rather than model downloads.
         LinearLayout recording=card(root);
-        text(recording,"KAYIT",16,true);
+        text(recording,"SEÇİLİ SES KAYDI",14,true);
+        sourceInfo=text(recording,"Ses kaydını seçerek başla.",13,true);
+        Button choose=button(recording,"Ses kaydı seç veya değiştir",false);
+        choose.setOnClickListener(v->pickSource(null));
+        Button playerToggle=button(recording,"Kaydı dinle ▼",false);
         playback=new RecordingPlayerCard(this);
         recording.addView(playback,new LinearLayout.LayoutParams(-1,-2));
-        sourceInfo=text(recording,"Ses kaydını seçerek başla.",12,false);
-        Button choose=button(recording,"Başka ses kaydı seç",false);
-        choose.setOnClickListener(v->pickSource(null));
+        playback.setVisibility(View.GONE);
+        playerToggle.setOnClickListener(v->{
+            boolean open=playback.getVisibility()!=View.VISIBLE;
+            playback.setVisibility(open?View.VISIBLE:View.GONE);
+            playerToggle.setText(open?"Oynatıcıyı gizle ▲":"Kaydı dinle ▼");
+        });
 
         LinearLayout actions=card(root);
-        text(actions,"NE YAPMAK İSTİYORSUN?",16,true);
-        text(actions,"Konuşmayı metne dönüştür veya konuları ve görevleri çıkar.",12,false);
-        Button transcript=button(actions,"Konuşma metnini çıkar",true);
-        transcript.setOnClickListener(v->startAction(DailySummaryWorker.TRANSCRIPT));
-        Button summary=button(actions,"Özetle • Konu, karar ve görev tablosu",false);
-        summary.setOnClickListener(v->startAction(DailySummaryWorker.REPORT));
-        Button again=button(actions,"Hazır metinden yeni özet oluştur",false);
+        text(actions,"NE YAPILSIN?",15,true);
+        text(actions,"İşlem seçildiğinde canlı durum hemen aşağıda açılır.",12,false);
+        transcriptActionButton=button(actions,"Konuşmayı metne dönüştür",true);
+        transcriptActionButton.setOnClickListener(v->startAction(DailySummaryWorker.TRANSCRIPT));
+        summaryActionButton=button(actions,"Konuş ve görevleri analiz et",false);
+        summaryActionButton.setOnClickListener(v->startAction(DailySummaryWorker.REPORT));
+        liveStatus=new AiLiveStatusCard(this);
+        LinearLayout.LayoutParams statusLp=new LinearLayout.LayoutParams(-1,-2);
+        statusLp.bottomMargin=dp(14);
+        root.addView(liveStatus,statusLp);
+        liveStatus.onOpenContentClick(v->
+            startActivity(new Intent(this,TranscriptActivity.class)));
+        liveStatus.onCancelClick(v->new AlertDialog.Builder(this)
+            .setTitle("Analiz durdurulsun mu?")
+            .setMessage("Kaynak ses kaydı silinmez. Tamamlanan bölümlerin "+
+                "kontrol noktaları korunur.")
+            .setNegativeButton("Vazgeç",null)
+            .setPositiveButton("Durdur",(d,w)->{
+                WorkManager.getInstance(this).cancelAllWorkByTag("gunizi-local-summary");
+                getSharedPreferences(PREF,MODE_PRIVATE).edit()
+                    .putString("analysisPhase",AiStageMetrics.CANCELLED)
+                    .putString("analysisStage","Kullanıcı tarafından iptal edildi")
+                    .putLong("analysisCompletedAt",System.currentTimeMillis()).apply();
+                refreshStatus();
+            }).show());
+
+        Button extraToggle=button(root,"Diğer işlemler ve ayarlar ▼",false);
+        LinearLayout extras=card(root);
+        extras.setVisibility(View.GONE);
+        extraToggle.setOnClickListener(v->{
+            boolean open=extras.getVisibility()!=View.VISIBLE;
+            extras.setVisibility(open?View.VISIBLE:View.GONE);
+            extraToggle.setText(open?"Ek seçenekleri gizle ▲":"Diğer işlemler ve ayarlar ▼");
+        });
+        Button again=button(extras,"Hazır metinden yeni özet oluştur",false);
         again.setOnClickListener(v->{
             saveFocus();
             if(!AiModelStore.ready(this,new Prefs(this).aiModel())){
@@ -146,40 +184,14 @@ public final class SummaryActivity extends Activity {
             }else refreshStatus();
         });
 
-        Button moreOptions=button(actions,"Hız ve alternatif analiz seçenekleri ▼",false);
-        LinearLayout optionsBody=new LinearLayout(this);
-        optionsBody.setOrientation(LinearLayout.VERTICAL);
-        optionsBody.setVisibility(View.GONE);
-        actions.addView(optionsBody);
-        text(optionsBody,"Yerel yapay zeka telefonunun RAM ve işlemcisine göre yavaş çalışabilir. "+
-            "Büyük modeller, uzun kayıtlar ve ısınma süreyi artırabilir.",12,false);
-        text(optionsBody,"Dilersen ses dosyanı başka bir uygulamada açabilirsin. "+
-            "Paylaştığın kayıt, seçtiğin uygulamanın gizlilik kurallarına tabi olur.",12,false);
-        Button external=button(optionsBody,"Ses kaydını başka uygulamada aç",false);
+        text(extras,"Yerel modeller RAM'e ve işlemciye göre yavaş çalışabilir. "+
+            "Özellikle büyük modellerin ilk açılışı uzun sürebilir.",12,false);
+        text(extras,"Ses kaydını başka uygulamada açarsan gizliliği o uygulamanın kuralları belirler.",12,false);
+        Button external=button(extras,"Ses kaydını başka uygulamada aç",false);
         external.setOnClickListener(v->shareSelectedAudio());
-        moreOptions.setOnClickListener(v->{
-            boolean open=optionsBody.getVisibility()!=View.VISIBLE;
-            optionsBody.setVisibility(open?View.VISIBLE:View.GONE);
-            moreOptions.setText(open?"Hız ve alternatif seçenekleri gizle ▲":
-                "Hız ve alternatif analiz seçenekleri ▼");
-        });
-
-        liveStatus=new AiLiveStatusCard(this);
-        LinearLayout.LayoutParams statusLp=new LinearLayout.LayoutParams(-1,-2);
-        statusLp.bottomMargin=dp(14);
-        root.addView(liveStatus,statusLp);
-        liveStatus.onOpenContentClick(v->
-            startActivity(new Intent(this,TranscriptActivity.class)));
-        liveStatus.onCancelClick(v->new AlertDialog.Builder(this)
-            .setTitle("Analiz durdurulsun mu?")
-            .setMessage("Kaynak ses kaydı silinmez. Tamamlanan bölümlerin "+
-                "kontrol noktaları korunur.")
-            .setNegativeButton("Vazgeç",null)
-            .setPositiveButton("Durdur",(d,w)->{
-                WorkManager.getInstance(this).cancelAllWorkByTag("gunizi-local-summary");
-                refreshStatus();
-            }).show());
-
+        Button modelShortcut=button(extras,"Konuşma modelini değiştir",false);
+        modelShortcut.setOnClickListener(v->
+            startActivity(new Intent(this,ModelSettingsActivity.class)));
         LinearLayout result=card(root);
         text(result,"SONUÇLAR",16,true);
         text(result,"Metin ve konu tablosu birbirinden bağımsız kaydedilir.",12,false);
@@ -258,30 +270,51 @@ public final class SummaryActivity extends Activity {
         new AnalysisPreferences(this).focus(focus.getText().toString());
     }
     private void startAction(String mode){
-        saveFocus();
-        boolean whisper=AiModelStore.ready(this,new AnalysisPreferences(this).speechModel());
-        boolean qwen=AiModelStore.ready(this,new Prefs(this).aiModel());
-        if(!whisper){missingModel(true);return;}
-        if(DailySummaryWorker.REPORT.equals(mode)&&!qwen){missingModel(false);return;}
+        // Never defer user feedback until a background preflight finishes.
         if(selectedUri==null){pickSource(mode);return;}
-        final Uri uri=selectedUri;
-        final String name=selectedName;
-        new Thread(()->{
-            try{
-                AiAudioPreflight.Info info=AiAudioPreflight.inspect(this,uri);
-                runOnUiThread(()->{
-                    sourceInfo.setText(info.description());
-                    DailySummaryWorker.queue(this,uri,name,false,mode);
-                    refreshStatus();
-                });
-            }catch(Exception err){
-                runOnUiThread(()->new AlertDialog.Builder(this)
-                    .setTitle("Kayda erişilemiyor")
-                    .setMessage(err.getMessage()+"\nSes kaydını yeniden seçebilirsin.")
-                    .setPositiveButton("Tekrar seç",(d,w)->pickSource(mode))
-                    .setNegativeButton("Vazgeç",null).show());
-            }
-        },"GunIzi-AudioCheck").start();
+        long now=SystemClock.elapsedRealtime();
+        if(now-lastSubmitMs<900)return;
+        SharedPreferences pref=getSharedPreferences(PREF,MODE_PRIVATE);
+        String stage=pref.getString("analysisPhase","");
+        boolean active=(AiStageMetrics.QUEUED.equals(stage)||
+            AiStageMetrics.PREFLIGHT.equals(stage)||
+            AiStageMetrics.MODEL_LOADING.equals(stage)||
+            AiStageMetrics.AUDIO_DECODING.equals(stage)||
+            AiStageMetrics.ASR.equals(stage)||
+            AiStageMetrics.LLM_LOADING.equals(stage)||
+            AiStageMetrics.EXTRACTING.equals(stage)||
+            AiStageMetrics.MERGING.equals(stage))&&
+            pref.getLong("analysisCompletedAt",0)==0;
+        if(active){
+            Toast.makeText(this,"Mevcut işlem devam ediyor. Canlı durum hemen aşağıda.",
+                Toast.LENGTH_LONG).show();
+            showLiveStatus();return;
+        }
+        saveFocus();
+        if(!AiModelStore.ready(this,new AnalysisPreferences(this).speechModel())){
+            missingModel(true);return;
+        }
+        if(DailySummaryWorker.REPORT.equals(mode)&&
+            !AiModelStore.ready(this,new Prefs(this).aiModel())){
+            missingModel(false);return;
+        }
+        lastSubmitMs=now;
+        boolean queued=DailySummaryWorker.queue(this,selectedUri,selectedName,false,mode);
+        if(queued){
+            liveStatus.showPreparing("İşleme alındı • Android analiz görevini başlatıyor");
+            Toast.makeText(this,"Analiz isteği alındı. Aşağıdaki durumdan takip edebilirsin.",
+                Toast.LENGTH_SHORT).show();
+        }else{
+            liveStatus.showPreparing("İşlem başlatılamadı. Model ve kayıt durumunu kontrol et.");
+        }
+        refreshStatus();
+        showLiveStatus();
+    }
+    private void showLiveStatus(){
+        if(pageScroll!=null&&liveStatus!=null){
+            pageScroll.post(()->pageScroll.smoothScrollTo(0,
+                Math.max(0,liveStatus.getTop()-dp(12))));
+        }
     }
     private void missingModel(boolean speech){
         new AlertDialog.Builder(this).setTitle(speech?"Whisper gerekli":"Yerel özet modeli gerekli")
@@ -354,6 +387,27 @@ public final class SummaryActivity extends Activity {
             lastJobPollElapsed=0;
         }
         liveStatus.render(p,observedJobState);
+        String activePhase=p.getString("analysisPhase","");
+        boolean isBusy=p.getLong("analysisCompletedAt",0)==0&&
+            (AiStageMetrics.QUEUED.equals(activePhase)||
+             AiStageMetrics.PREFLIGHT.equals(activePhase)||
+             AiStageMetrics.MODEL_LOADING.equals(activePhase)||
+             AiStageMetrics.AUDIO_DECODING.equals(activePhase)||
+             AiStageMetrics.ASR.equals(activePhase)||
+             AiStageMetrics.LLM_LOADING.equals(activePhase)||
+             AiStageMetrics.EXTRACTING.equals(activePhase)||
+             AiStageMetrics.MERGING.equals(activePhase));
+        if(transcriptActionButton!=null){
+            transcriptActionButton.setEnabled(!isBusy);
+            transcriptActionButton.setText(isBusy?"Analiz sürüyor • Canlı durumu izle":
+                "Konuşmayı metne dönüştür");
+        }
+        if(summaryActionButton!=null){
+            summaryActionButton.setEnabled(!isBusy);
+            summaryActionButton.setText(isBusy?"Devam eden analiz var":
+                "Konuş ve görevleri analiz et");
+        }
+
         String selected=selectedUri==null?null:selectedUri.toString();
         String transcriptUri=p.getString("transcriptSourceUri",null);
         String reportUri=p.getString("lastReportSourceUri",null);
