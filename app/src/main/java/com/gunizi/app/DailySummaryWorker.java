@@ -167,7 +167,7 @@ public final class DailySummaryWorker extends Worker {
     }
     private static File writeInternal(Context c,String source,String transcript)throws Exception{
         File dir=outputDir(c);
-        File dst=new File(dir,safe(source)+"_"+Integer.toHexString(source.hashCode())+".txt");
+        File dst=new File(dir,safe(source)+".txt");
         File tmp=new File(dir,dst.getName()+".tmp");
         try(FileOutputStream out=new FileOutputStream(tmp)){
             out.write(transcript.getBytes(StandardCharsets.UTF_8));out.getFD().sync();
@@ -222,14 +222,27 @@ public final class DailySummaryWorker extends Worker {
                     .putLong("analysisAudioDuration",info.durationMs)
                     .putString("analysisCodec",info.codec).apply();
             }
-            String base=fileName.replaceAll("(?i)\\.(ogg|opus|wav|m4a|mp3|aac)$","");
+            String sourceHash;
+            if(!useExistingText){
+                listener.update(0,"Kaydın benzersiz kimliği hesaplanıyor");
+                sourceHash=SourceFingerprint.of(c,Uri.parse(uriString));
+            }else{
+                sourceHash=c.getSharedPreferences("gunizi",Context.MODE_PRIVATE)
+                    .getString("transcriptSourceDigest","");
+                if(sourceHash.isEmpty())
+                    throw new IOException("Önceki dökümün kaynak kimliği bulunamadı");
+            }
+            String stem=fileName.replaceAll("(?i)\\.(ogg|opus|wav|m4a|mp3|aac)$","");
+            String base=safe(stem)+"_"+sourceHash.substring(0,16)+"_"+
+                getId().toString().replace("-","");
+            c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
+                .putString("analysisSourceDigest",sourceHash).apply();
             File cacheFolder=new File(c.getNoBackupFilesDir(),"ai_drafts");
             cacheFolder.mkdirs();
             File transcriptCache=new File(cacheFolder,
-                safe(base)+"_cvnative_"+speech+"_vad"+
+                safe(stem)+"_native_"+speech+"_vad"+
                 (c.getSharedPreferences("gunizi",Context.MODE_PRIVATE)
-                    .getBoolean("aiSileroVad",true)?"1":"0")+"_"+Integer.toHexString(
-                    (uriString==null?"saved-transcript":uriString).hashCode())+".txt");
+                    .getBoolean("aiSileroVad",true)?"1":"0")+"_"+sourceHash+".txt");
             String transcript;
             if(useExistingText){
                 listener.update(70,"Konuşma metni okunuyor • Whisper tekrar çalıştırılmıyor");
@@ -260,7 +273,8 @@ public final class DailySummaryWorker extends Worker {
                 c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
                     .putString("transcriptInternal",internal.getAbsolutePath())
                     .putString("transcriptSource",fileName)
-                    .putString("transcriptSourceUri",uriString).apply();
+                    .putString("transcriptSourceUri",uriString)
+                    .putString("transcriptSourceDigest",sourceHash).apply();
             }
             Uri folder=new Prefs(c).folder();
             if(folder!=null&&!useExistingText)ExportManager.writeText(c,folder,
@@ -276,7 +290,7 @@ public final class DailySummaryWorker extends Worker {
             }
             String focus=getInputData().getString("analysisFocus");
             if(focus==null||focus.trim().isEmpty())focus=AnalysisPreferences.DEFAULT;
-            listener.update(71,"CallVault llama.cpp ile kararlar ve konular inceleniyor");
+            listener.update(71,"Yerel yapay zeka kararları ve konuları inceliyor");
             String summary=FullDaySummarizer.summarize(c,transcript,focus,language,listener);
             listener.update(99,"Konu tablosu, notlar ve rapor kaydediliyor");
             String report="GÜNİZİ • YEREL YAPAY ZEKA GÜNLÜK RAPORU\n"+
