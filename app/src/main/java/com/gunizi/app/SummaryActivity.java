@@ -146,10 +146,30 @@ public final class SummaryActivity extends Activity {
             }else refreshStatus();
         });
 
+        Button moreOptions=button(actions,"Hız ve alternatif analiz seçenekleri ▼",false);
+        LinearLayout optionsBody=new LinearLayout(this);
+        optionsBody.setOrientation(LinearLayout.VERTICAL);
+        optionsBody.setVisibility(View.GONE);
+        actions.addView(optionsBody);
+        text(optionsBody,"Yerel yapay zeka telefonunun RAM ve işlemcisine göre yavaş çalışabilir. "+
+            "Büyük modeller, uzun kayıtlar ve ısınma süreyi artırabilir.",12,false);
+        text(optionsBody,"Dilersen ses dosyanı başka bir uygulamada açabilirsin. "+
+            "Paylaştığın kayıt, seçtiğin uygulamanın gizlilik kurallarına tabi olur.",12,false);
+        Button external=button(optionsBody,"Ses kaydını başka uygulamada aç",false);
+        external.setOnClickListener(v->shareSelectedAudio());
+        moreOptions.setOnClickListener(v->{
+            boolean open=optionsBody.getVisibility()!=View.VISIBLE;
+            optionsBody.setVisibility(open?View.VISIBLE:View.GONE);
+            moreOptions.setText(open?"Hız ve alternatif seçenekleri gizle ▲":
+                "Hız ve alternatif analiz seçenekleri ▼");
+        });
+
         liveStatus=new AiLiveStatusCard(this);
         LinearLayout.LayoutParams statusLp=new LinearLayout.LayoutParams(-1,-2);
         statusLp.bottomMargin=dp(14);
         root.addView(liveStatus,statusLp);
+        liveStatus.onOpenContentClick(v->
+            startActivity(new Intent(this,TranscriptActivity.class)));
         liveStatus.onCancelClick(v->new AlertDialog.Builder(this)
             .setTitle("Analiz durdurulsun mu?")
             .setMessage("Kaynak ses kaydı silinmez. Tamamlanan bölümlerin "+
@@ -208,6 +228,28 @@ public final class SummaryActivity extends Activity {
         settings.setOnClickListener(v->
             startActivity(new Intent(this,ModelSettingsActivity.class)));
         refreshStatus();
+    }
+    private void shareSelectedAudio(){
+        if(selectedUri==null){
+            Toast.makeText(this,"Önce bir ses kaydı seç.",Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Ses kaydını başka uygulamada aç")
+            .setMessage("Bu işlem ses dosyanı seçeceğin uygulamayla paylaşır. "+
+                "Yerel gizlilik koruması, dış uygulamanın kendi kurallarına bağlıdır. Devam edilsin mi?")
+            .setNegativeButton("Vazgeç",null)
+            .setPositiveButton("Uygulama seç",(dialog,which)->{
+                Intent send=new Intent(Intent.ACTION_SEND);
+                send.setType("audio/*");
+                send.putExtra(Intent.EXTRA_STREAM,selectedUri);
+                send.setClipData(ClipData.newUri(getContentResolver(),
+                    "Günİzi ses kaydı",selectedUri));
+                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                try{startActivity(Intent.createChooser(send,"Ses kaydını paylaş"));}
+                catch(Exception e){Toast.makeText(this,
+                    "Paylaşılacak uygulama bulunamadı.",Toast.LENGTH_LONG).show();}
+            }).show();
     }
     private void saveFocus(){
         new AnalysisPreferences(this).focus(focus.getText().toString());
