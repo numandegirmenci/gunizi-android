@@ -91,12 +91,11 @@ public final class SummaryActivity extends Activity {
         setContentView(scroll);
         TextView eyebrow=text(root,"GÜNİZİ  /  YEREL YAPAY ZEKA",11,true);
         eyebrow.setTextColor(TEAL);eyebrow.setLetterSpacing(0.13f);
-        text(root,"Konuşmalarına anlam kat.",26,true);
-        text(root,"Kaydı dinle, metnini çıkar, kararları ve yapılacakları gör. "+
-            "Sesin ve notların telefonunda kalır.",13,false);
+        text(root,"Kaydını analiz et",25,true);
+        text(root,"Ses kaydını seç, metnini çıkar ve istersen kararları özetle.",13,false);
         LinearLayout privacy=new LinearLayout(this);
         privacy.setOrientation(LinearLayout.HORIZONTAL);
-        TextView privacyBadge=text(privacy,"●  ÇEVRİMDIŞI ANALİZ    •    CALLVAULT MOTORU",11,true);
+        TextView privacyBadge=text(privacy,"●  ÇEVRİMDIŞI ANALİZ    •    CİHAZ ÜZERİNDE",11,true);
         privacyBadge.setTextColor(TEAL);
         privacyBadge.setPadding(dp(10),dp(4),dp(10),dp(4));
         GradientDrawable bgBadge=bg(0xff102e31);
@@ -106,7 +105,7 @@ public final class SummaryActivity extends Activity {
 
         // Primary screen: recording playback and source, rather than model downloads.
         LinearLayout recording=card(root);
-        text(recording,"01   KAYDIN",16,true);
+        text(recording,"KAYIT",16,true);
         playback=new RecordingPlayerCard(this);
         recording.addView(playback,new LinearLayout.LayoutParams(-1,-2));
         sourceInfo=text(recording,"Ses kaydını seçerek başla.",12,false);
@@ -114,7 +113,7 @@ public final class SummaryActivity extends Activity {
         choose.setOnClickListener(v->pickSource(null));
 
         LinearLayout actions=card(root);
-        text(actions,"02   YAPAY ZEKA İŞLEMLERİ",16,true);
+        text(actions,"NE YAPMAK İSTİYORSUN?",16,true);
         text(actions,"Konuşmayı metne dönüştür veya konuları ve görevleri çıkar.",12,false);
         Button transcript=button(actions,"Konuşma metnini çıkar",true);
         transcript.setOnClickListener(v->startAction(DailySummaryWorker.TRANSCRIPT));
@@ -162,7 +161,7 @@ public final class SummaryActivity extends Activity {
             }).show());
 
         LinearLayout result=card(root);
-        text(result,"04   SONUÇLARIN",16,true);
+        text(result,"SONUÇLAR",16,true);
         text(result,"Metin ve konu tablosu birbirinden bağımsız kaydedilir.",12,false);
         LinearLayout tabs=new LinearLayout(this);
         tabs.setOrientation(LinearLayout.HORIZONTAL);
@@ -179,7 +178,7 @@ public final class SummaryActivity extends Activity {
         text(result,"Notlarını düzenleyebilir, onayınla Samsung Notes'a paylaşabilirsin.",12,false);
 
         LinearLayout preferences=card(root);
-        text(preferences,"05   ANALİZ TERCİHİM",16,true);
+        text(preferences,"ANALİZ TERCİHİM",16,true);
         text(preferences,"Örneğin alınan kararlar, sorumlular, mağaza açılışları ve "+
             "bekleyen konular. Bu talimat yalnızca özetleme için kullanılır.",12,false);
         focus=new EditText(this);focus.setText(new AnalysisPreferences(this).focus());
@@ -191,7 +190,7 @@ public final class SummaryActivity extends Activity {
             Toast.makeText(this,"Tercih kaydedildi.",Toast.LENGTH_SHORT).show();});
 
         LinearLayout models=card(root);
-        text(models,"MODEL VE MOTOR DURUMU",16,true);
+        text(models,"KULLANILAN MODELLER",16,true);
         modelStatus=text(models,"Model durumu kontrol ediliyor.",12,false);
         Button settings=button(models,"Model seçimi • Whisper / Gemma / Qwen",false);
         settings.setOnClickListener(v->
@@ -288,7 +287,7 @@ public final class SummaryActivity extends Activity {
             (AiModelStore.ready(this,speech)?"Hazır ✓":"İndirilmeli")+"\n"+
             AiModelStore.label(llm)+": "+
             (AiModelStore.ready(this,llm)?"Hazır ✓":"İndirilmeli")+"\n"+
-            "Motor: CallVault whisper.cpp / llama.cpp • Silero VAD "+
+            "Sessiz bölümleri atlama: "+
             (p.getBoolean("aiSileroVad",true)?"açık":"kapalı");
         if(!text.contentEquals(modelStatus.getText()))
             modelStatus.setText(text);
