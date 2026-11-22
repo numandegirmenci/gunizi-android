@@ -91,8 +91,24 @@ public final class DailySummaryWorker extends Worker {
         LiveTranscriptStore.begin(c,task.getId().toString(),uri.toString());
         // Only one native AI pipeline runs at once: llama.cpp and whisper.cpp share RAM.
         try {
-            WorkManager.getInstance(c).enqueueUniqueWork(
+            Operation operation=WorkManager.getInstance(c).enqueueUniqueWork(
                 "gunizi-single-ai-job",ExistingWorkPolicy.REPLACE,task);
+            operation.getResult().addListener(()->{
+                try{
+                    operation.getResult().get();
+                }catch(Exception queuedError){
+                    android.content.SharedPreferences prefs=c.getSharedPreferences(
+                        "gunizi",Context.MODE_PRIVATE);
+                    if(task.getId().toString().equals(
+                        prefs.getString("analysisWorkId",""))){
+                        prefs.edit().putString("summaryError",
+                            "Android görevi sıraya alamadı: "+queuedError.getClass().getSimpleName())
+                            .putString("analysisStage","İşlem başlatılamadı")
+                            .putString("analysisPhase",AiStageMetrics.ERROR)
+                            .putLong("analysisCompletedAt",System.currentTimeMillis()).apply();
+                    }
+                }
+            },androidx.core.content.ContextCompat.getMainExecutor(c));
             return true;
         }catch(Exception error){
             c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
