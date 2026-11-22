@@ -20,6 +20,8 @@
             </intent-filter>
         </activity>
         <activity android:name=".SummaryActivity" android:exported="false" />
+        <activity android:name=".ModelSettingsActivity" android:exported="false" />
+        <activity android:name=".TranscriptActivity" android:exported="false" />
         <activity android:name=".UpdateActivity" android:exported="false" />
         <activity android:name=".ReportTableActivity" android:exported="false" />
         <activity android:name=".UserNotesActivity" android:exported="false" />

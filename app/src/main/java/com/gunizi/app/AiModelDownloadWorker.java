@@ -16,7 +16,7 @@ public final class AiModelDownloadWorker extends Worker {
     private static final String CHANNEL="gunizi_model_downloads_v1";
     private static final int NOTICE_ID=401;
     private volatile long lastNotice=0;
-    AiModelDownloadWorker(@NonNull Context c,@NonNull WorkerParameters p){super(c,p);}
+    public AiModelDownloadWorker(@NonNull Context c,@NonNull WorkerParameters p){super(c,p);}
 
     static void enqueue(Context c,String model){
         if(!valid(model))throw new IllegalArgumentException("Bilinmeyen model");
@@ -67,8 +67,9 @@ public final class AiModelDownloadWorker extends Worker {
         if(!valid(model))return Result.failure();
         channel();
         String name=label(model);
+        int noticeId=NOTICE_ID+model.hashCode()%31;
         try{
-            setForegroundAsync(new ForegroundInfo(NOTICE_ID,
+            setForegroundAsync(new ForegroundInfo(noticeId,
                 notification("Günİzi • "+name,"İndirme hazırlanıyor",0,true),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)).get();
             if(AiModelStore.ready(c,model)){
@@ -93,11 +94,11 @@ public final class AiModelDownloadWorker extends Worker {
                 if(done||now-lastNotice>1800){
                     lastNotice=now;
                     c.getSystemService(NotificationManager.class)
-                        .notify(NOTICE_ID,notification("Günİzi • "+name,
+                        .notify(noticeId,notification("Günİzi • "+name,
                             message,percent,!done));
                 }
             });
-            c.getSystemService(NotificationManager.class).notify(NOTICE_ID+1,
+            c.getSystemService(NotificationManager.class).notify(noticeId+101,
                 notification(name+" hazır","Artık çevrimdışı kullanılabilir",100,false));
             return Result.success();
         }catch(Exception e){
@@ -109,7 +110,7 @@ public final class AiModelDownloadWorker extends Worker {
                 .putString("error_"+model,reason).apply();
             if(isStopped())return Result.failure();
             if(getRunAttemptCount()<3)return Result.retry();
-            c.getSystemService(NotificationManager.class).notify(NOTICE_ID+2,
+            c.getSystemService(NotificationManager.class).notify(noticeId+201,
                 notification("Günİzi model indirilemedi",
                     name+" • "+reason,0,false));
             return Result.failure();

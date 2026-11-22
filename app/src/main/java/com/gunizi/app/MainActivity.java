@@ -168,16 +168,15 @@ public final class MainActivity extends Activity {
         gap(choose,6);
         muted(choose,"Kaydetmek, dinlemeyi sonlandırmaz. En fazla son 6 saat korunur.");
 
-        LinearLayout folder=card("Kayıt klasörü");
-        folderLabel=label(prefs.folder()==null?"Klasör seçilmedi":"Kayıt klasörü hazır ✓",
-            13,prefs.folder()==null?0xffedb46f:CYAN,true);
-        folder.addView(folderLabel);gap(folder,8);
-        Button pick=button("Klasör seç / değiştir",false);
-        folder.addView(pick);pick.setOnClickListener(v->chooseFolder());
-        gap(folder,4);
-        muted(folder,"Gizlilik: Dinleme sırasında sesler sıkıştırılmış şekilde geçici uygulama "+
-            "bellek alanına yazılır. 'Kaydet' demedikçe seçilen klasöre aktarılmaz. "+
-            "Dinlemeyi durdurunca kaydedilmeyen parçalar silinir.");
+        LinearLayout folder=card("Kayıt dosyalarının konumu");
+        muted(folder,prefs.folder()==null?
+            "Henüz kayıt klasörü seçmedin. Klasörü Ayarlar'dan bir kez belirle.":
+            "Kayıt klasörü hazır ✓  Değiştirmek için Ayarlar'a git.");
+        gap(folder,8);
+        Button pick=button("Ayarlar • Kayıt klasörü",false);
+        folder.addView(pick);pick.setOnClickListener(v->show(3));
+        gap(folder,5);
+        muted(folder,"Dinlemeyi durdurunca kaydedilmeyen geçici sesler temizlenir.");
     }
     private static String formatDuration(int m){
         return m<60?m+" dakikayı":m/60+" saati";
@@ -224,12 +223,13 @@ public final class MainActivity extends Activity {
         });
         gap(box,9);
         muted(box,"Hizmet etkin kaldığı sürece saatleri takip eder. Sistem hizmeti sonlandırırsa kayıt kendiliğinden yeniden başlayamayabilir.");
-        LinearLayout folder=card("Otomatik kayıt dosyaları");
-        folderLabel=label(prefs.folder()==null?"Klasör seçilmedi":"Klasör seçildi ✓",14,
-            prefs.folder()==null?0xffedb46f:CYAN,true);
-        folder.addView(folderLabel);gap(folder,8);
-        Button pick=button("Kayıt klasörünü seç",false);folder.addView(pick);
-        pick.setOnClickListener(v->chooseFolder());
+        LinearLayout folder=card("Otomatik kayıt klasörü");
+        muted(folder,prefs.folder()==null?
+            "Klasör seçilmedi. Ayarlar'dan kayıt klasörünü belirle.":
+            "Klasör ayarlandı ✓");
+        gap(folder,8);
+        Button pick=button("Ayarlar • Klasörü değiştir",false);
+        folder.addView(pick);pick.setOnClickListener(v->show(3));
     }
     private void reportTab(){
         LinearLayout overview=card("Günİzi • Yapay Zeka");
@@ -242,7 +242,7 @@ public final class MainActivity extends Activity {
         overview.addView(label(!err.isEmpty()?"Son rapor hatası: "+err:
             !last.isEmpty()?last:"Henüz rapor oluşturulmadı.",13,err.isEmpty()?CYAN:0xffdf8a7d,false));
         gap(overview,10);
-        Button open=button("Günlük analizi başlat / Tercihler",true);
+        Button open=button("Konuşmayı yazıya dök / Özet ve tablo oluştur",true);
         overview.addView(open);
         open.setOnClickListener(v->startActivity(new Intent(this,SummaryActivity.class)));
         gap(overview,7);
@@ -259,6 +259,13 @@ public final class MainActivity extends Activity {
             +"9 saatlik kayıtların çözülmesi uzun sürebilir ve şarj gerektirebilir.");
     }
     private void settingsTab(){
+        LinearLayout models=card("Yapay zeka modelleri");
+        muted(models,"Whisper ve Qwen3 indirmeleri burada yönetilir. İndirme arka planda ilerler; "+
+            "Yapay Zeka ekranı konuşma çözümleme ve rapor oluşturma içindir.");
+        gap(models,9);
+        Button modelSettings=button("Modelleri seç / İndirme durumunu gör",true);
+        models.addView(modelSettings);
+        modelSettings.setOnClickListener(v->startActivity(new Intent(this,ModelSettingsActivity.class)));
         LinearLayout updates=card("Uygulama güncellemeleri");
         muted(updates,"Yeni sürümleri GitHub Releases üzerinden arka planda kontrol eder. "+
             "Wi-Fi bağlantısında APK'yı indirebilir. Kurulumu her zaman sen onaylarsın.");
