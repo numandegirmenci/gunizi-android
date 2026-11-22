@@ -6,6 +6,8 @@ import android.content.*;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.media.MediaRecorder;
+import android.media.AudioManager;
+import android.media.AudioRecordingConfiguration;
 import android.os.*;
 import android.util.Log;
 import java.io.File;
@@ -47,11 +49,14 @@ public final class RecorderService extends Service {
     private long historyStart=0;
     private long lastHistoryExportAt=0;
     private boolean shutdownAfterExport=false;
+    private boolean wasCallMode=false;
+    private boolean warnedSilenced=false;
 
     private final Runnable monitor=new Runnable(){
         @Override public void run(){
             if(!running)return;
             applySchedule();
+            checkAudioInterruption();
             if(running){
                 getSystemService(NotificationManager.class).notify(ID,notification());
                 handler.postDelayed(this,15000);
@@ -129,6 +134,7 @@ public final class RecorderService extends Service {
             (recording?"Mesai kaydı sürüyor":
             "Saat "+prefs.timeString(true)+"–"+prefs.timeString(false)+" bekleniyor");
         Notification.Builder builder=new Notification.Builder(this,CHANNEL)
+            .setSubText(historyActive?"Durdurmak için Günİzi'yi aç":null)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle(title).setContentText(desc).setContentIntent(open)
             .setOngoing(true).setOnlyAlertOnce(true).setDefaults(0).setShowWhen(false)
@@ -153,6 +159,37 @@ public final class RecorderService extends Service {
             .putExtra(EXTRA_HISTORY_MINUTES,minutes);
         return PendingIntent.getService(this,1000+minutes,action,
             PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+    }
+    /**
+     * Call audio may be silenced by Android even while MediaRecorder continues.
+     * Detect likely interruptions and warn. Never claim to capture the call.
+     */
+    private void checkAudioInterruption(){
+        if(!recording)return;
+        try{
+            AudioManager audio=getSystemService(AudioManager.class);
+            if(audio==null)return;
+            int mode=audio.getMode();
+            boolean inCall=mode==AudioManager.MODE_IN_CALL||
+                mode==AudioManager.MODE_IN_COMMUNICATION;
+            boolean silenced=false;
+            for(AudioRecordingConfiguration config:audio.getActiveRecordingConfigurations()){
+                if(config.isClientSilenced()&&
+                    config.getClientAudioSource()==MediaRecorder.AudioSource.MIC){
+                    silenced=true;break;
+                }
+            }
+            if(inCall&&!wasCallMode)
+                lastEvent="Arama başladı: Android diğer uygulamalara mikrofon sesini vermeyebilir";
+            if(silenced&&!warnedSilenced)
+                lastEvent="Uyarı: Android mikrofon sesini geçici olarak sessize aldı";
+            if(wasCallMode&&!inCall)
+                lastEvent="Arama sona erdi; dinleme devam ediyor. Aradaki ses eksik olabilir";
+            wasCallMode=inCall;
+            warnedSilenced=silenced;
+            if(inCall||silenced)
+                stateText="Dinleme hizmeti açık • Arama sırasında ses eksik olabilir";
+        }catch(Exception ignored){}
     }
     private void applySchedule(){
         if(historyActive){
@@ -241,6 +278,7 @@ public final class RecorderService extends Service {
         if(!historyActive)return;
         finishHistorySegment();
         historyActive=false;recording=false;historyHeldSeconds=0;
+        wasCallMode=false;warnedSilenced=false;
         if(historyStore!=null&&deleteTemporary)historyStore.discard();
         historyStore=null;historyCurrentStart=0;historyStart=0;
         stateText="Geçmiş dinleme durduruldu";
