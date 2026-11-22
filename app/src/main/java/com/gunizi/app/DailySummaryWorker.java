@@ -77,7 +77,8 @@ public final class DailySummaryWorker extends Worker {
             java.io.File drafts=new java.io.File(c.getNoBackupFilesDir(),"ai_drafts");
             drafts.mkdirs();
             java.io.File transcriptCache=new java.io.File(drafts,
-                fileBase.replaceAll("[^a-zA-Z0-9_-]","_")+".txt");
+                fileBase.replaceAll("[^a-zA-Z0-9_-]","_")+
+                    "_"+speech+"_"+Integer.toHexString(address.hashCode())+".txt");
             AiProgress listener=(pct,message)->{
                 setProgressAsync(new Data.Builder().putInt("percent",pct).putString("stage",message).build());
                 if(pct%10==0)c.getSystemService(NotificationManager.class).notify(206,notice(message));

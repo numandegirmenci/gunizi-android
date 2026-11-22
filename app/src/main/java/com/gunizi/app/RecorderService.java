@@ -322,7 +322,7 @@ public final class RecorderService extends Service {
                 android.net.Uri exported=ExportManager.writeFile(
                     getApplicationContext(),prefs.folder(),merged,name,"audio/ogg");
                 lastEvent="Son "+savedSeconds+" saniyelik geçmiş kaydedildi";
-                if(AiModelStore.ready(this,AiModelStore.WHISPER)&&
+                if(AiModelStore.ready(this,new AnalysisPreferences(this).speechModel())&&
                    AiModelStore.ready(this,new Prefs(this).aiModel()))
                     DailySummaryWorker.queue(this,exported,name,true);
                 if(backup!=null)backup.delete();
@@ -367,7 +367,7 @@ public final class RecorderService extends Service {
                 backup=CryptoVault.encrypt(getApplicationContext(),audio);
                 android.net.Uri saved=ExportManager.writeFile(getApplicationContext(),prefs.folder(),
                     audio,audio.getName(),"audio/ogg");
-                if(AiModelStore.ready(this,AiModelStore.WHISPER)&&
+                if(AiModelStore.ready(this,new AnalysisPreferences(this).speechModel())&&
                     AiModelStore.ready(this,new Prefs(this).aiModel()))
                     DailySummaryWorker.queue(this,saved,audio.getName(),true);
                 stateText="Mesai kaydı kaydedildi";lastEvent=audio.getName();
