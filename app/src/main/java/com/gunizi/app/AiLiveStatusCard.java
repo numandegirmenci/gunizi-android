@@ -158,6 +158,7 @@ final class AiLiveStatusCard extends LinearLayout {
 
     void render(SharedPreferences prefs,WorkInfo.State state){
         String phase=prefs.getString("analysisPhase",AiStageMetrics.QUEUED);
+        boolean neverStarted=prefs.getLong("analysisStartedAt",0)==0&&state==null;
         String mode=prefs.getString("analysisMode",DailySummaryWorker.TRANSCRIPT);
         String message=prefs.getString("analysisStage","");
         String error=prefs.getString("summaryError","");
@@ -174,14 +175,16 @@ final class AiLiveStatusCard extends LinearLayout {
         if(stopped){running=false;phase=AiStageMetrics.CANCELLED;}
         if(failed){running=false;phase=AiStageMetrics.ERROR;}
         if(completed&&!failed&&!stopped){running=false;phase=AiStageMetrics.DONE;}
-        final String stageName=AiStageMetrics.displayStage(phase);
+        final String stageName=neverStarted?"Henüz analiz başlatılmadı":
+            AiStageMetrics.displayStage(phase);
         changed(headline,stageName);
-        String display=failed&&!error.isEmpty()?"Hata: "+error:
+        String display=neverStarted?"Kaydını seçip işlemi başlattığında ilerleme burada görünecek.":
+            failed&&!error.isEmpty()?"Hata: "+error:
             stopped?"Kaynak ses korunuyor. İstersen analizi tekrar başlatabilirsin.":
             message.isEmpty()?"Kayıt seçip analiz başlatabilirsin.":message;
         changed(description,display);
         String suffix=DailySummaryWorker.TRANSCRIPT.equals(mode)?" · Yalnızca metin":" · Metin + özet";
-        changed(step,AiProgressStatus.stageNumber(phase,mode));
+        changed(step,neverStarted?"Hazır":AiProgressStatus.stageNumber(phase,mode));
         int percent=prefs.getInt("analysisPercent",0);
         boolean indeterminate=running&&AiProgressStatus.indeterminate(phase);
         progress.setIndeterminate(indeterminate);
@@ -217,13 +220,14 @@ final class AiLiveStatusCard extends LinearLayout {
             AiProgressStatus.partLabel(currentPart,totalParts));
         long audioDone=prefs.getLong("analysisAudioProcessedMs",0),
             audioTotal=prefs.getLong("analysisAudioDuration",0);
-        String audioLabel=summarizing?
+        String audioLabel=neverStarted?"":summarizing?
             "Ses çözümlendi • Şimdi metinden konu ve görevler çıkarılıyor":
             audioTotal>0?
                 "İşlenen ses: "+AiProgressStatus.audioLabel(audioDone,audioTotal)+
                     " • %"+AiProgressStatus.totalPercent(audioDone,audioTotal):
                 "İşlenen ses süresi hazırlanıyor";
         changed(audio,audioLabel);
+        audio.setVisibility(audioLabel.isEmpty()?GONE:VISIBLE);
 
         String excerpt=prefs.getString("analysisPreview","");
         boolean hasPreview=!excerpt.isEmpty();

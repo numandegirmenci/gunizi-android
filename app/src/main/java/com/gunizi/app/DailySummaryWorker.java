@@ -256,7 +256,8 @@ public final class DailySummaryWorker extends Worker {
                 File internal=writeInternal(c,base,transcript);
                 c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
                     .putString("transcriptInternal",internal.getAbsolutePath())
-                    .putString("transcriptSource",fileName).apply();
+                    .putString("transcriptSource",fileName)
+                    .putString("transcriptSourceUri",uriString).apply();
             }
             Uri folder=new Prefs(c).folder();
             if(folder!=null&&!useExistingText)ExportManager.writeText(c,folder,
@@ -283,6 +284,10 @@ public final class DailySummaryWorker extends Worker {
             List<TopicReportRenderer.Entry> topics=TopicReportRenderer.parse(summary);
             String html=TopicReportRenderer.html(topics,fileName);
             TopicReportRenderer.saveInternal(c,html,base);
+            c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
+                .putString("lastReportSourceUri",useExistingText?
+                    c.getSharedPreferences("gunizi",Context.MODE_PRIVATE)
+                        .getString("transcriptSourceUri",""):uriString).apply();
             UserNotesStore.latestReport(c,"Günİzi • "+fileName+" • Günlük özet",
                 "ANALİZ TERCİHİ: "+focus+"\n\n"+TopicReportRenderer.noteText(topics)+
                 "\n\n--- AYRINTILI DEĞERLENDİRME ---\n\n"+summary);

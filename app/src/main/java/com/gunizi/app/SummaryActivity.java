@@ -126,6 +126,19 @@ public final class SummaryActivity extends Activity {
             if(!AiModelStore.ready(this,new Prefs(this).aiModel())){
                 missingModel(false);return;
             }
+            String previousUri=getSharedPreferences(PREF,MODE_PRIVATE)
+                .getString("transcriptSourceUri",null);
+            if(selectedUri!=null&&(previousUri==null||
+                !selectedUri.toString().equals(previousUri))){
+                new AlertDialog.Builder(this)
+                    .setTitle("Bu kayıt için henüz konuşma metni yok")
+                    .setMessage("Önce seçili kaydı yazıya dökmelisin. Başka bir kayda ait "+
+                        "hazır metni yanlışlıkla özetlemeyeceğiz.")
+                    .setNegativeButton("Vazgeç",null)
+                    .setPositiveButton("Metnini çıkar",(d,w)->
+                        startAction(DailySummaryWorker.TRANSCRIPT)).show();
+                return;
+            }
             if(!DailySummaryWorker.queueFromTranscript(this)){
                 new AlertDialog.Builder(this).setTitle("Henüz konuşma metni yok")
                     .setMessage("Önce konuşmayı yazıya dök. Sonrasında ses dosyasını tekrar "+
@@ -285,8 +298,13 @@ public final class SummaryActivity extends Activity {
             lastJobPollElapsed=0;
         }
         liveStatus.render(p,observedJobState);
-        transcriptButton.setEnabled(p.getString("transcriptInternal",null)!=null);
-        reportButton.setEnabled(p.getString("latestHtmlReport",null)!=null);
+        String selected=selectedUri==null?null:selectedUri.toString();
+        String transcriptUri=p.getString("transcriptSourceUri",null);
+        String reportUri=p.getString("lastReportSourceUri",null);
+        transcriptButton.setEnabled(p.getString("transcriptInternal",null)!=null&&
+            (selected==null||selected.equals(transcriptUri)));
+        reportButton.setEnabled(p.getString("latestHtmlReport",null)!=null&&
+            (selected==null||selected.equals(reportUri)));
         long now=android.os.SystemClock.elapsedRealtime();
         if(workId!=null&&now-lastJobPollElapsed>=3500L&&
             statusRefreshing.compareAndSet(false,true)){
