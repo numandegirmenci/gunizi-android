@@ -127,7 +127,7 @@ public final class SummaryActivity extends Activity {
         text(actions,"İşlem seçildiğinde canlı durum hemen aşağıda açılır.",12,false);
         transcriptActionButton=button(actions,"Konuşmayı metne dönüştür",true);
         transcriptActionButton.setOnClickListener(v->startAction(DailySummaryWorker.TRANSCRIPT));
-        summaryActionButton=button(actions,"Konuş ve görevleri analiz et",false);
+        summaryActionButton=button(actions,"Konuları ve görevleri çıkar",false);
         summaryActionButton.setOnClickListener(v->startAction(DailySummaryWorker.REPORT));
         liveStatus=new AiLiveStatusCard(this);
         LinearLayout.LayoutParams statusLp=new LinearLayout.LayoutParams(-1,-2);
@@ -413,7 +413,7 @@ public final class SummaryActivity extends Activity {
         if(summaryActionButton!=null){
             summaryActionButton.setEnabled(!isBusy);
             summaryActionButton.setText(isBusy?"Devam eden analiz var":
-                "Konuş ve görevleri analiz et");
+                "Konuları ve görevleri çıkar");
         }
 
         String selected=selectedUri==null?null:selectedUri.toString();
