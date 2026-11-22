@@ -1,0 +1,59 @@
+name: Publish Günİzi v0.9.1 Side-by-Side Test APK
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v091-beta.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch exact tested build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          REPO="numandegirmenci/gunizi-android"
+          RUN="44974217714"
+          TESTED_SHA="9bae9a6a7fb218cf16dff00e04320928da32a7ad"
+          test "$(gh api "repos/$REPO/actions/runs/$RUN" --jq .conclusion)" = "success"
+          test "$(gh api "repos/$REPO/actions/runs/$RUN" --jq .head_sha)" = "$TESTED_SHA"
+          mkdir -p "$RUNNER_TEMP/gunizi"
+          gh run download "$RUN" --repo "$REPO" --name GunIzi-debug-apk --dir "$RUNNER_TEMP/gunizi"
+          APK="$(find "$RUNNER_TEMP/gunizi" -type f -name '*.apk' | head -n 1)"
+          test -n "$APK" && test -s "$APK"
+          test "$(sha256sum "$APK" | cut -d ' ' -f 1)" = "9075e92b82abd62086ae51a6a9f023b10a37293fbc4a6e06d568eddc963138ac"
+          cp "$APK" GunIzi-Test-v0.9.1.apk
+      - name: Confirm side-by-side Android identity
+        run: |
+          set -euo pipefail
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          test -n "$AAPT"
+          "$AAPT" dump badging GunIzi-Test-v0.9.1.apk | head -n 1 | tee badge.txt
+          grep -F "name='com.gunizi.app.test'" badge.txt
+          grep -F "versionCode='10'" badge.txt
+          grep -F "versionName='0.9.1-test'" badge.txt
+          sha256sum GunIzi-Test-v0.9.1.apk
+      - name: Publish prerelease without affecting production updater
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          REPO="numandegirmenci/gunizi-android"
+          TAG="test-v0.9.1"
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Existing prerelease preserved. Original APK will not be replaced."
+          else
+            gh release create "$TAG" GunIzi-Test-v0.9.1.apk \
+              --repo "$REPO" \
+              --target 9bae9a6a7fb218cf16dff00e04320928da32a7ad \
+              --title "Günİzi Test v0.9.1 • Yan Yana Kurulum" \
+              --prerelease --notes-file release-notes/v0.9.1.md
+          fi
+          gh release view "$TAG" --repo "$REPO" --json url,isPrerelease,assets
