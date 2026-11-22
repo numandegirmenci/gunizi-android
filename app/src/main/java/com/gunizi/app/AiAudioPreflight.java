@@ -22,8 +22,10 @@ final class AiAudioPreflight {
         }
         String description(){
             long sec=Math.max(0,durationMs/1000);
-            return name+" • "+(sec/60)+":"+String.format(java.util.Locale.ROOT,"%02d",sec%60)
-                +" • "+codec;
+            String elapsed=sec>=3600?
+                String.format(java.util.Locale.ROOT,"%02d:%02d:%02d",sec/3600,(sec/60)%60,sec%60):
+                String.format(java.util.Locale.ROOT,"%02d:%02d",sec/60,sec%60);
+            return name+" • "+elapsed+" • "+codec;
         }
     }
     static Info inspect(Context c,Uri uri)throws IOException{

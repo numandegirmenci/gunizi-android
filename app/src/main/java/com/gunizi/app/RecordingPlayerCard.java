@@ -117,6 +117,8 @@ final class RecordingPlayerCard extends LinearLayout {
     }
     private static String time(long milliseconds){
         long sec=Math.max(0,milliseconds/1000);
-        return String.format(Locale.ROOT,"%02d:%02d",sec/60,sec%60);
+        return sec>=3600?
+            String.format(Locale.ROOT,"%02d:%02d:%02d",sec/3600,(sec/60)%60,sec%60):
+            String.format(Locale.ROOT,"%02d:%02d",sec/60,sec%60);
     }
 }
