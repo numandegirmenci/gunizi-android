@@ -2,259 +2,329 @@ package com.gunizi.app;
 
 import android.app.*;
 import android.content.*;
-import android.database.Cursor;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.*;
-import android.provider.OpenableColumns;
 import android.view.*;
 import android.widget.*;
 import androidx.work.*;
-import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Human-readable AI workspace: choose source, transcribe OR summarize, inspect results. */
+/**
+ * AI 2.0: one selected recording, two primary actions, one truthful pipeline card.
+ * Recording storage stays independent of the AI engine.
+ */
 public final class SummaryActivity extends Activity {
-    private static final int PICK=321,BG=0xff090e1b,PANEL=0xff172031,
-        WHITE=0xfff0f7ff,MUTED=0xffa2b4c9,CYAN=0xff38d4ca;
-    private String chosenMode=DailySummaryWorker.REPORT;
-    private ProgressBar progress;
-    private TextView stage,source,progressText,modelState,preview,elapsed;
+    private static final int PICK_SOURCE=321,BG=0xff090e1b,PANEL=0xff172031,
+        WHITE=0xffeef8ff,MUTED=0xffa2b4c9,TEAL=0xff38d4ca;
+    private static final String PREF="gunizi";
+    private Uri selectedUri;
+    private String selectedName="Ses kaydı";
+    private String pendingAction;
+    private RecordingPlayerCard playback;
+    private TextView sourceInfo,stage,preview,progressLabel,elapsed,phaseInfo,modelStatus;
+    private ProgressBar progressBar;
+    private Button cancel,transcriptButton,reportButton;
     private EditText focus;
+    private final AtomicBoolean statusRefreshing=new AtomicBoolean(false);
     private final Handler handler=new Handler(Looper.getMainLooper());
-    private final Runnable tick=new Runnable(){
-        @Override public void run(){refresh();handler.postDelayed(this,1000);}
+    private final Runnable timer=new Runnable(){
+        @Override public void run(){refreshStatus();handler.postDelayed(this,1000);}
     };
     private int dp(int n){return Math.round(getResources().getDisplayMetrics().density*n);}
     private GradientDrawable bg(int color){
-        GradientDrawable b=new GradientDrawable();b.setColor(color);b.setCornerRadius(dp(15));return b;
+        GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(16));return d;
     }
-    private TextView text(LinearLayout root,String txt,int size,boolean strong){
-        TextView v=new TextView(this);v.setText(txt);v.setTextSize(size);
-        v.setTextColor(strong?WHITE:MUTED);
-        if(strong)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(10);
-        root.addView(v,p);return v;
+    private TextView text(LinearLayout container,String content,int size,boolean bold){
+        TextView v=new TextView(this);v.setText(content);v.setTextColor(bold?WHITE:MUTED);
+        v.setTextSize(size);
+        if(bold)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(9);
+        container.addView(v,p);return v;
     }
-    private LinearLayout card(LinearLayout root){
-        LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);
-        c.setPadding(dp(17),dp(17),dp(17),dp(17));c.setBackground(bg(PANEL));
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(13);
-        root.addView(c,p);return c;
+    private LinearLayout card(LinearLayout parent){
+        LinearLayout c=new LinearLayout(this);c.setPadding(dp(15),dp(16),dp(15),dp(14));
+        c.setOrientation(LinearLayout.VERTICAL);c.setBackground(bg(PANEL));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);
+        p.bottomMargin=dp(12);parent.addView(c,p);return c;
     }
-    private Button button(LinearLayout root,String label,boolean primary){
-        Button b=new Button(this);b.setAllCaps(false);b.setText(label);
-        b.setTextSize(15);b.setTextColor(primary?BG:WHITE);
-        b.setBackground(bg(primary?CYAN:0xff2a3b53));
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(51));
-        p.bottomMargin=dp(9);root.addView(b,p);return b;
+    private Button button(LinearLayout parent,String name,boolean primary){
+        Button b=new Button(this);b.setText(name);b.setAllCaps(false);b.setTextSize(14);
+        b.setTextColor(primary?BG:WHITE);
+        b.setBackground(bg(primary?TEAL:0xff29384f));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(52));
+        p.bottomMargin=dp(8);parent.addView(b,p);return b;
     }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
-        if(state!=null)chosenMode=state.getString("chosenMode",DailySummaryWorker.REPORT);
-        build();
+        android.content.SharedPreferences prefs=getSharedPreferences(PREF,MODE_PRIVATE);
+        String prev=prefs.getString("aiSelectedSourceUri",null);
+        if(prev!=null)try{selectedUri=Uri.parse(prev);}catch(Exception ignored){}
+        selectedName=prefs.getString("aiSelectedSourceName","Ses kaydı");
+        render();
+        if(selectedUri!=null)inspectSource(selectedUri,null);
     }
-    @Override protected void onSaveInstanceState(Bundle b){
-        super.onSaveInstanceState(b);b.putString("chosenMode",chosenMode);
-    }
-    private void build(){
-        ScrollView sc=new ScrollView(this);sc.setBackgroundColor(BG);
+    private void render(){
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
+        scroll.setBackgroundColor(BG);
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(17),dp(20),dp(17),dp(24));sc.addView(root);
-        setContentView(sc);
+        root.setPadding(dp(16),dp(22),dp(16),dp(25));scroll.addView(root);
+        setContentView(scroll);
         text(root,"Günİzi • Yapay Zeka",24,true);
-        text(root,"Kaydını seç, ne yapılacağını belirle. İşlem sırasında başka "+
-            "uygulamalara geçebilirsin; ilerleme ve sonuç bildirimde gösterilir.",13,false);
+        text(root,"Tek kayıt, iki işlem. Konuşma metni bir kez çıkarılır; "+
+            "sonra istediğin kadar yeniden özetlenebilir.",13,false);
 
-        LinearLayout analyze=card(root);
-        text(analyze,"1 • Ne yapmak istiyorsun?",18,true);
-        text(analyze,"Konuşmayı Yazıya Dök: yalnızca Whisper gerekir. "+
-            "Özetle + Tablo: Whisper ve Qwen3 gerekir; konu, karar ve görevleri de çıkarır.",13,false);
-        Button transcribe=button(analyze,"Konuşma metnini çıkar",true);
-        transcribe.setOnClickListener(v->choose(DailySummaryWorker.TRANSCRIPT));
-        Button summarize=button(analyze,"Ses kaydını özetle ve tablolaştır",false);
-        summarize.setOnClickListener(v->choose(DailySummaryWorker.REPORT));
-        Button existing=button(analyze,"Çıkarılan konuşma metnini özetle ve tablolaştır",false);
-        existing.setOnClickListener(v->{
-            new AnalysisPreferences(this).focus(focus.getText().toString());
+        // Primary screen: recording playback and source, rather than model downloads.
+        LinearLayout recording=card(root);
+        text(recording,"Seçilen kayıt",17,true);
+        playback=new RecordingPlayerCard(this);
+        recording.addView(playback,new LinearLayout.LayoutParams(-1,-2));
+        sourceInfo=text(recording,"Ses kaydını seçerek başla.",12,false);
+        Button choose=button(recording,"Ses kaydı seç / değiştir",false);
+        choose.setOnClickListener(v->pickSource(null));
+
+        LinearLayout actions=card(root);
+        text(actions,"Ne yapmak istiyorsun?",18,true);
+        Button transcript=button(actions,"Konuşma metnini çıkar",true);
+        transcript.setOnClickListener(v->startAction(DailySummaryWorker.TRANSCRIPT));
+        Button summary=button(actions,"Konuşmayı özetle ve tablolaştır",false);
+        summary.setOnClickListener(v->startAction(DailySummaryWorker.REPORT));
+        Button again=button(actions,"Hazır metinden yeni özet oluştur",false);
+        again.setOnClickListener(v->{
+            saveFocus();
             if(!AiModelStore.ready(this,new Prefs(this).aiModel())){
-                new AlertDialog.Builder(this).setTitle("Qwen3 modeli gerekli")
-                    .setMessage("Metni konu tablosuna çevirmek için Qwen3 modelinin indirilmiş olması gerekiyor.")
-                    .setNegativeButton("Vazgeç",null)
-                    .setPositiveButton("Model ayarları",(d,w2)->
-                        startActivity(new Intent(this,ModelSettingsActivity.class))).show();
-            }else if(!DailySummaryWorker.queueFromTranscript(this)){
-                new AlertDialog.Builder(this).setTitle("Konuşma metni bulunamadı")
-                    .setMessage("Önce 'Konuşma metnini çıkar' ile bir ses kaydını işle. "+
-                        "Daha sonra Whisper'ı tekrar yüklemeden metni özetleyebilirsin.")
-                    .setPositiveButton("Tamam",null).show();
-            }else refresh();
+                missingModel(false);return;
+            }
+            if(!DailySummaryWorker.queueFromTranscript(this)){
+                new AlertDialog.Builder(this).setTitle("Henüz konuşma metni yok")
+                    .setMessage("Önce konuşmayı yazıya dök. Sonrasında ses dosyasını tekrar "+
+                        "çözmeden yeni rapor oluşturabilirsin.")
+                    .setPositiveButton("Anladım",null).show();
+            }else refreshStatus();
         });
 
-        LinearLayout tracker=card(root);
-        text(tracker,"2 • Canlı işlem durumu",18,true);
-        source=text(tracker,"Ses kaydı seçilmedi.",14,true);
-        stage=text(tracker,"Henüz işlem başlatılmadı.",13,false);
-        progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
-        progress.setMax(100);progress.setProgressTintList(
-            android.content.res.ColorStateList.valueOf(CYAN));
-        tracker.addView(progress,new LinearLayout.LayoutParams(-1,dp(12)));
-        progressText=text(tracker,"%0",13,true);
-        elapsed=text(tracker,"Geçen süre: 00:00:00",13,false);
-        text(tracker,"Son okunan / incelenen bölüm",14,true);
-        preview=text(tracker,"Henüz işlenen konuşma yok.",13,false);
-        text(tracker,"Döküm sırasında: ses parçaları çözümlenir. "+
-            "Özet sırasında: konular, kararlar ve görevler çıkarılır. "+
-            "Otomatik mesai raporu şarj koşulunu bekleyebilir.",12,false);
-        Button refresh=button(tracker,"Durumu yenile",false);
-        refresh.setOnClickListener(v->refresh());
-        Button cancel=button(tracker,"Çalışan analizi durdur",false);
+        LinearLayout tracking=card(root);
+        text(tracking,"İşlem durumu",18,true);
+        stage=text(tracking,"Henüz analiz başlatılmadı.",15,true);
+        phaseInfo=text(tracking,"İşlem aşaması ve kaynak bilgisi burada görünür.",12,false);
+        progressBar=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
+        progressBar.setMax(100);
+        progressBar.setProgressTintList(android.content.res.ColorStateList.valueOf(TEAL));
+        tracking.addView(progressBar,new LinearLayout.LayoutParams(-1,dp(10)));
+        LinearLayout metrics=new LinearLayout(this);metrics.setOrientation(LinearLayout.HORIZONTAL);
+        progressLabel=text(metrics,"Başlamadı",12,true);
+        elapsed=text(metrics,"00:00:00",12,true);
+        LinearLayout.LayoutParams l=new LinearLayout.LayoutParams(0,-2,1);
+        progressLabel.setLayoutParams(l);
+        elapsed.setGravity(Gravity.END);metrics.addView(new android.view.View(this),
+            new LinearLayout.LayoutParams(0,1,0));
+        tracking.addView(metrics);
+        text(tracking,"Son çıkarılan konuşma / konu",13,true);
+        preview=text(tracking,"Henüz konuşma çözümlenmedi.",13,false);
+        preview.setMaxLines(4);
+        cancel=button(tracking,"Analizi durdur",false);
         cancel.setOnClickListener(v->new AlertDialog.Builder(this)
             .setTitle("Analiz durdurulsun mu?")
-            .setMessage("Ses dosyası korunur. Tamamlanan işlem parçaları, mümkün olduğunda yeniden kullanılır.")
+            .setMessage("Kaynak ses korunur. Tamamlanmış parçalar mümkün olduğunda kullanılabilir.")
             .setNegativeButton("Vazgeç",null)
             .setPositiveButton("Durdur",(d,w)->{
                 WorkManager.getInstance(this).cancelAllWorkByTag("gunizi-local-summary");
-                stage.setText("İptal istendi; ses dosyası korunuyor.");
+                stage.setText("İptal istendi");
             }).show());
 
-        LinearLayout results=card(root);
-        text(results,"3 • Sonuçlar",18,true);
-        Button transcript=button(results,"Konuşma dökümünü görüntüle",false);
-        transcript.setOnClickListener(v->startActivity(new Intent(this,TranscriptActivity.class)));
-        Button topics=button(results,"Konular • Kararlar • Görevler",false);
-        topics.setOnClickListener(v->startActivity(new Intent(this,ReportTableActivity.class)));
-        Button notes=button(results,"Notlarıma ekle / Samsung Notes ile paylaş",false);
+        LinearLayout result=card(root);
+        text(result,"Sonuçlar",18,true);
+        transcriptButton=button(result,"Konuşma metni • Görüntüle",false);
+        transcriptButton.setOnClickListener(v->startActivity(new Intent(this,TranscriptActivity.class)));
+        reportButton=button(result,"Konu tablosu • Kararlar ve görevler",false);
+        reportButton.setOnClickListener(v->startActivity(new Intent(this,ReportTableActivity.class)));
+        Button notes=button(result,"Notlarıma ekle / Samsung Notes",false);
         notes.setOnClickListener(v->{
             Intent i=new Intent(this,UserNotesActivity.class);
             i.putExtra("openLatestReport",true);startActivity(i);
         });
 
-        LinearLayout instructions=card(root);
-        text(instructions,"4 • Özetlemede neye odaklanayım?",17,true);
-        text(instructions,"Yalnızca özet ve tablo oluştururken uygulanır. "+
-            "Konuşmayı yazıya dökme işlemi için değişiklik yapman gerekmez.",13,false);
-        focus=new EditText(this);
-        focus.setText(new AnalysisPreferences(this).focus());
+        LinearLayout preferences=card(root);
+        text(preferences,"Özetleme tercihim",17,true);
+        text(preferences,"Örneğin alınan kararlar, sorumlular, mağaza açılışları ve "+
+            "bekleyen konular. Bu talimat yalnızca özetleme için kullanılır.",12,false);
+        focus=new EditText(this);focus.setText(new AnalysisPreferences(this).focus());
         focus.setTextColor(WHITE);focus.setHintTextColor(MUTED);
-        focus.setTextSize(14);focus.setMinLines(3);focus.setMaxLines(8);
-        focus.setHint("Örnek: Ruhsat görüşmeleri, son tarihler, sorumlular ve bekleyen işler…");
-        instructions.addView(focus);
-        Button save=button(instructions,"Analiz tercihini kaydet",false);
-        save.setOnClickListener(v->{
-            new AnalysisPreferences(this).focus(focus.getText().toString());
-            Toast.makeText(this,"Analiz tercihi kaydedildi.",Toast.LENGTH_SHORT).show();
-        });
+        focus.setTextSize(14);focus.setMinLines(2);focus.setMaxLines(7);
+        preferences.addView(focus);
+        Button save=button(preferences,"Tercihimi kaydet",false);
+        save.setOnClickListener(v->{saveFocus();
+            Toast.makeText(this,"Tercih kaydedildi.",Toast.LENGTH_SHORT).show();});
 
         LinearLayout models=card(root);
-        text(models,"Model ve indirme ayarları",17,true);
-        modelState=text(models,"Model durumları kontrol ediliyor…",13,false);
-        Button settings=button(models,"Ayarlar • Yapay Zeka Modelleri",false);
-        settings.setOnClickListener(v->startActivity(new Intent(this,ModelSettingsActivity.class)));
-        text(models,"Model indirmek ayrı bir işlemdir. İndirme, konuşma "+
-            "çözümleme veya günlük özetleme anlamına gelmez.",12,false);
-        refresh();
+        text(models,"Cihazdaki modeller",17,true);
+        modelStatus=text(models,"Model durumu kontrol ediliyor.",12,false);
+        Button settings=button(models,"Ayarlar • Whisper ve Qwen3",false);
+        settings.setOnClickListener(v->
+            startActivity(new Intent(this,ModelSettingsActivity.class)));
+        refreshStatus();
     }
-    private void choose(String mode){
-        chosenMode=mode;
+    private void saveFocus(){
         new AnalysisPreferences(this).focus(focus.getText().toString());
+    }
+    private void startAction(String mode){
+        saveFocus();
         boolean whisper=AiModelStore.ready(this,new AnalysisPreferences(this).speechModel());
         boolean qwen=AiModelStore.ready(this,new Prefs(this).aiModel());
-        if(!whisper||(DailySummaryWorker.REPORT.equals(mode)&&!qwen)){
-            new AlertDialog.Builder(this).setTitle("Model kurulumu gerekli")
-                .setMessage(!whisper?"Önce Whisper konuşma modelini kur.":
-                    "Konuşmayı yazıya dökmek için Whisper hazır. Ancak özet ve konu tablosu için Qwen3 de tam olarak indirilip doğrulanmalı.")
-                .setNegativeButton("Vazgeç",null)
-                .setPositiveButton("Model ayarlarını aç",(d,w)->
-                    startActivity(new Intent(this,ModelSettingsActivity.class))).show();
-            return;
-        }
-        Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType("audio/*");
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|
+        if(!whisper){missingModel(true);return;}
+        if(DailySummaryWorker.REPORT.equals(mode)&&!qwen){missingModel(false);return;}
+        if(selectedUri==null){pickSource(mode);return;}
+        final Uri uri=selectedUri;
+        final String name=selectedName;
+        new Thread(()->{
+            try{
+                AiAudioPreflight.Info info=AiAudioPreflight.inspect(this,uri);
+                runOnUiThread(()->{
+                    sourceInfo.setText(info.description());
+                    DailySummaryWorker.queue(this,uri,name,false,mode);
+                    refreshStatus();
+                });
+            }catch(Exception err){
+                runOnUiThread(()->new AlertDialog.Builder(this)
+                    .setTitle("Kayda erişilemiyor")
+                    .setMessage(err.getMessage()+"\nSes kaydını yeniden seçebilirsin.")
+                    .setPositiveButton("Tekrar seç",(d,w)->pickSource(mode))
+                    .setNegativeButton("Vazgeç",null).show());
+            }
+        },"GunIzi-AudioCheck").start();
+    }
+    private void missingModel(boolean speech){
+        new AlertDialog.Builder(this).setTitle(speech?"Whisper gerekli":"Qwen3 gerekli")
+            .setMessage(speech?"Konuşma metni için Whisper modelini indir.":
+                "Konuşma metni yalnızca Whisper ile çıkarılır; ancak "+
+                "konu/karar tablosu için Qwen3 modelinin kurulması gerekir.")
+            .setNegativeButton("Vazgeç",null)
+            .setPositiveButton("Model ayarları",(d,w)->
+                startActivity(new Intent(this,ModelSettingsActivity.class))).show();
+    }
+    private void pickSource(String action){
+        pendingAction=action;
+        Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("audio/*");
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|
             Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-        startActivityForResult(intent,PICK);
+        startActivityForResult(i,PICK_SOURCE);
     }
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);
-        if(request!=PICK||result!=RESULT_OK||data==null||data.getData()==null)return;
+        if(request!=PICK_SOURCE||result!=RESULT_OK||data==null||data.getData()==null)return;
         Uri uri=data.getData();
         try{getContentResolver().takePersistableUriPermission(uri,
             Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}
-        String name="Ses_Kaydi.ogg";
-        try(Cursor c=getContentResolver().query(uri,new String[]{OpenableColumns.DISPLAY_NAME},
-            null,null,null)){
-            if(c!=null&&c.moveToFirst())name=c.getString(0);
-        }catch(Exception ignored){}
-        DailySummaryWorker.queue(this,uri,name,false,chosenMode);
-        refresh();
+        selectedUri=uri;
+        String action=pendingAction;pendingAction=null;
+        inspectSource(uri,action);
     }
-    private void refresh(){
-        if(modelState==null)return;
-        String speech=new AnalysisPreferences(this).speechModel();
-        String qwen=new Prefs(this).aiModel();
-        modelState.setText("Whisper: "+(AiModelStore.ready(this,speech)?"Hazır ✓":"Eksik")+
-            "    •    Qwen3: "+(AiModelStore.ready(this,qwen)?"Hazır ✓":"Eksik"));
-        android.content.SharedPreferences p=getSharedPreferences("gunizi",MODE_PRIVATE);
-        String filename=p.getString("analysisSource","");
-        String phase=p.getString("analysisStage","");
-        String error=p.getString("summaryError","");
-        int percent=p.getInt("analysisPercent",0);
-        source.setText(filename.isEmpty()?"Henüz ses kaydı seçilmedi.":"Kaynak: "+filename);
-        stage.setText(!error.isEmpty()?"Son hata: "+error:phase.isEmpty()?
-            "İşlem başlatmak için yukarıdan bir seçenek seç.":phase);
-        progress.setProgress(percent);
-        progressText.setText("%"+percent);
-        long started=p.getLong("analysisStartedAt",0);
-        long completed=p.getLong("analysisCompletedAt",0);
-        if(started>0){
-            long secs=Math.max(0,((completed>0?completed:System.currentTimeMillis())-started)/1000);
-            elapsed.setText("Geçen süre: "+String.format(java.util.Locale.ROOT,
-                "%02d:%02d:%02d",secs/3600,(secs/60)%60,secs%60));
-            long last=p.getLong("analysisProgressAt",0);
-            boolean loading=phase.contains("model")||phase.contains("Model");
-            if(loading&&last>0&&System.currentTimeMillis()-last>90000){
-                stage.setText(phase+"\nModel açılışı beklenenden uzun sürdü. "+
-                    "Bellek veya işlemci sınırı olabilir. İlerleme başlamazsa "+
-                    "işlemi durdurup Whisper small ile dene.");
-            }
-        }else elapsed.setText("Geçen süre: 00:00:00");
-        String excerpt=p.getString("analysisPreview","");
-        preview.setText(excerpt.isEmpty()?"Analiz başladığında burada kaynak metin ve konu açıklaması görünecek.":excerpt);
-        String workId=p.getString("analysisWorkId",null);
-        if(workId!=null)new Thread(()->{
+    private void inspectSource(Uri uri,String action){
+        sourceInfo.setText("Ses dosyası kontrol ediliyor…");
+        new Thread(()->{
             try{
-                WorkInfo job=WorkManager.getInstance(this)
-                    .getWorkInfoById(java.util.UUID.fromString(workId)).get();
-                if(job==null)return;
+                AiAudioPreflight.Info info=AiAudioPreflight.inspect(this,uri);
                 runOnUiThread(()->{
-                    if(isFinishing()||isDestroyed()||stage==null)return;
-                    if(job.getState()==WorkInfo.State.ENQUEUED){
-                        stage.setText("İşlem sırada • Android görev/pil koşulları bekleniyor");
-                    }else if(job.getState()==WorkInfo.State.RUNNING){
-                        String current=job.getProgress().getString("stage");
-                        if(current!=null&&!current.isEmpty()&&
-                            !stage.getText().toString().contains("beklenenden uzun"))
-                            stage.setText(current);
-                        int value=job.getProgress().getInt("percent",percent);
-                        progress.setProgress(value);progressText.setText("%"+value);
-                    }else if(job.getState()==WorkInfo.State.FAILED){
-                        String why=getSharedPreferences("gunizi",MODE_PRIVATE)
-                            .getString("summaryError","");
-                        stage.setText(why.isEmpty()?
-                            "İşlem başarısız oldu. Android görevi durdurmuş olabilir. "+
-                            "Whisper base veya small ile tekrar dene.":"Hata: "+why);
-                    }else if(job.getState()==WorkInfo.State.CANCELLED){
-                        stage.setText("Analiz iptal edildi. Kaynak ses korunuyor.");
-                    }else if(job.getState()==WorkInfo.State.SUCCEEDED){
-                        stage.setText(getSharedPreferences("gunizi",MODE_PRIVATE)
-                            .getString("analysisStage","Tamamlandı"));
-                        progress.setProgress(100);progressText.setText("%100");
-                    }
+                    if(isFinishing()||isDestroyed())return;
+                    selectedName=info.name;selectedUri=uri;
+                    getSharedPreferences(PREF,MODE_PRIVATE).edit()
+                        .putString("aiSelectedSourceUri",uri.toString())
+                        .putString("aiSelectedSourceName",info.name).apply();
+                    playback.setSource(uri,info);
+                    sourceInfo.setText(info.description());
+                    if(action!=null)startAction(action);
                 });
-            }catch(Exception ignored){}
-        },"GunIzi-AIWorkStatus").start();
+            }catch(Exception e){
+                runOnUiThread(()->{
+                    sourceInfo.setText("Ses dosyası açılamadı: "+e.getMessage());
+                    if(action!=null)new AlertDialog.Builder(this)
+                        .setTitle("Ses dosyası okunamadı")
+                        .setMessage(e.getMessage()).setPositiveButton("Tamam",null).show();
+                });
+            }
+        },"GunIzi-SourcePreflight").start();
     }
-    @Override protected void onResume(){super.onResume();handler.post(tick);}
-    @Override protected void onPause(){handler.removeCallbacks(tick);super.onPause();}
+    private void refreshStatus(){
+        if(stage==null)return;
+        android.content.SharedPreferences p=getSharedPreferences(PREF,MODE_PRIVATE);
+        String speech=new AnalysisPreferences(this).speechModel(),qwen=new Prefs(this).aiModel();
+        modelStatus.setText("Whisper: "+(AiModelStore.ready(this,speech)?"Hazır ✓":"İndirilmeli")+
+            "  •  Qwen3: "+(AiModelStore.ready(this,qwen)?"Hazır ✓":"İndirilmeli"));
+        String stageKey=AiStageMetrics.stage(this);
+        String current=p.getString("analysisStage","");
+        String error=p.getString("summaryError","");
+        String filename=p.getString("analysisSource","");
+        boolean running=p.getLong("analysisStartedAt",0)>p.getLong("analysisCompletedAt",0);
+        stage.setText(!error.isEmpty()?"İşlem başarısız":current.isEmpty()?
+            "Henüz işlem başlatılmadı":current);
+        String phaseText=AiStageMetrics.displayStage(stageKey);
+        phaseInfo.setText(phaseText+(filename.isEmpty()?"":"  •  "+filename));
+        int percent=p.getInt("analysisPercent",0);
+        boolean loading=AiStageMetrics.MODEL_LOADING.equals(stageKey)||
+            AiStageMetrics.LLM_LOADING.equals(stageKey);
+        if(loading&&running){
+            progressBar.setIndeterminate(true);
+            progressLabel.setText("Model hazırlanıyor • Yüzde hesaplanamıyor");
+        }else{
+            progressBar.setIndeterminate(false);progressBar.setProgress(percent);
+            progressLabel.setText(running?"%"+percent+" işlendi":percent==100?"Tamamlandı":
+                error.isEmpty()?"Bekliyor":"Başarısız");
+        }
+        long started=p.getLong("analysisStartedAt",0),completed=p.getLong("analysisCompletedAt",0);
+        long seconds=started<=0?0:Math.max(0,((completed>0?completed:
+            System.currentTimeMillis())-started)/1000);
+        elapsed.setText(String.format(Locale.ROOT,"%02d:%02d:%02d",
+            seconds/3600,(seconds/60)%60,seconds%60));
+        long loadingFor=AiStageMetrics.stageMs(this);
+        if(loading&&running&&loadingFor>90000)
+            phaseInfo.setText(phaseText+" • "+AiStageMetrics.displayTime(loadingFor)+
+                " • Uzun sürüyor; model uyumluluğu veya bellek sorunu olabilir.");
+        preview.setText(p.getString("analysisPreview","").isEmpty()?
+            "Konuşmalar işlendikçe burada kısa bir bölüm görünecek.":
+            p.getString("analysisPreview",""));
+        transcriptButton.setEnabled(p.getString("transcriptInternal",null)!=null);
+        reportButton.setEnabled(p.getString("latestHtmlReport",null)!=null);
+        String job=p.getString("analysisWorkId",null);
+        if(job!=null&&statusRefreshing.compareAndSet(false,true)){
+            new Thread(()->{
+                try{
+                    WorkInfo info=WorkManager.getInstance(this)
+                        .getWorkInfoById(java.util.UUID.fromString(job)).get();
+                    if(info!=null)runOnUiThread(()->{
+                        if(isFinishing()||isDestroyed())return;
+                        String now=getSharedPreferences(PREF,MODE_PRIVATE)
+                            .getString("analysisWorkId","");
+                        if(!job.equals(now))return;
+                        if(info.getState()==WorkInfo.State.ENQUEUED)
+                            stage.setText("İşlem sırada • Android koşulları bekleniyor");
+                        else if(info.getState()==WorkInfo.State.FAILED)
+                            stage.setText("Analiz başarısız • Ayrıntıları kontrol et");
+                        else if(info.getState()==WorkInfo.State.CANCELLED)
+                            stage.setText("İşlem iptal edildi");
+                        else if(info.getState()==WorkInfo.State.SUCCEEDED)
+                            stage.setText("İşlem tamamlandı");
+                        cancel.setEnabled(info.getState()==WorkInfo.State.RUNNING||
+                            info.getState()==WorkInfo.State.ENQUEUED);
+                    });
+                }catch(Exception ignored){}
+                finally{statusRefreshing.set(false);}
+            },"GunIzi-JobStatus").start();
+        }
+    }
+    @Override protected void onResume(){
+        super.onResume();handler.removeCallbacks(timer);handler.post(timer);
+    }
+    @Override protected void onPause(){
+        handler.removeCallbacks(timer);
+        if(playback!=null)playback.release();
+        super.onPause();
+    }
+    @Override protected void onDestroy(){
+        handler.removeCallbacks(timer);
+        if(playback!=null)playback.release();
+        super.onDestroy();
+    }
 }
