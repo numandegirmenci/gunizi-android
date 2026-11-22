@@ -73,8 +73,16 @@ public final class SummaryActivity extends Activity {
         b.setElevation(primary?dp(2):0);
         b.setTextColor(primary?BG:WHITE);
         b.setBackground(bg(primary?TEAL:0xff29384f));
+        b.setGravity(Gravity.CENTER);b.setMaxLines(2);b.setPadding(dp(7),dp(3),dp(7),dp(3));
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(52));
         p.bottomMargin=dp(8);parent.addView(b,p);return b;
+    }
+    private void buttonPair(LinearLayout parent,Button first,Button second){
+        LinearLayout.LayoutParams l=new LinearLayout.LayoutParams(0,dp(62),1);
+        l.rightMargin=dp(8);
+        first.setLayoutParams(l);
+        second.setLayoutParams(new LinearLayout.LayoutParams(0,dp(62),1));
+        first.setTextSize(13);second.setTextSize(13);
     }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
@@ -95,7 +103,7 @@ public final class SummaryActivity extends Activity {
         TextView eyebrow=text(root,"GÜNİZİ  /  YEREL YAPAY ZEKA",11,true);
         eyebrow.setTextColor(TEAL);eyebrow.setLetterSpacing(0.13f);
         text(root,"Ses analizim",22,true);
-        text(root,"Bir kayıt seç, işlemi başlat ve konuşmaları canlı takip et.",12,false);
+        text(root,"Kayıt seç  •  Analiz et  •  Canlı takip",12,false);
         LinearLayout privacy=new LinearLayout(this);
         privacy.setOrientation(LinearLayout.HORIZONTAL);
         TextView privacyBadge=text(privacy,"●  ÇEVRİMDIŞI ANALİZ    •    CİHAZ ÜZERİNDE",11,true);
@@ -110,25 +118,32 @@ public final class SummaryActivity extends Activity {
         LinearLayout recording=card(root);
         text(recording,"SEÇİLİ SES KAYDI",14,true);
         sourceInfo=text(recording,"Ses kaydını seçerek başla.",13,true);
-        Button choose=button(recording,"Ses kaydı seç veya değiştir",false);
+        LinearLayout sourceButtons=new LinearLayout(this);
+        sourceButtons.setOrientation(LinearLayout.HORIZONTAL);
+        recording.addView(sourceButtons,new LinearLayout.LayoutParams(-1,-2));
+        Button choose=button(sourceButtons,"Ses kaydı seç",true);
         choose.setOnClickListener(v->pickSource(null));
-        Button playerToggle=button(recording,"Kaydı dinle ▼",false);
+        Button playerToggle=button(sourceButtons,"Kaydı dinle ▾",false);
+        buttonPair(sourceButtons,choose,playerToggle);
         playback=new RecordingPlayerCard(this);
         recording.addView(playback,new LinearLayout.LayoutParams(-1,-2));
         playback.setVisibility(View.GONE);
         playerToggle.setOnClickListener(v->{
             boolean open=playback.getVisibility()!=View.VISIBLE;
             playback.setVisibility(open?View.VISIBLE:View.GONE);
-            playerToggle.setText(open?"Oynatıcıyı gizle ▲":"Kaydı dinle ▼");
+            playerToggle.setText(open?"Oynatıcıyı gizle ▴":"Kaydı dinle ▾");
         });
 
         LinearLayout actions=card(root);
-        text(actions,"NE YAPILSIN?",15,true);
-        text(actions,"İşlem seçildiğinde canlı durum hemen aşağıda açılır.",12,false);
-        transcriptActionButton=button(actions,"Konuşmayı metne dönüştür",true);
+        text(actions,"İŞLEM BAŞLAT",15,true);
+        LinearLayout operations=new LinearLayout(this);
+        operations.setOrientation(LinearLayout.HORIZONTAL);
+        actions.addView(operations,new LinearLayout.LayoutParams(-1,-2));
+        transcriptActionButton=button(operations,"Konuşma → Metin",true);
         transcriptActionButton.setOnClickListener(v->startAction(DailySummaryWorker.TRANSCRIPT));
-        summaryActionButton=button(actions,"Konuları ve görevleri çıkar",false);
+        summaryActionButton=button(operations,"Karar ve görevler",false);
         summaryActionButton.setOnClickListener(v->startAction(DailySummaryWorker.REPORT));
+        buttonPair(operations,transcriptActionButton,summaryActionButton);
         liveStatus=new AiLiveStatusCard(this);
         LinearLayout.LayoutParams statusLp=new LinearLayout.LayoutParams(-1,-2);
         statusLp.bottomMargin=dp(14);
@@ -148,6 +163,26 @@ public final class SummaryActivity extends Activity {
                     .putLong("analysisCompletedAt",System.currentTimeMillis()).apply();
                 refreshStatus();
             }).show());
+
+        LinearLayout result=card(root);
+        text(result,"SONUÇLAR",16,true);
+        text(result,"Metin ve konu tablosu birbirinden bağımsız kaydedilir.",12,false);
+        LinearLayout tabs=new LinearLayout(this);
+        tabs.setOrientation(LinearLayout.HORIZONTAL);
+        result.addView(tabs,new LinearLayout.LayoutParams(-1,-2));
+        transcriptButton=resultTab(tabs,"Metin");
+        transcriptButton.setOnClickListener(v->startActivity(new Intent(this,TranscriptActivity.class)));
+        reportButton=resultTab(tabs,"Konular ve kararlar");
+        reportButton.setOnClickListener(v->startActivity(new Intent(this,ReportTableActivity.class)));
+        Button notes=resultTab(tabs,"Notlarım");
+        notes.setOnClickListener(v->{
+            Intent i=new Intent(this,UserNotesActivity.class);
+            startActivity(i);
+        });
+        Button memory=button(result,"Günlük iş hafızam • İşler, dönüşler ve kararlar",true);
+        memory.setOnClickListener(v->
+            startActivity(new Intent(this,WorkMemoryActivity.class)));
+        text(result,"Notlarını düzenleyebilir, onayınla Samsung Notes'a paylaşabilirsin.",12,false);
 
         Button extraToggle=button(root,"Diğer işlemler ve ayarlar ▼",false);
         LinearLayout extras=card(root);
@@ -195,26 +230,6 @@ public final class SummaryActivity extends Activity {
         Button modelShortcut=button(extras,"Konuşma modelini değiştir",false);
         modelShortcut.setOnClickListener(v->
             startActivity(new Intent(this,ModelSettingsActivity.class)));
-        LinearLayout result=card(root);
-        text(result,"SONUÇLAR",16,true);
-        text(result,"Metin ve konu tablosu birbirinden bağımsız kaydedilir.",12,false);
-        LinearLayout tabs=new LinearLayout(this);
-        tabs.setOrientation(LinearLayout.HORIZONTAL);
-        result.addView(tabs,new LinearLayout.LayoutParams(-1,-2));
-        transcriptButton=resultTab(tabs,"Metin");
-        transcriptButton.setOnClickListener(v->startActivity(new Intent(this,TranscriptActivity.class)));
-        reportButton=resultTab(tabs,"Konular ve kararlar");
-        reportButton.setOnClickListener(v->startActivity(new Intent(this,ReportTableActivity.class)));
-        Button notes=resultTab(tabs,"Notlarım");
-        notes.setOnClickListener(v->{
-            Intent i=new Intent(this,UserNotesActivity.class);
-            startActivity(i);
-        });
-        Button memory=button(result,"Günlük iş hafızam • İşler, dönüşler ve kararlar",true);
-        memory.setOnClickListener(v->
-            startActivity(new Intent(this,WorkMemoryActivity.class)));
-        text(result,"Notlarını düzenleyebilir, onayınla Samsung Notes'a paylaşabilirsin.",12,false);
-
         // Advanced controls are available but no longer fill the first screen.
         LinearLayout advanced=card(root);
         Button toggleAdvanced=button(advanced,"Tercihler ve model ayarları ▼",false);
@@ -421,12 +436,12 @@ public final class SummaryActivity extends Activity {
         if(transcriptActionButton!=null){
             transcriptActionButton.setEnabled(!isBusy);
             transcriptActionButton.setText(isBusy?"Analiz sürüyor • Canlı durumu izle":
-                "Konuşmayı metne dönüştür");
+                "Konuşma → Metin");
         }
         if(summaryActionButton!=null){
             summaryActionButton.setEnabled(!isBusy);
             summaryActionButton.setText(isBusy?"Devam eden analiz var":
-                "Konuları ve görevleri çıkar");
+                "Karar ve görevler");
         }
 
         String selected=selectedUri==null?null:selectedUri.toString();
