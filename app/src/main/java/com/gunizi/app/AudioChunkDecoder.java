@@ -19,6 +19,7 @@ import java.util.Locale;
 final class AudioChunkDecoder {
     interface Consumer {void onChunk(float[] pcm,long offsetMs,int percent)throws Exception;}
     private static final int RATE=16000,CHUNK_SECONDS=30,MAX=CHUNK_SECONDS*RATE*2;
+    private static final int FIRST_CHUNK=12*RATE*2;
     private final Context context;
     private final Consumer consumer;
     private final ByteArrayOutputStream pcm=new ByteArrayOutputStream(MAX);
@@ -28,6 +29,7 @@ final class AudioChunkDecoder {
     private long currentStartMs=0;
     private int sequence=0;
     private int progress=0;
+    private int nextChunkBytes=FIRST_CHUNK;
     private AudioChunkDecoder(Context c,Consumer x){context=c;consumer=x;}
     static void decode(Context c,Uri uri,Consumer callback)throws Exception{
         new AudioChunkDecoder(c,callback).process(uri);
@@ -98,7 +100,7 @@ final class AudioChunkDecoder {
                                     short value=(short)(sum/Math.max(1,averageCount));
                                     pcm.write(value&255);pcm.write((value>>>8)&255);
                                     sampleCount++;phase-=rate;sum=0;averageCount=0;
-                                    if(pcm.size()>=MAX)emit();
+                                    if(pcm.size()>=nextChunkBytes)emit();
                                 }
                             }
                         }
@@ -129,6 +131,7 @@ final class AudioChunkDecoder {
         }finally{
             currentStartMs+=bytes.length*1000L/(RATE*2);
             pcm.reset();
+            nextChunkBytes=MAX;
             java.util.Arrays.fill(bytes,(byte)0);
         }
     }
