@@ -26,10 +26,13 @@ final class AnalysisPreferences {
     }
     String speechModel(){
         String id=p.getString("speech_model",AiModelStore.WHISPER);
-        return AiModelStore.WHISPER_TURBO.equals(id)?id:AiModelStore.WHISPER;
+        return AiModelStore.WHISPER_TURBO.equals(id)||
+            AiModelStore.WHISPER_BASE.equals(id)?id:AiModelStore.WHISPER;
     }
     void speechModel(String id){
-        if(!AiModelStore.WHISPER.equals(id)&&!AiModelStore.WHISPER_TURBO.equals(id))
+        if(!AiModelStore.WHISPER.equals(id)&&
+           !AiModelStore.WHISPER_BASE.equals(id)&&
+           !AiModelStore.WHISPER_TURBO.equals(id))
             throw new IllegalArgumentException("Konuşma modeli");
         p.edit().putString("speech_model",id).apply();
     }

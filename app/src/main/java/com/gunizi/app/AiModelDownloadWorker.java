@@ -31,12 +31,14 @@ public final class AiModelDownloadWorker extends Worker {
             ExistingWorkPolicy.KEEP,request);
     }
     static boolean valid(String s){
-        return AiModelStore.WHISPER.equals(s)||
+        return AiModelStore.WHISPER_BASE.equals(s)||
+            AiModelStore.WHISPER.equals(s)||
             AiModelStore.WHISPER_TURBO.equals(s)||
             AiModelStore.QWEN.equals(s)||AiModelStore.QWEN4.equals(s);
     }
     private String label(String model){
         if(AiModelStore.WHISPER_TURBO.equals(model))return "Whisper Large v3 Turbo";
+        if(AiModelStore.WHISPER_BASE.equals(model))return "Whisper base";
         if(AiModelStore.WHISPER.equals(model))return "Whisper small";
         if(AiModelStore.QWEN4.equals(model))return "Qwen3-4B";
         return "Qwen3-1.7B";

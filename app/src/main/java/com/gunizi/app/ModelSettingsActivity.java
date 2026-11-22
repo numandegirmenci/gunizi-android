@@ -57,19 +57,25 @@ public final class ModelSettingsActivity extends Activity {
         LinearLayout speech=card(root);
         text(speech,"1. Konuşmayı yazıya dökme",18,true);
         RadioGroup speechChoices=new RadioGroup(this);speechChoices.setOrientation(RadioGroup.VERTICAL);
-        RadioButton small=new RadioButton(this),turbo=new RadioButton(this);
+        RadioButton base=new RadioButton(this),small=new RadioButton(this),turbo=new RadioButton(this);
+        base.setId(View.generateViewId());
         small.setId(View.generateViewId());turbo.setId(View.generateViewId());
+        base.setText("Whisper base • Hızlı deneme (~148 MB)");
         small.setText("Whisper small • Dengeli (~488 MB)");
-        turbo.setText("Whisper Large v3 Turbo • Daha güçlü (~574 MB)");
-        small.setTextColor(WHITE);turbo.setTextColor(WHITE);
-        speechChoices.addView(small);speechChoices.addView(turbo);speech.addView(speechChoices);
+        turbo.setText("Whisper Large v3 Turbo Q5 • Uyumluluk deneyi (~574 MB)");
+        base.setTextColor(WHITE);small.setTextColor(WHITE);turbo.setTextColor(WHITE);
+        speechChoices.addView(base);speechChoices.addView(small);
+        speechChoices.addView(turbo);speech.addView(speechChoices);
         speechChoices.check(AiModelStore.WHISPER_TURBO.equals(analysis.speechModel())?
-            turbo.getId():small.getId());
+            turbo.getId():AiModelStore.WHISPER_BASE.equals(analysis.speechModel())?
+            base.getId():small.getId());
         speechChoices.setOnCheckedChangeListener((group,checked)->{
-            analysis.speechModel(checked==turbo.getId()?
-                AiModelStore.WHISPER_TURBO:AiModelStore.WHISPER);
+            analysis.speechModel(checked==turbo.getId()?AiModelStore.WHISPER_TURBO:
+                checked==base.getId()?AiModelStore.WHISPER_BASE:AiModelStore.WHISPER);
             refresh();
         });
+        text(speech,"Kısa kayıt testinde önce base veya small modelini dene. "+
+            "Large Turbo Q5 modelinin mevcut Android motoruyla uyumluluğu henüz doğrulanmadı.",13,false);
         whisperStatus=text(speech,"Hazırlanıyor…",13,false);
         whisperButton=button(speech,"Konuşma modelini indir");
         whisperButton.setOnClickListener(v->confirm(analysis.speechModel()));
@@ -104,6 +110,7 @@ public final class ModelSettingsActivity extends Activity {
     private void confirm(String model){
         if(AiModelStore.ready(this,model))return;
         String label=AiModelStore.WHISPER_TURBO.equals(model)?"Whisper Large v3 Turbo":
+            AiModelStore.WHISPER_BASE.equals(model)?"Whisper base":
             AiModelStore.WHISPER.equals(model)?"Whisper small":
             AiModelStore.QWEN4.equals(model)?"Qwen3-4B":"Qwen3-1.7B";
         new AlertDialog.Builder(this).setTitle(label+" indirilsin mi?")
@@ -127,6 +134,7 @@ public final class ModelSettingsActivity extends Activity {
         }
         button.setEnabled(true);button.setText("İndirmeyi başlat / sürdür");
         File target=AiModelStore.WHISPER_TURBO.equals(model)?AiModelStore.whisperTurbo(this):
+            AiModelStore.WHISPER_BASE.equals(model)?AiModelStore.whisperBase(this):
             AiModelStore.WHISPER.equals(model)?AiModelStore.whisper(this):
             AiModelStore.QWEN4.equals(model)?AiModelStore.qwen4(this):AiModelStore.qwen(this);
         File part=new File(target.getAbsolutePath()+".part");
