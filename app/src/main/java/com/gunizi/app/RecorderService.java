@@ -26,12 +26,15 @@ import java.util.concurrent.Executors;
 public final class RecorderService extends Service {
     public static final String ACTION_START="com.gunizi.START";
     public static final String ACTION_START_HISTORY="com.gunizi.START_HISTORY";
+    public static final String ACTION_ARM_HISTORY_SCHEDULE="com.gunizi.ARM_HISTORY_SCHEDULE";
+    public static final String ACTION_DISARM_HISTORY_SCHEDULE="com.gunizi.DISARM_HISTORY_SCHEDULE";
     public static final String ACTION_SAVE_HISTORY="com.gunizi.SAVE_HISTORY";
     public static final String EXTRA_HISTORY_MINUTES="com.gunizi.extra.HISTORY_MINUTES";
     public static final String ACTION_STOP="com.gunizi.STOP";
     public static final String ACTION_RECOVER="com.gunizi.RECOVER";
     public static final String ACTION_REFRESH="com.gunizi.REFRESH";
     public static volatile boolean running=false,recording=false,historyActive=false;
+    public static volatile boolean historyScheduledArmed=false;
     public static volatile int historyHeldSeconds=0;
     private static volatile long historyStartedElapsedMs=0;
     /** Exact elapsed clock while rolling audio is being captured. */
@@ -59,6 +62,7 @@ public final class RecorderService extends Service {
     private boolean shutdownAfterExport=false;
     private boolean wasCallMode=false;
     private boolean warnedSilenced=false;
+    private long lastScheduledStartAttempt=0L;
 
     private final Runnable monitor=new Runnable(){
         @Override public void run(){
@@ -67,7 +71,8 @@ public final class RecorderService extends Service {
             checkAudioInterruption();
             if(running){
                 getSystemService(NotificationManager.class).notify(ID,notification());
-                handler.postDelayed(this,15000);
+                // Outside a scheduled history window no microphone is open; poll less.
+                handler.postDelayed(this,(historyActive||recorder!=null)?15000:60000);
             }
         }
     };
@@ -83,7 +88,11 @@ public final class RecorderService extends Service {
 
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         String action=intent==null?ACTION_REFRESH:intent.getAction();
-        if(ACTION_STOP.equals(action)){
+        if(ACTION_STOP.equals(action)||ACTION_DISARM_HISTORY_SCHEDULE.equals(action)){
+            if(historyScheduledArmed||prefs.historyScheduleEnabled()){
+                historyScheduledArmed=false;
+                prefs.historyScheduleEnabled(false);
+            }
             if(historyActive){
                 stopHistory(true);
                 shutdownIdle();
@@ -115,8 +124,23 @@ public final class RecorderService extends Service {
             }
             handler.post(monitor);
         }
-        if(ACTION_START_HISTORY.equals(action)){
-            if(recorder!=null){
+        if(ACTION_ARM_HISTORY_SCHEDULE.equals(action)){
+            if(recorder!=null||(running&&!historyScheduledArmed&&Prefs.MODE_WORK.equals(prefs.mode()))){
+                lastEvent="Mesai hizmetini durdurmadan zamanlı geçmiş açılamaz";
+                stateText=lastEvent;
+            }else if(!prefs.validHistorySchedule()){
+                stateText="Geçmiş planı için günleri ve saatleri kontrol et";
+            }else{
+                prefs.mode(Prefs.MODE_HISTORY);
+                prefs.historyScheduleEnabled(true);
+                historyScheduledArmed=true;
+                lastScheduledStartAttempt=0L;
+                applySchedule();
+            }
+        }else if(ACTION_START_HISTORY.equals(action)){
+            if(historyScheduledArmed){
+                lastEvent="Zamanlı plan açıkken elle dinleme başlatılamaz";
+            }else if(recorder!=null){
                 lastEvent="Mesai kaydı çalışırken geçmiş dinleme başlatılamaz";
             }else if(!historyActive){
                 prefs.mode(Prefs.MODE_HISTORY);
@@ -134,11 +158,13 @@ public final class RecorderService extends Service {
         PendingIntent stop=PendingIntent.getService(this,3,
             new Intent(this,RecorderService.class).setAction(ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-        boolean history=historyActive||Prefs.MODE_HISTORY.equals(prefs.mode());
-        String title=history?"Günİzi · Geçmiş dinleme":"Günİzi · Mesai kaydı";
+        boolean history=historyScheduledArmed||historyActive||
+            Prefs.MODE_HISTORY.equals(prefs.mode());
+        String title=historyScheduledArmed?"Günİzi · Zamanlı geçmiş":
+            history?"Günİzi · Geçmiş dinleme":"Günİzi · Mesai kaydı";
         String desc=history?(historyActive?
             "Biriken geçmiş: "+historyHeldSeconds/60+" dk "+historyHeldSeconds%60+" sn":
-            "Dinleme kapalı"):
+            historyScheduledArmed?"Plan beklemede • Mikrofon kapalı":"Dinleme kapalı"):
             (recording?"Mesai kaydı sürüyor":
             "Saat "+prefs.timeString(true)+"–"+prefs.timeString(false)+" bekleniyor");
         Notification.Builder builder=new Notification.Builder(this,CHANNEL)
@@ -154,8 +180,11 @@ public final class RecorderService extends Service {
                 "15 dk kaydet",historySaveIntent(15));
             builder.addAction(android.R.drawable.ic_menu_save,
                 "1 sa kaydet",historySaveIntent(60));
-            builder.addAction(android.R.drawable.ic_menu_save,
-                "2 sa kaydet",historySaveIntent(120));
+            if(historyScheduledArmed)
+                builder.addAction(android.R.drawable.ic_media_pause,"Planı kapat",stop);
+            else
+                builder.addAction(android.R.drawable.ic_menu_save,
+                    "2 sa kaydet",historySaveIntent(120));
         }else{
             builder.addAction(android.R.drawable.ic_media_pause,"Durdur",stop);
         }
@@ -200,6 +229,40 @@ public final class RecorderService extends Service {
         }catch(Exception ignored){}
     }
     private void applySchedule(){
+        if(historyScheduledArmed){
+            if(!prefs.historyScheduleEnabled()){
+                if(historyActive)stopHistory(true);
+                historyScheduledArmed=false;
+                shutdownIdle();
+                return;
+            }
+            if(!prefs.validHistorySchedule()){
+                if(historyActive)stopHistory(true);
+                stateText="Zamanlı geçmiş: gün/saat seçimi geçersiz • Mikrofon kapalı";
+                return;
+            }
+            if(!prefs.inHistoryWindow()){
+                if(historyActive){
+                    // A rolling buffer is transient, not an automatically saved work file.
+                    stopHistory(true);
+                    lastEvent="Plan sona erdi • Kaydedilmemiş geçici geçmiş temizlendi";
+                }
+                historyHeldSeconds=0;
+                stateText="Zamanlı plan beklemede • Mikrofon kapalı";
+                lastScheduledStartAttempt=0L;
+                return;
+            }
+            if(!historyActive){
+                long now=SystemClock.elapsedRealtime();
+                if(lastScheduledStartAttempt==0L||
+                    now-lastScheduledStartAttempt>=120000L){
+                    lastScheduledStartAttempt=now;
+                    startHistory();
+                }else stateText="Mikrofon başlatma yeniden denenecek";
+            }
+            if(!historyActive)return;
+            // Stay within the rolling-window service path below.
+        }
         if(historyActive){
             if(!Prefs.MODE_HISTORY.equals(prefs.mode()))return;
             long now=SystemClock.elapsedRealtime();
@@ -248,7 +311,11 @@ public final class RecorderService extends Service {
         recording=true;
         if(!startHistorySegment()){
             historyActive=false;recording=false;
-            shutdownIdle();
+            historyStartedElapsedMs=0L;
+            if(historyStore!=null)historyStore.discard();
+            historyStore=null;
+            if(!historyScheduledArmed)shutdownIdle();
+            else lastEvent="Zamanlı geçmiş başlatılamadı • Tekrar denenecek";
         }else{
             stateText="Geçmiş dinleme açık";
             lastEvent="Geçici geçmiş birikmeye başladı";
@@ -315,7 +382,8 @@ public final class RecorderService extends Service {
         if(!startHistorySegment()){
             historyActive=false;recording=false;
             stateText="Mikrofon yeniden başlatılamadı";
-            shutdownIdle();return;
+            if(!historyScheduledArmed)shutdownIdle();
+            return;
         }
         long end=SystemClock.elapsedRealtime();
         long take=Math.min((long)requestedMinutes*60000L,available);
@@ -419,12 +487,12 @@ public final class RecorderService extends Service {
         });
     }
     private void shutdownIdle(){
-        running=false;handler.removeCallbacks(monitor);
+        running=false;historyScheduledArmed=false;handler.removeCallbacks(monitor);
         try{stopForeground(STOP_FOREGROUND_REMOVE);}catch(Exception ignored){}
         stopSelf();
     }
     @Override public void onDestroy(){
-        running=false;handler.removeCallbacks(monitor);
+        running=false;historyScheduledArmed=false;handler.removeCallbacks(monitor);
         if(historyActive)stopHistory(true);
         if(recorder!=null)stopWorkRecording();
         io.shutdown();super.onDestroy();
