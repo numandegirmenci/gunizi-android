@@ -24,10 +24,12 @@ final class AiLiveStatusCard extends LinearLayout {
     private final TextView step,headline,description,stageTimer,elapsed,
         audio,parts,globalPercent,preview,alert,details,previewTitle;
     private final ProgressBar progress;
-    private final LinearLayout previewBox,detailBox;
-    private final Button expandPreview,detailToggle,cancel,copyInfo;
+    private final LinearLayout previewBox,detailBox,timelineRows;
+    private final ScrollView timelineScroll;
+    private final Button expandPreview,detailToggle,cancel,copyInfo,openContent;
     private boolean expanded=false,showDetails=false;
     private String copiedDiagnostic="";
+    private String lastTimeline="";
     private final boolean narrow;
 
     private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
@@ -112,6 +114,16 @@ final class AiLiveStatusCard extends LinearLayout {
         pp.topMargin=dp(9);addView(previewBox,pp);
         previewTitle=addText(previewBox,"SON ÇIKARILAN METİN",11,true);
         previewTitle.setTextColor(TEAL);
+        timelineScroll=new ScrollView(context);
+        timelineScroll.setFillViewport(false);
+        timelineScroll.setVerticalScrollBarEnabled(false);
+        timelineRows=new LinearLayout(context);
+        timelineRows.setOrientation(VERTICAL);
+        timelineScroll.addView(timelineRows);
+        LinearLayout.LayoutParams tlp=new LinearLayout.LayoutParams(-1,dp(182));
+        tlp.bottomMargin=dp(6);
+        previewBox.addView(timelineScroll,tlp);
+        timelineScroll.setVisibility(GONE);
         preview=addText(previewBox,"",13,false);
         preview.setMaxLines(3);preview.setEllipsize(TextUtils.TruncateAt.END);
         expandPreview=action("Metnin devamını göster");
@@ -123,6 +135,10 @@ final class AiLiveStatusCard extends LinearLayout {
             preview.setEllipsize(expanded?null:TextUtils.TruncateAt.END);
             expandPreview.setText(expanded?"Metni daralt":"Metnin devamını göster");
         });
+        openContent=action("İçeriğe gir · Tüm konuşma");
+        LinearLayout.LayoutParams contentLp=new LinearLayout.LayoutParams(-1,dp(42));
+        contentLp.bottomMargin=dp(5);
+        previewBox.addView(openContent,contentLp);
         previewBox.setVisibility(GONE);
 
         detailToggle=action("İşlem ayrıntılarını göster");
@@ -155,6 +171,33 @@ final class AiLiveStatusCard extends LinearLayout {
         cancel.setVisibility(GONE);
     }
     void onCancelClick(OnClickListener callback){cancel.setOnClickListener(callback);}
+    void onOpenContentClick(OnClickListener callback){openContent.setOnClickListener(callback);}
+
+    private void updateTimeline(String value){
+        if(value.equals(lastTimeline))return;
+        lastTimeline=value;timelineRows.removeAllViews();
+        String[] rows=value.split("\\r?\\n");
+        int start=Math.max(0,rows.length-9);
+        for(int i=start;i<rows.length;i++){
+            String raw=rows[i].trim();if(raw.isEmpty())continue;
+            int boundary=raw.indexOf(']');
+            String time=raw.startsWith("[")&&boundary>0?raw.substring(1,boundary):"";
+            String spoken=time.isEmpty()?raw:raw.substring(boundary+1).trim();
+            if(spoken.isEmpty())continue;
+            LinearLayout item=new LinearLayout(getContext());
+            item.setOrientation(VERTICAL);
+            item.setPadding(dp(11),dp(9),dp(11),dp(8));
+            item.setBackground(shape(0xff1b2b3b));
+            LinearLayout.LayoutParams rowLp=new LinearLayout.LayoutParams(-1,-2);
+            rowLp.bottomMargin=dp(5);timelineRows.addView(item,rowLp);
+            if(!time.isEmpty()){
+                TextView stamp=addText(item,time,11,true);stamp.setTextColor(TEAL);
+            }
+            TextView words=addText(item,spoken.length()>320?spoken.substring(0,320)+"…":spoken,13,false);
+            words.setTextColor(WHITE);
+        }
+        timelineScroll.post(()->timelineScroll.fullScroll(View.FOCUS_DOWN));
+    }
 
     void render(SharedPreferences prefs,WorkInfo.State state){
         String phase=prefs.getString("analysisPhase",AiStageMetrics.QUEUED);
@@ -230,13 +273,27 @@ final class AiLiveStatusCard extends LinearLayout {
         audio.setVisibility(audioLabel.isEmpty()?GONE:VISIBLE);
 
         String excerpt=prefs.getString("analysisPreview","");
-        boolean hasPreview=!excerpt.isEmpty();
-        previewBox.setVisibility(hasPreview?VISIBLE:GONE);
-        if(hasPreview){
+        String activeSource=prefs.getString("analysisLiveSourceUri","");
+        String selectedSource=prefs.getString("aiSelectedSourceUri","");
+        String timeline=!activeSource.isEmpty()&&activeSource.equals(selectedSource)?
+            prefs.getString("analysisTimeline",""):"";
+        boolean hasTimeline=!summarizing&&!timeline.trim().isEmpty();
+        boolean hasPreview=!excerpt.isEmpty()&&
+            (summarizing||activeSource.equals(selectedSource));
+        previewBox.setVisibility(hasTimeline||hasPreview?VISIBLE:GONE);
+        timelineScroll.setVisibility(hasTimeline?VISIBLE:GONE);
+        preview.setVisibility(hasTimeline?GONE:VISIBLE);
+        if(hasTimeline){
+            changed(previewTitle,"CANLI KONUŞMA AKIŞI · ESKİDEN YENİYE");
+            updateTimeline(timeline);
+            expandPreview.setVisibility(GONE);
+            openContent.setVisibility(VISIBLE);
+        }else if(hasPreview){
             changed(preview,excerpt);
             boolean longText=excerpt.length()>180;
             expandPreview.setVisibility(longText?VISIBLE:GONE);
             changed(previewTitle,summarizing?"SON ÇIKARILAN KONU":"SON OKUNAN KONUŞMA");
+            openContent.setVisibility(summarizing?GONE:VISIBLE);
         }
         long stale=System.currentTimeMillis()-prefs.getLong("analysisLastAdvanceAt",0);
         String warning=AiProgressStatus.attention(phase,stale,phaseDuration,running);
