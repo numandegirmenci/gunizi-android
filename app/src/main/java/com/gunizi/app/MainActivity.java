@@ -267,17 +267,28 @@ public final class MainActivity extends Activity {
         models.addView(modelSettings);
         modelSettings.setOnClickListener(v->startActivity(new Intent(this,ModelSettingsActivity.class)));
         LinearLayout updates=card("Uygulama güncellemeleri");
-        muted(updates,"Yeni sürümleri GitHub Releases üzerinden arka planda kontrol eder. "+
+        boolean testBuild=getPackageName().endsWith(".test");
+        muted(updates,testBuild?
+            "Bu bağımsız Günİzi Test uygulamasıdır. Ana uygulamanın kayıtlarına ve "+
+            "modellerine dokunmaz. Otomatik güncelleme yalnızca kalıcı imzalı ana yayın içindir.":
+            "Yeni sürümleri GitHub Releases üzerinden arka planda kontrol eder. "+
             "Wi-Fi bağlantısında APK'yı indirebilir. Kurulumu her zaman sen onaylarsın.");
         gap(updates,9);
         Switch auto=new Switch(this);auto.setText("Otomatik güncelleme kontrolü");
-        auto.setTextColor(WHITE);auto.setChecked(AppUpdateWorker.enabled(this));
+        auto.setTextColor(WHITE);
+        auto.setChecked(!testBuild&&AppUpdateWorker.enabled(this));
+        auto.setEnabled(!testBuild);
         updates.addView(auto);
         auto.setOnCheckedChangeListener((v,on)->AppUpdateWorker.enable(this,on));
         gap(updates,8);
-        Button update=button("Güncellemeleri kontrol et",false);
+        Button update=button(testBuild?"Günİzi Test • Yeni APK'lar GitHub Actions'ta":
+            "Güncellemeleri kontrol et",false);
         updates.addView(update);
-        update.setOnClickListener(v->startActivity(new Intent(this,UpdateActivity.class)));
+        update.setOnClickListener(v->{
+            if(testBuild)startActivity(new Intent(Intent.ACTION_VIEW,
+                Uri.parse("https://github.com/numandegirmenci/gunizi-android/actions")));
+            else startActivity(new Intent(this,UpdateActivity.class));
+        });
 
         LinearLayout permissions=card("İzinler");
         muted(permissions,"Gerekli izinleri bir kez ver. Hiçbir izin senin onayın olmadan etkinleştirilmez.");
