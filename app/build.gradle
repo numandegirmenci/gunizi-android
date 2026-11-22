@@ -9,16 +9,16 @@ android {
         applicationId 'com.gunizi.app'
         minSdk 29
         targetSdk 35
-        versionCode 10
-        versionName '0.9.1'
+        versionCode 11
+        versionName '0.10.0'
         manifestPlaceholders = [appLabel: 'Günİzi']
     }
     buildTypes {
         debug {
             // Side-by-side test install. Never overwrite the installed production app.
-            applicationIdSuffix '.test'
+            applicationIdSuffix '.ai2'
             versionNameSuffix '-test'
-            manifestPlaceholders = [appLabel: 'Günİzi Test']
+            manifestPlaceholders = [appLabel: 'Günİzi AI 2.0 Test']
         }
         release {
             minifyEnabled false
