@@ -15,10 +15,10 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Locale;
 
-/** Decode an audio document in a streaming manner; emit 5-minute mono PCM WAV clips. */
+/** Decode as streaming mono PCM; emit bounded 30-second WAV segments for first-text latency. */
 final class AudioChunkDecoder {
     interface Consumer {void onChunk(File wav,long offsetMs,int percent)throws Exception;}
-    private static final int RATE=16000,CHUNK_SECONDS=5*60,MAX=CHUNK_SECONDS*RATE*2;
+    private static final int RATE=16000,CHUNK_SECONDS=30,MAX=CHUNK_SECONDS*RATE*2;
     private final Context context;
     private final Consumer consumer;
     private final ByteArrayOutputStream pcm=new ByteArrayOutputStream(MAX);

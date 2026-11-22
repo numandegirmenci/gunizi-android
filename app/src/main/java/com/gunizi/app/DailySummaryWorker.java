@@ -183,6 +183,14 @@ public final class DailySummaryWorker extends Worker {
                 notice(source,useExistingText?"Kaydedilen konuşma metni açılıyor":
                     "Konuşma modeli hazırlanıyor",0,true),type)).get();
             AiProgress listener=(percent,message)->progress(percent,message,source);
+            AiStageMetrics.enter(c,AiStageMetrics.PREFLIGHT);
+            if(!useExistingText){
+                listener.update(0,"Ses biçimi ve süresi kontrol ediliyor");
+                AiAudioPreflight.Info info=AiAudioPreflight.inspect(c,Uri.parse(uriString));
+                c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
+                    .putLong("analysisAudioDuration",info.durationMs)
+                    .putString("analysisCodec",info.codec).apply();
+            }
             String base=fileName.replaceAll("(?i)\\.(ogg|opus|wav|m4a|mp3|aac)$","");
             File cacheFolder=new File(c.getNoBackupFilesDir(),"ai_drafts");
             cacheFolder.mkdirs();
@@ -228,6 +236,7 @@ public final class DailySummaryWorker extends Worker {
                 throw new IOException("Kaydın içinde anlaşılır konuşma bulunamadı. "+
                     "Kaydı dinleyip daha hafif Whisper modeliyle tekrar dene.");
             if(TRANSCRIPT.equals(selectedMode)){
+                AiStageMetrics.enter(c,AiStageMetrics.TEXT_READY);
                 finish(c,"Konuşma dökümü hazır","Yazıya dökülen konuşma: "+fileName);
                 return Result.success();
             }
@@ -255,13 +264,16 @@ public final class DailySummaryWorker extends Worker {
             finish(c,"Günlük rapor hazır","Konu tablosu ve özet: "+fileName);
             return Result.success();
         }catch(OutOfMemoryError oom){
+            AiStageMetrics.enter(c,AiStageMetrics.ERROR);
             return failure(c,source,"Model açılırken RAM yetersiz kaldı. "+
                 "Whisper base veya small seçip yeniden dene.");
         }catch(LinkageError nativeError){
+            AiStageMetrics.enter(c,AiStageMetrics.ERROR);
             return failure(c,source,"Yerel konuşma motoru başlatılamadı: "+
                 nativeError.getClass().getSimpleName());
         }catch(Exception e){
             if(isStopped())return Result.failure();
+            AiStageMetrics.enter(c,AiStageMetrics.ERROR);
             String message=(e.getMessage()==null?e.getClass().getSimpleName():e.getMessage());
             c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
                 .putString("summaryError",message)
@@ -282,6 +294,7 @@ public final class DailySummaryWorker extends Worker {
         return Result.failure();
     }
     private void finish(Context c,String title,String message){
+        AiStageMetrics.enter(c,AiStageMetrics.DONE);
         c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
             .putString("summaryLast",message).putString("summaryError","")
             .putInt("analysisPercent",100).putString("analysisStage",title)

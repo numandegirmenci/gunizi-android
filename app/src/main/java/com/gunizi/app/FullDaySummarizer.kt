@@ -24,12 +24,14 @@ object FullDaySummarizer {
                   progress: AiProgress): String = runBlocking {
         require(AiModelStore.ready(context,languageModel)) { "Seçilen Qwen3 modeli kurulmamış" }
         if (transcript.isBlank()) return@runBlocking "Anlaşılır konuşma bulunamadı."
-        progress.update(71,"Qwen3 yerel modeli açılıyor")
+        AiStageMetrics.enter(context,AiStageMetrics.LLM_LOADING)
+        progress.update(71,"Qwen3 belleğe alınıyor • Konuşma metni hazır")
         val modelFile=if(AiModelStore.QWEN4==languageModel)AiModelStore.qwen4(context)
             else AiModelStore.qwen(context)
         val model=Llama.loadModel(modelFile.absolutePath,
             LlamaConfig(contextSize=4096,threads=4,temperature=0.15f,topP=0.85f,topK=30,seed=17))
         try {
+            AiStageMetrics.enter(context,AiStageMetrics.EXTRACTING)
             val parts=splitText(transcript,CHUNK_LIMIT)
             val boundedFocus=focus.take(1500)
             val folder=File(context.noBackupFilesDir,"ai_checkpoints_v2/"+digest(transcript+"|"+boundedFocus+"|"+languageModel))
@@ -80,6 +82,7 @@ object FullDaySummarizer {
                 progress.update(72+(i+1)*20/parts.size,
                     "Qwen3: "+(i+1)+"/"+parts.size+" bölüm yorumlandı")
             }
+            AiStageMetrics.enter(context,AiStageMetrics.MERGING)
             var level: List<String> = notes
             var round=0
             while(level.size>1&&round++<7) {

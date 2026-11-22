@@ -23,13 +23,19 @@ object WhisperDailyTranscriber {
                    progress: AiProgress): String {
         require(AiModelStore.ready(context, speechModel)) { "Seçilen Whisper modeli kurulmamış" }
         return runBlocking {
-            progress.update(0, "Yerel konuşma tanıma modeli yükleniyor")
+            AiStageMetrics.enter(context, AiStageMetrics.MODEL_LOADING)
+            progress.update(0, "Whisper modeli belleğe alınıyor • Bu aşama henüz ses çözümlemesi değildir")
             val checkpoint = File(context.noBackupFilesDir,
                 "asr_checkpoints/" + digest(audio.toString() + "|" + speechModel + "|" +
                     contentSize(context, audio)))
             checkpoint.mkdirs()
+            val loadStart=android.os.SystemClock.elapsedRealtime()
             val model = Whisper.loadModel(context, AiModelStore.speechFile(context, speechModel).absolutePath)
-            progress.update(1, "Whisper modeli açıldı • Ses bölümleri hazırlanıyor")
+            val loadMs=android.os.SystemClock.elapsedRealtime()-loadStart
+            context.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
+                .putLong("lastWhisperLoadMs",loadMs).apply()
+            AiStageMetrics.enter(context, AiStageMetrics.AUDIO_DECODING)
+            progress.update(1, "Whisper $speechModel açıldı ("+AiStageMetrics.displayTime(loadMs)+") • Ses okunuyor")
             val resultText = StringBuilder()
             var count = 0
             var index = 0
@@ -42,8 +48,9 @@ object WhisperDailyTranscriber {
                     if (checkpointFile.exists()) {
                         current = checkpointFile.readText(Charsets.UTF_8)
                     } else {
-                        progress.update(1,
-                            "Whisper açık • Bölüm ${index + 1} konuşmaya dönüştürülüyor")
+                        AiStageMetrics.enter(context, AiStageMetrics.ASR)
+                        progress.update((percent*65/100).coerceAtLeast(1),
+                            "Konuşma çıkarılıyor • ${index + 1}. kısa bölüm")
                         val output = runBlocking {
                             Whisper.transcribe(model, file.absolutePath,
                                 WhisperConfig(language = "tr", threads = 4))
@@ -78,6 +85,7 @@ object WhisperDailyTranscriber {
                             .edit().putString("analysisPreview",excerpt).apply()
                     }
                     index++
+                    AiStageMetrics.enter(context, AiStageMetrics.AUDIO_DECODING)
                     progress.update(percent * 70 / 100,
                         "Türkçe ses çözülüyor: bölüm $index, ilerleme %$percent")
                 }
