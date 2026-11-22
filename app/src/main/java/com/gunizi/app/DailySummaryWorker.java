@@ -71,6 +71,13 @@ public final class DailySummaryWorker extends Worker {
             .putString("analysisMode",mode)
             .putString("analysisStage",charging?
                 "Şarj ve pil koşullarını bekliyor":"İşlem sıraya alındı")
+            .putString("analysisPhase",AiStageMetrics.QUEUED)
+            .putLong("analysisPhaseStartElapsed",SystemClock.elapsedRealtime())
+            .putLong("analysisStartedElapsed",SystemClock.elapsedRealtime())
+            .putLong("analysisAudioProcessedMs",0L)
+            .putInt("analysisChunkIndex",0).putInt("analysisChunkTotal",0)
+            .putInt("analysisNativePercent",0)
+            .putLong("analysisLastAdvanceAt",System.currentTimeMillis())
             .putInt("analysisPercent",0)
             .putLong("analysisStartedAt",System.currentTimeMillis())
             .putLong("analysisProgressAt",System.currentTimeMillis())
@@ -79,9 +86,9 @@ public final class DailySummaryWorker extends Worker {
             .putString("analysisWorkId",task.getId().toString())
             .putLong("analysisCompletedAt",0)
             .putString("summaryError","").apply();
+        // Only one native AI pipeline runs at once: llama.cpp and whisper.cpp share RAM.
         WorkManager.getInstance(c).enqueueUniqueWork(
-            "gunizi-analysis-"+mode+"-"+Integer.toHexString(uri.toString().hashCode()),
-            ExistingWorkPolicy.REPLACE,task);
+            "gunizi-single-ai-job",ExistingWorkPolicy.REPLACE,task);
     }
     /** Summarize a stored local transcript; do not reload Whisper. */
     public static boolean queueFromTranscript(Context c){
@@ -110,21 +117,31 @@ public final class DailySummaryWorker extends Worker {
         prefs.edit().putString("analysisSource",name)
             .putString("analysisMode",TEXT_REPORT)
             .putString("analysisStage","Hazır konuşma metni yerel özet için sırada")
+            .putString("analysisPhase",AiStageMetrics.QUEUED)
+            .putLong("analysisPhaseStartElapsed",SystemClock.elapsedRealtime())
+            .putLong("analysisStartedElapsed",SystemClock.elapsedRealtime())
+            .putInt("analysisPartsDone",0).putInt("analysisPartsTotal",0)
+            .putLong("analysisLastAdvanceAt",System.currentTimeMillis())
             .putInt("analysisPercent",0)
             .putLong("analysisStartedAt",now).putLong("analysisProgressAt",now)
             .putString("summaryError","").putString("analysisPreview","")
             .putString("analysisWorkId",request.getId().toString())
             .putLong("analysisCompletedAt",0).apply();
-        WorkManager.getInstance(c).enqueueUniqueWork("gunizi-text-summary",
+        WorkManager.getInstance(c).enqueueUniqueWork("gunizi-single-ai-job",
             ExistingWorkPolicy.REPLACE,request);
         return true;
     }
     private void progress(int percent,String message,String source){
+        if(isStopped()||Thread.currentThread().isInterrupted())
+            throw new IllegalStateException("İşlem iptal edildi");
+        Context c=getApplicationContext();
+        if(!getId().toString().equals(c.getSharedPreferences("gunizi",Context.MODE_PRIVATE)
+            .getString("analysisWorkId","")))
+            throw new IllegalStateException("Bu analiz görevi artık etkin değil");
         int n=Math.max(0,Math.min(100,percent));
         Data data=new Data.Builder().putInt("percent",n)
             .putString("stage",message).putString("source",source).build();
         setProgressAsync(data);
-        Context c=getApplicationContext();
         c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
             .putString("analysisStage",message).putInt("analysisPercent",n)
             .putLong("analysisProgressAt",System.currentTimeMillis())
@@ -135,8 +152,6 @@ public final class DailySummaryWorker extends Worker {
             c.getSystemService(NotificationManager.class)
                 .notify(ACTIVE_NOTICE,notice(source,message,n,true));
         }
-        if(isStopped()||Thread.currentThread().isInterrupted())
-            throw new IllegalStateException("İşlem iptal edildi");
     }
     private static File outputDir(Context c)throws IOException{
         File dir=new File(c.getNoBackupFilesDir(),"transcripts");
@@ -161,8 +176,14 @@ public final class DailySummaryWorker extends Worker {
     @Override public void onStopped(){
         super.onStopped();
         CallVaultWhisperEngine.cancel();
-        try{com.baba.callvault.summary.LlamaNative.INSTANCE.requestAbort();}
-        catch(Throwable ignored){}
+        FullDaySummarizer.cancel();
+        Context c=getApplicationContext();
+        android.content.SharedPreferences prefs=c.getSharedPreferences("gunizi",Context.MODE_PRIVATE);
+        if(getId().toString().equals(prefs.getString("analysisWorkId",""))){
+            prefs.edit().putLong("analysisCompletedAt",System.currentTimeMillis())
+                .putString("analysisStage","İşlem iptal edildi")
+                .putString("analysisPhase",AiStageMetrics.CANCELLED).apply();
+        }
     }
     @NonNull @Override public Result doWork(){
         Context c=getApplicationContext();
@@ -281,7 +302,8 @@ public final class DailySummaryWorker extends Worker {
             return failure(c,source,"Yerel konuşma motoru başlatılamadı: "+
                 nativeError.getClass().getSimpleName());
         }catch(Exception e){
-            if(isStopped())return Result.failure();
+            if(isStopped()||!getId().toString().equals(c.getSharedPreferences("gunizi",Context.MODE_PRIVATE)
+                .getString("analysisWorkId","")))return Result.failure();
             AiStageMetrics.enter(c,AiStageMetrics.ERROR);
             String message=(e.getMessage()==null?e.getClass().getSimpleName():e.getMessage());
             c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
@@ -294,6 +316,8 @@ public final class DailySummaryWorker extends Worker {
         }
     }
     private Result failure(Context c,String source,String detail){
+        if(isStopped()||!getId().toString().equals(c.getSharedPreferences("gunizi",Context.MODE_PRIVATE)
+            .getString("analysisWorkId","")))return Result.failure();
         c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
             .putString("summaryError",detail)
             .putString("analysisStage","Hata: "+detail)
@@ -303,6 +327,8 @@ public final class DailySummaryWorker extends Worker {
         return Result.failure();
     }
     private void finish(Context c,String title,String message){
+        if(isStopped()||!getId().toString().equals(c.getSharedPreferences("gunizi",Context.MODE_PRIVATE)
+            .getString("analysisWorkId","")))return;
         AiStageMetrics.enter(c,AiStageMetrics.DONE);
         c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
             .putString("summaryLast",message).putString("summaryError","")

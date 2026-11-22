@@ -14,7 +14,7 @@ final class AiStageMetrics {
     static final String PREFLIGHT="preflight",MODEL_LOADING="model_loading",
         AUDIO_DECODING="audio_decoding",ASR="asr",TEXT_READY="text_ready",
         LLM_LOADING="llm_loading",EXTRACTING="extracting",MERGING="merging",
-        DONE="done",ERROR="error";
+        DONE="done",ERROR="error",QUEUED="queued",CANCELLED="cancelled";
     static void enter(Context c,String stage){
         long now=SystemClock.elapsedRealtime();
         SharedPreferences prefs=c.getSharedPreferences(PREF,Context.MODE_PRIVATE);
@@ -39,6 +39,8 @@ final class AiStageMetrics {
         return Math.max(0,now-start);
     }
     static String displayStage(String stage){
+        if(QUEUED.equals(stage))return "Android işlemi başlatıyor";
+        if(CANCELLED.equals(stage))return "Kullanıcı tarafından iptal edildi";
         if(PREFLIGHT.equals(stage))return "Ses dosyası kontrol ediliyor";
         if(MODEL_LOADING.equals(stage))return "Whisper modeli belleğe alınıyor";
         if(AUDIO_DECODING.equals(stage))return "Ses okunuyor";

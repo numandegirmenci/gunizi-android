@@ -42,6 +42,9 @@ object FullDaySummarizer {
             if(!LlamaNative.grammarAccepted(ptr,SummaryGrammar.JSON))
                 throw IllegalStateException("CallVault JSON grameri yerel model tarafından kabul edilmedi")
             val parts=split(transcript,CHUNK_LIMIT)
+            context.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
+                .putInt("analysisPartsTotal",parts.size).putInt("analysisPartsDone",0)
+                .putLong("analysisLastAdvanceAt",System.currentTimeMillis()).apply()
             val summaries=ArrayList<CallSummary>(parts.size)
             val rows=ArrayList<String>()
             AiStageMetrics.enter(context,AiStageMetrics.EXTRACTING)
@@ -66,6 +69,7 @@ object FullDaySummarizer {
                 rows.addAll(topicRows(data,part))
                 context.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
                     .putInt("analysisPartsDone",index+1).putInt("analysisPartsTotal",parts.size)
+                    .putLong("analysisLastAdvanceAt",System.currentTimeMillis())
                     .putString("analysisPreview",
                         data.summary.replace("\n"," ").take(530)).apply()
                 progress.update(73+(index+1)*22/parts.size,

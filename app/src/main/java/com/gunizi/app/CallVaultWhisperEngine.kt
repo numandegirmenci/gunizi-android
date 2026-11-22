@@ -53,11 +53,19 @@ object CallVaultWhisperEngine {
                 else -> "Silero VAD kapalı • Sesin tamamı işlenecek"
             })
             val totalMs=prefs.getLong("analysisAudioDuration",0L)
+            prefs.edit().putLong("analysisAudioProcessedMs",0L)
+                .putInt("analysisChunkIndex",0)
+                .putInt("analysisChunkTotal",AiProgressStatus.totalChunks(totalMs))
+                .putInt("analysisNativePercent",0)
+                .putLong("analysisLastAdvanceAt",System.currentTimeMillis()).apply()
             AiStageMetrics.enter(context,AiStageMetrics.AUDIO_DECODING)
             AudioChunkDecoder.decode(context,audio){chunk,startMs,_ ->
                 if(Thread.currentThread().isInterrupted)
                     throw InterruptedException("Konuşma çıkarma iptal edildi")
                 val checkpoint=File(cache,"part_"+index.toString().padStart(5,'0')+".txt")
+                prefs.edit().putInt("analysisChunkIndex",index+1)
+                    .putInt("analysisNativePercent",0)
+                    .putLong("analysisLastAdvanceAt",System.currentTimeMillis()).apply()
                 val current=if(checkpoint.isFile){
                     checkpoint.readText(Charsets.UTF_8)
                 }else{
@@ -66,13 +74,19 @@ object CallVaultWhisperEngine {
                     progress.update(progressValue(startMs,totalMs,0),
                         "Whisper • ${index+1}. ses bölümü işleniyor")
                     val polling=AtomicBoolean(true)
+                    var lastNativePct=-1
                     val job=Thread({
                         while(polling.get()){
                             try{Thread.sleep(1100)}catch(_:InterruptedException){break}
                             if(!polling.get())break
                             val nativePct=try{WhisperNative.progressPercent()}catch(_:Throwable){0}
+                            if(nativePct>lastNativePct){
+                                lastNativePct=nativePct
+                                prefs.edit().putInt("analysisNativePercent",nativePct)
+                                    .putLong("analysisLastAdvanceAt",System.currentTimeMillis()).apply()
+                            }
                             progress.update(progressValue(startMs,totalMs,nativePct),
-                                "CallVault Whisper • Bölüm ${index+1} · motor %$nativePct")
+                                "Ses çözülüyor • Bölüm ${index+1} • Yerel motor %$nativePct")
                         }
                     },"GunIzi-WhisperProgress").apply{isDaemon=true}
                     job.start()
@@ -116,9 +130,15 @@ object CallVaultWhisperEngine {
                         current.replace("\n"," ").takeLast(430)).apply()
                 }
                 index++
+                val chunkMs=((chunk.length()-44L).coerceAtLeast(0L)*1000L/(2L*16000L))
+                val doneMs=if(totalMs>0) (startMs+chunkMs).coerceAtMost(totalMs) else startMs+chunkMs
+                prefs.edit().putLong("analysisAudioProcessedMs",doneMs)
+                    .putInt("analysisNativePercent",100)
+                    .putLong("analysisLastAdvanceAt",System.currentTimeMillis()).apply()
                 AiStageMetrics.enter(context,AiStageMetrics.AUDIO_DECODING)
-                progress.update(progressValue(startMs+30_000,totalMs,0),
-                    "İşlenen ses bölümü: $index · Kaynak süre korunuyor")
+                progress.update(progressValue(doneMs,totalMs,0),
+                    "Tamamlanan ses bölümü: $index • "+
+                        AiProgressStatus.audioLabel(doneMs,totalMs))
             }
             progress.update(70,"Konuşma metni hazır • $index bölüm incelendi")
             return result.toString()
