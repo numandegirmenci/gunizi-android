@@ -16,6 +16,22 @@ Günİzi, Türkçe çevrimdışı ses kaydı ve yerel yapay zeka ile günlük ra
 
 
 
+
+## v0.11.1 • Canlı durum ve kararlılık testi
+
+Yeni AI ekranında genel ilerleme, **saniye sayaçlı aşama**, işlenen ses
+süresi ve **bölüm sayısı** ayrıdır. Uzun model yükleme veya bölüm duraksamasında
+net uyarı çıkar. Son metin ve teknik ayrıntılar isteğe bağlı açılır.
+İptal edilen işlerin durumu kaybolmaz, bir kaydın dökümü diğer kayda karışmaz.
+Orijinal CallVault whisper.cpp, Silero VAD ve llama.cpp/Gemma motoru korunur.
+
+- [v0.11.1 sürüm notları](release-notes/v0.11.1.md)
+- [Canlı durum teknik sözleşmesi](docs/AI_LIVE_STATUS_V0111.md)
+
+Ayrı **Günİzi Stabilite Test** APK paketi `com.gunizi.app.ai4`,
+eski kurulum verilerini silmemek için farklı kimlikle dağıtılır.
+Önceki beta modelleri bu uygulamaya otomatik taşınmaz.
+
 ## Günİzi v0.11 • CallVault native yapay zeka (TEST)
 
 Bu sürümde **CallVault'un gerçek native whisper.cpp + Silero VAD +
