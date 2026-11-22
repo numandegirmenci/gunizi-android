@@ -114,6 +114,7 @@ public final class RecorderService extends Service {
         if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
             stateText="Mikrofon izni gerekli";stopSelf();return START_NOT_STICKY;
         }
+        final boolean wasRunning=running;
         if(!running){
             try{
                 startForeground(ID,notification(),ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
@@ -125,7 +126,7 @@ public final class RecorderService extends Service {
             handler.post(monitor);
         }
         if(ACTION_ARM_HISTORY_SCHEDULE.equals(action)){
-            if(recorder!=null||(running&&!historyScheduledArmed&&Prefs.MODE_WORK.equals(prefs.mode()))){
+            if(recorder!=null||(wasRunning&&!historyScheduledArmed&&Prefs.MODE_WORK.equals(prefs.mode()))){
                 lastEvent="Mesai hizmetini durdurmadan zamanlı geçmiş açılamaz";
                 stateText=lastEvent;
             }else if(!prefs.validHistorySchedule()){
