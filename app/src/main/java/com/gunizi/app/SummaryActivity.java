@@ -275,7 +275,7 @@ public final class SummaryActivity extends Activity {
     private void startAction(String mode){
         // Never defer user feedback until a background preflight finishes.
         if(selectedUri==null){pickSource(mode);return;}
-        long now=SystemClock.elapsedRealtime();
+        long now=android.os.SystemClock.elapsedRealtime();
         if(now-lastSubmitMs<900)return;
         SharedPreferences pref=getSharedPreferences(PREF,MODE_PRIVATE);
         String stage=pref.getString("analysisPhase","");
