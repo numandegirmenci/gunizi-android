@@ -2,6 +2,23 @@
 
 **Günİzi**, Android'de geçmişe dönük ses kaydı, mesai kaydı, Türkçe konuşma dökümü ve cihaz içinde yapay zeka destekli özet hazırlama uygulamasıdır. Ses kayıtlarının işlenmesi yerel olarak yapılır; modeller yalnızca kullanıcı isterse indirilir.
 
+## Günİzi v0.14.0 — Zamanlı Geçmiş Dinleme
+
+**Pil kullanımı için yeni özellik:** Kayıt → Zamanlı geçmiş dinleme alanında, Mesai'den bağımsız **günleri, başlangıç ve bitiş saatlerini** belirle. Planı uygulama açıkken etkinleştir. Seçilen saat aralığı dışında mikrofon kaydı ve Opus kodlama durur; saatleri izleyen düşük sıklıklı ön plan hizmeti çalışmaya devam eder.
+
+- Haftanın 7 günü ayrı seçilebilir; geceye taşan vardiyalar desteklenir.
+- Plan dışındayken durum: **Mikrofon kapalı**. Uygulama ve plan bildirimi görünürdür.
+- Eski Mesai otomatik dosya kaydı değişmez. Geçmiş kayıt RAM'de sınırsız tutulmaz; şifreli özel önbellekte en fazla 6 saat birikir.
+- **Dikkat:** Plan bittiğinde kaydedilmemiş geçici geçmiş silinir; önemli sesi süre dolmadan kaydet.
+- Android'in mikrofon foreground service kısıtları nedeniyle hizmet sistem tarafından durdurulursa uygulamayı açarak planı yeniden etkinleştirmek gerekir. Doze/Samsung pil yönetimi saat geçişlerini geciktirebilir. Gerçek pil tasarrufu henüz cihazda ölçülmedi.
+- Tam kalite Whisper Turbo Q8 ve Gemma 4 varsayılanları değiştirilmedi.
+
+[Değişiklik notları](release-notes/v0.14.0.md) · [Başarılı Android derlemesi ve APK](https://github.com/numandegirmenci/gunizi-android/actions/runs/45026044048)
+
+**Kurulum:** GitHub Actions'taki APK `com.gunizi.app.ai10` kimliğiyle ayrı kurulur; mevcut Günİzi verilerini otomatik taşımaz. Önceki sürümü silme. Android CI testleri ve imza kontrolü başarılıdır, ancak Samsung cihazında gerçek saat geçişi ve pil ölçümü henüz yapılmamıştır.
+
+---
+
 ## Günİzi v0.13.1 — Canlı analiz ve işlem başlatma düzeltmesi
 
 v0.13.0'da kullanıcı testinde tespit edilen **anlaşılmayan bekleme, gizli ilerleme paneli ve geç gelen konuşma akışı** sorunları için düzeltme sürümüdür.
