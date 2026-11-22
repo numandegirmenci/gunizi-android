@@ -1,59 +1,71 @@
-# Günİzi Android • v0.2 (deneysel)
+# Günİzi Android • v0.3 (Deneysel)
 
-Türkçe, çevrimdışı odaklı Android ses kayıt uygulaması. Gecko'nun RAM'de döngüsel ses belleği yaklaşımı temel alınarak **ayrı bir prototip** olarak geliştirilmiştir.
+**Durum:** Android debug APK üretiliyor; gerçek cihazda 9 saatlik yük testi henüz yapılmadı.
 
-## İki çalışma modu
+Günİzi, Türkçe çevrimdışı ses kaydı ve yerel yapay zeka ile günlük rapor amaçlayan Android uygulamasıdır.
 
-**Sürekli Kayıt (Gecko tarzı):**
-- 16 kHz, mono, 16 bit ses, parçalı ve döngüsel RAM tamponunda tutulur.
-- Hedef 256 MiB = yaklaşık **2 saat 19 dakika** geriye dönük ses. Düşük Java heap sınırı varsa %60 ile sınırlanır; gerçek kapasite uygulamada gösterilir.
-- Kullanıcı istediğinde geçmişi seçtiği klasöre WAV olarak aktarır. 2 saatten uzun WAV dosyası **yaklaşık 270 MB** olabilir.
-- RAM belleği kalıcı arşiv değildir; sistem kapatırsa kaybolabilir.
-- Her 24 saati otomatik kalıcı kaydetmez. 24 saatlik **günlük özet yalnızca elde kayıt varsa** mümkündür.
+## Ekran tasarımı
+Ana ekran artık tek uzun liste değil: **Kayıt, Mesai, Rapor, Ayarlar** olmak üzere dört kompakt sekme bulunur.
 
-**Mesai Kaydı:**
-- Çalışma günleri, başlangıç / bitiş saatleri ve klasör bir kez seçilir.
-- Android izin veriyorsa, **kullanıcı tarafından önceden başlatılmış mikrofon servisi açıkken** kayıt otomatik başlar ve biter.
-- Gün sonunda 16 kbps mono Opus/OGG dosyası seçilen klasöre aktarılır.
-- Tamamlanmış OGG için Android Keystore / AES-GCM ile şifreli koruma ve kurtarma işlemi yapılır. **Aktif dosyanın ve son 5 dakikanın sürekli şifreli koruması henüz yok**.
+## Kayıt modları
 
-## Yerel Türkçe konuşma tanıma ve günlük özet
+**İsteğe Bağlı Kayıt**
+- Kullanıcı **15 dakika / 1 saat / 6 saat** seçer ve kayıt düğmesine basar.
+- Mikrofon kullanıcı başlatmadan çalışmaz.
+- Seçilen süre bittiğinde kayıt durdurulur ve seçilen klasöre Opus/OGG olarak aktarılır.
+- Durdur ve Kaydet düğmesi kaydı erken bitirir.
+- Bu mod **geçmişe dönük kayıt değildir**; mikrofon önceden kapalıysa eski sesler geri getirilemez.
+- 6 saatlik kayıt yaklaşık 43,2 MB teorik Opus ses alanı tutar (kapsayıcı + yedek ek olabilir).
 
-- **Vosk small-tr-0.3** (~35 MB sıkıştırılmış, Apache 2.0) Türkçe modelini kullanıcı **bir defa açıkça** indirir: <https://alphacephei.com/vosk/models>.
-- Model kurulduktan sonra ses kaydı, döküm ve özet **cihazdan dışarı aktarılmadan** işlenir.
-- Mesai kaydı tamamlandığında, şarj ve pil koşulları uygunsa Android WorkManager günlük rapor oluşturmak üzere işi sıraya alır.
-- Günİzi > Yerel yapay zeka ekranında seçilmiş başka bir ses kaydı da raporlanabilir.
-- Raporda **özet + 30 dakikalık akış + takip edilebilecek ifadeler + eksiksiz algılanmış konuşma dökümü** .txt dosyasına yazılır.
-- Özetleme şu anda **alıntı temelli / çıkarımsal**; **üretken dil modeli (LLM) içermez**. Konuşmayı yazıya çeviren bölüm gerçek yerel makine öğrenmesi modelidir.
-- Modelin Türkçe özel isimlerde, birden fazla kişinin konuşmasında ve gürültüde hata yapması mümkündür; kayıttan çıkarılmayan bilgileri üretmeye çalışmaz.
-- Saatler ses dosyasının başlangıcına göre yazılır. Konuşma olmayan aralıklar veya eksik ses yakalama durumları kayıtta görünmeyebilir.
+**Mesai Kaydı**
+- Çalışma günleri, başlangıç/bitiş saatleri ve klasör bir kez ayarlanır.
+- Kullanıcı hizmeti uygulama açıkken etkinleştirir; hizmet çalışmaya devam ettiği sürece saatlerde otomatik kayıt tutar.
+- Android 14+ mikrofon kısıtlamaları nedeniyle sistem hizmeti kapatmışsa uygulama kendi başına, izinsiz yeniden başlayamaz.
+- Mesai bitiminde kayıt klasöre taşınır; tamamlanmış kayıt için geçici şifreli yedek kullanılır.
+- Aktif kayıt dosyası henüz sürekli olarak şifrelenmemektedir.
 
-## Pil tüketimi karşılaştırması
+## Gerçek yerel yapay zeka (Whisper + Qwen3)
 
-- Ana ekrandaki **Pil ve Performans** alanından iki modun kayıt süreleri ve teorik ses boyutları karşılaştırılabilir.
-- Kaydırıcılı pil hesabı **varsayımsaldır**. Uygulamaya ait gerçek enerji ölçümü olarak sunulmaz.
-- Gerçek tüketim hedef cihazda kontrollü testlerle belirlenmelidir.
-- Şarjda özetleme varsayılanı, gün içinde ağır yapay zeka işinin pil tüketmesini azaltmayı amaçlar.
+Bu prototipte artık iki ayrı model katmanı bulunmaktadır:
 
-## İzinler ve güvenlik
+1. **Whisper small multilingual**: yaklaşık 488 MB. Türkçe dahil çevrimdışı konuşma tanıma.
+2. **Qwen3-1.7B Q4_K_M**: yaklaşık 1,28 GB. Yerel dil modeli ile üretken Türkçe özetleme.
 
-- **Mikrofon:** çalışma için gerekli; kullanıcı uygulama açıkken izin verir ve kayıt hizmetini başlatır.
-- **Bildirim:** mikrofon hizmetini ve kayıt/özetleme durumunu görmek için; Android 13+ ayarı.
-- **Kayıt klasörü:** Android'in klasör seçicisiyle tek seferlik ve kalıcı SAF erişimi.
-- **İnternet:** yalnızca kullanıcının başlattığı Türkçe model indirmesi; ses ve döküm sunucuya gönderilmez.
-- **İsteğe bağlı Samsung pil ayarı:** uygulama sistem pil optimizasyon ayarlarına yönlendirebilir. Herhangi bir izni sessizce vermez.
-- Android 14+ arka plandan mikrofon foreground service başlatma kısıtlaması **aşılamaz**. Servis sistem tarafından kapatıldığında otomatik başlangıç garanti edilmez.
-- Aynı anda Gecko ve Günİzi mikrofon kullanıyorsa ses erişimi rekabeti yaşanabilir. Test sırasında tek uygulama önerilir.
-- Diğer kişilerin konuşmalarını kaydetmeden önce ilgili kişileri bilgilendirin ve gerekli izinleri alın.
+Her iki model de **Rapor** sekmesinden kullanıcının açık onayıyla indirilir. Özgün model indirme URL'leri:
+- Whisper: https://huggingface.co/ggerganov/whisper.cpp
+- Qwen3: https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF
 
-## APK
+İndirme sonrasında SHA-256 dosya bütünlüğü doğrulanır. Kayıt, çözümleme ve özetleme sırasında ses veya döküm hiçbir internet sunucusuna gönderilmez.
 
-GitHub Actions > **Android Debug APK** > son başarılı işlem > **Artifacts** > `GunIzi-debug-apk`.
+### 9 saatlik rapor yöntemi
+- Android MediaCodec ile ses **akış halinde çözülür** ve beşer dakikalık geçici WAV parçaları oluşturulur.
+- Whisper, parçaları tek tek Türkçe metne dönüştürür; saatler korunur.
+- Tam döküm kaydedilir; model hatası özetlemeden önce oluşsa bile verinin korunması hedeflenir.
+- Qwen3, zaman damgalı metni parçalara ayırarak özetler ve sonra parçaları birleştirerek genel rapor hazırlar.
+- Ara Qwen3 özetleri uygulamanın özel alanında kontrol noktası olarak saklanır.
+- Sonuç: **günün özeti + kronoloji + kararlar + yapılacaklar + bekleyenler + tam konuşma dökümü**.
+- İşlem saatler sürebilir. Android'in arka plan çalışma sınırları veya ısı/pil kısıtlamaları yüzünden durdurulabilir. Cihazda uçtan uca doğrulama henüz yapılmadı.
 
-Bu **debug/test APK**'sıdır; cihaz üstünde uzun süreli ve hukuki kritik kayıtlarda güvenilirlik doğrulanmadı. Özel telefon ve Android sürümlerine bağlı sorunlar olabilir.
+**Önemli:** Model konuşmayı hatalı algılayabilir ve dili yanlış yorumlayabilir. Özet, ses kaydıyla doğrulanmalıdır. Sınırsız doğruluk veya tüm konuşmaların mutlaka eksiksiz çözüleceği vaat edilmez.
 
-## Kaynak ve krediler
+## İzinler ve pil
+- Mikrofon izni kullanıcıdan açıkça istenir.
+- Bildirim izni kullanıcıya bırakılır.
+- Seçilen kayıt klasörüne Android Storage Access Framework üzerinden kalıcı erişim alınır.
+- Pil karşılaştırma ekranı seçili manuel kayıt süresi ile mesai süresini gösterir; **gerçek ölçümler yerine varsayımsal hesapları açıkça belirtir**.
+- Yerel yapay zeka yoğun CPU/RAM kullanabilir. Otomatik raporlar varsayılan olarak şarj koşulu sağlanınca başlar.
+- Bir cihazın gizlilik ve mikrofon göstergeleri Android tarafından yönetilir; uygulama bunları gizlemez.
 
-- Gecko: <https://github.com/anantdark/Gecko>
-- Vosk: <https://alphacephei.com/vosk/>
-- Android background microphone foreground service kısıtlamaları: <https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start>
+## APK derleme
+**GitHub Actions → Android Debug APK → son başarılı çalışma → Artifacts → GunIzi-debug-apk**.
+
+APK, test amaçlı debug paketidir. Eski debug sürümü farklı imzalanmışsa güncelleme yüklenmeyebilir; eski sürümü kaldırmadan önce ses kayıtlarını ayrıca yedekleyin.
+
+## Kaynak/krediler
+Gecko projesinin RAM tabanlı ses belleği fikri ilk prototipe ilham vermiştir; Günİzi'nin bu sürümü iki farklı çalışma mantığı ve ayrı kod tabanıyla geliştirilmektedir.
+- https://github.com/anantdark/Gecko
+- https://github.com/ffmpegkit-maintained/whisper
+- https://github.com/ffmpegkit-maintained/llama-android
+- https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start
+
+Başkalarının konuşmalarının kaydı için gerekli bilgilendirme ve izinlere dikkat edin.
