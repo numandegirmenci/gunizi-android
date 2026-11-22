@@ -181,7 +181,10 @@ public final class SummaryActivity extends Activity {
                     .setMessage("Önce konuşmayı yazıya dök. Sonrasında ses dosyasını tekrar "+
                         "çözmeden yeni rapor oluşturabilirsin.")
                     .setPositiveButton("Anladım",null).show();
-            }else refreshStatus();
+            }else{
+                refreshStatus();
+                showLiveStatus();
+            }
         });
 
         text(extras,"Yerel modeller RAM'e ve işlemciye göre yavaş çalışabilir. "+
