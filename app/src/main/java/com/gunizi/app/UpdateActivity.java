@@ -102,6 +102,15 @@ public final class UpdateActivity extends Activity {
         int saved=p.getInt("downloadVersion",0);
         boolean downloaded=file.isFile()&&file.length()>100_000&&remote>0&&saved==remote;
         install.setEnabled(false);
+        if(AppUpdateWorker.independent(this)){
+            compatibility.setText("Güncelleme kontrolü kullanılabilir. Bu kurulumun paket kimliği "+
+                "ayrı olduğu için GitHub'daki APK üzerine kurulamaz. "+
+                "Yeni sürümü GitHub Releases üzerinden ayrı kurabilirsin; "+
+                "mevcut kayıtlarını silme.");
+            compatibility.setTextColor(0xffedb46f);
+            install.setText("Bu kurulumun üzerine güncelleme desteklenmiyor");
+            return;
+        }
         if(remote>0&&remote<=installed){
             compatibility.setText("Yüklü uygulama zaten yayınlanan sürümle aynı veya daha yeni. "+
                 "Yeni sürüm yayınlandığında güncelleme bildirimi gelecektir.");
@@ -142,6 +151,11 @@ public final class UpdateActivity extends Activity {
     }
 
     private void install(){
+        if(AppUpdateWorker.independent(this)){
+            compatibility.setText("Ayrı kurulumun üzerine uyumsuz APK yüklenmez. "+
+                "GitHub Releases sayfasındaki sürümün paket ve imzasını kontrol et.");
+            install.setEnabled(false);return;
+        }
         File file=AppUpdateWorker.packageFile(this);
         ReleaseApkValidator.Result result=ReleaseApkValidator.verify(this,file);
         if(!result.compatible){
