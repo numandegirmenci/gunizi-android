@@ -10,14 +10,14 @@ android {
         minSdk 29
         targetSdk 35
         ndk { abiFilters 'arm64-v8a' }
-        versionCode 17
-        versionName '0.13.1'
+        versionCode 18
+        versionName '0.13.2'
         manifestPlaceholders = [appLabel: 'Günİzi']
     }
     buildTypes {
         debug {
             // Side-by-side test install. Never overwrite the installed production app.
-            applicationIdSuffix '.ai8'
+            applicationIdSuffix '.ai9'
             manifestPlaceholders = [appLabel: 'Günİzi']
         }
         release {
