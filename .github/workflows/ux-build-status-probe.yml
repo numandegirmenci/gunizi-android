@@ -24,6 +24,6 @@ jobs:
           test -n "$RESULT"
           echo "$RESULT"
           CONTENT="$(printf '%s\n' "$RESULT" | base64 -w 0)"
-          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/docs/GUNIZI_0130_BUILD_RUN4.txt" \
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/docs/GUNIZI_0130_BUILD_RUN5.txt" \
             -f message="Record Günİzi 0.13 memory build run" \
             -f content="$CONTENT"
