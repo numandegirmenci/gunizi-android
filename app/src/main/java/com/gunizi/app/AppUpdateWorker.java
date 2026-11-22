@@ -240,8 +240,8 @@ public final class AppUpdateWorker extends Worker {
             PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
         String summary=shortNotes(notes);
         Notification.BigTextStyle style=new Notification.BigTextStyle()
-            .bigText("Bu sürümde neler yeni?\\n"+summary+
-                "\\nKurulumdan önce ayrıntılı değişiklikleri incele.")
+            .bigText("Bu sürümde neler yeni?\n"+summary+
+                "\nKurulumdan önce ayrıntılı değişiklikleri incele.")
             .setBigContentTitle("Günİzi "+version+" güncellemesi");
         Notification notification=new Notification.Builder(c,CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
