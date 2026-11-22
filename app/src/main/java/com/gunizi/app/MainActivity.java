@@ -297,8 +297,11 @@ public final class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int request,String[] names,int[] results){
         super.onRequestPermissionsResult(request,names,results);
         if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED){
-            if(request==MIC){if(tab==1)startWork();else startManual();}
-            else toast("Bildirim izni verildi.");
+            if(request==MIC){
+                if(tab==0)startManual();
+                else if(tab==1)startWork();
+                else toast("Mikrofon izni verildi. Kayıt kendiliğinden başlamaz.");
+            }else toast("Bildirim izni verildi.");
         }else toast("İzin verilmedi.");show(tab);
     }
     private void refresh(){
