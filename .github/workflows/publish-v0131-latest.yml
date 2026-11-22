@@ -57,6 +57,13 @@ jobs:
             echo "::error::Release already exists; refusing to overwrite"
             exit 1
           fi
+          # Create the lightweight Git ref separately: release API may be unable to
+          # create tags on behalf of the GitHub Actions installation.
+          if ! gh api "repos/$REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            gh api --method POST "repos/$REPO/git/refs" \
+              -f ref="refs/tags/$TAG" \
+              -f sha="6b6d425c37f0a6562167c2f1f3faffacf956b7f3"
+          fi
           cat > notes.md <<'NOTES'
           ## Günİzi v0.13.1
 
