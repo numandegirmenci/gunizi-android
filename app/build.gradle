@@ -28,3 +28,19 @@ dependencies {
     implementation 'dev.ffmpegkit-maintained:llama-android:0.1.1'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
 }
+
+/*
+ * Signed GitHub Release APKs require a single, persistent private keystore.
+ * It is supplied from GitHub Actions Secrets and NEVER committed to git.
+ * Debug builds remain independent and may not install over differently signed releases.
+ */
+def signingStorePath = System.getenv('GUNIZI_KEYSTORE_PATH')
+if (signingStorePath) {
+    android.signingConfigs.create('guniziRelease') {
+        storeFile file(signingStorePath)
+        storePassword System.getenv('GUNIZI_KEYSTORE_PASSWORD')
+        keyAlias System.getenv('GUNIZI_KEY_ALIAS')
+        keyPassword System.getenv('GUNIZI_KEY_PASSWORD')
+    }
+    android.buildTypes.release.signingConfig = android.signingConfigs.guniziRelease
+}
