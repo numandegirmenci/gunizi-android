@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/build-publish-v0150.yml'
+      - 'app/src/main/java/com/gunizi/app/**'
+      - 'app/src/test/java/com/gunizi/app/**'
+      - 'app/build.gradle'
   workflow_dispatch:
 
 permissions:
@@ -13,7 +16,7 @@ permissions:
 
 concurrency:
   group: gunizi-v0150-stable
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   android:
@@ -40,6 +43,8 @@ jobs:
           grep -F 'auto.setChecked(AppUpdateWorker.enabled(this));' app/src/main/java/com/gunizi/app/MainActivity.java
           grep -F 'AppUpdateWorker.independent(this)' app/src/main/java/com/gunizi/app/MainActivity.java
           grep -F 'if(independent(c))' app/src/main/java/com/gunizi/app/AppUpdateWorker.java
+          grep -F 'ReleaseVersion.compare(tag,installedInfo.versionName)' app/src/main/java/com/gunizi/app/AppUpdateWorker.java
+          test -f app/src/test/java/com/gunizi/app/ReleaseVersionTest.java
           grep -F 'ReleaseApkValidator.verify(this,file)' app/src/main/java/com/gunizi/app/UpdateActivity.java
           grep -F 'HistoryScheduleWindow.active' app/src/main/java/com/gunizi/app/Prefs.java
           grep -F 'LiveTranscriptStore.append' app/src/main/java/com/gunizi/app/CallVaultWhisperEngine.kt
@@ -164,6 +169,11 @@ jobs:
           test -s GunIzi-v0.15.0.apk
           sha256sum --check SHA256.txt
           TAG="v0.15.0"
+          HEAD_SHA="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          if [ "$GITHUB_SHA" != "$HEAD_SHA" ]; then
+            echo "::error::Main advanced since this build; refusing to publish stale APK."
+            exit 1
+          fi
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "::error::Refusing to replace existing v0.15.0 release."
             exit 1
