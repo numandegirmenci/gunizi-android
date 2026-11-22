@@ -1,0 +1,29 @@
+name: Inspect Günİzi UX APK build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ux-build-status-probe.yml'
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish current UX build run id for diagnosis
+        env:
+          GH_${{ github.token }}: TOKEN
+        run: |
+          set -euo pipefail
+          RESULT="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build-v0112-ux-test.yml/runs?per_page=5" \
+            --jq '.workflow_runs | map(select(.head_branch == "main")) | first | "\(.id) \(.status) \(.conclusion) \(.head_sha) \(.html_url)"')"
+          test -n "$RESULT"
+          echo "$RESULT"
+          CONTENT="$(printf '%s\n' "$RESULT" | base64 -w 0)"
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/docs/UX_TEST_BUILD_RUN.txt" \
+            -f message="Record UX test workflow run for troubleshooting" \
+            -f content="$CONTENT"
