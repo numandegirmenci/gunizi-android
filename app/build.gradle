@@ -9,8 +9,8 @@ android {
         applicationId 'com.gunizi.app'
         minSdk 29
         targetSdk 35
-        versionCode 4
-        versionName '0.4-history-preview'
+        versionCode 5
+        versionName '0.5-update-preview'
     }
     buildTypes {
         release { minifyEnabled false }
@@ -23,6 +23,7 @@ android {
 
 dependencies {
     implementation 'androidx.work:work-runtime:2.10.5'
+    implementation 'androidx.core:core:1.15.0'
     implementation 'dev.ffmpegkit-maintained:whisper-android:1.0.0'
     implementation 'dev.ffmpegkit-maintained:llama-android:0.1.1'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'

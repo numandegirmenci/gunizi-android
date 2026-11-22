@@ -33,7 +33,7 @@ public final class MainActivity extends Activity {
     };
 
     @Override public void onCreate(Bundle b){
-        super.onCreate(b);prefs=new Prefs(this);show(0);
+        super.onCreate(b);prefs=new Prefs(this);AppUpdateWorker.schedule(this);show(0);
     }
     @Override protected void onResume(){super.onResume();handler.post(heartbeat);}
     @Override protected void onPause(){handler.removeCallbacks(heartbeat);super.onPause();}
@@ -250,6 +250,19 @@ public final class MainActivity extends Activity {
             +"9 saatlik kayıtların çözülmesi uzun sürebilir ve şarj gerektirebilir.");
     }
     private void settingsTab(){
+        LinearLayout updates=card("Uygulama güncellemeleri");
+        muted(updates,"Yeni sürümleri GitHub Releases üzerinden arka planda kontrol eder. "+
+            "Wi-Fi bağlantısında APK'yı indirebilir. Kurulumu her zaman sen onaylarsın.");
+        gap(updates,9);
+        Switch auto=new Switch(this);auto.setText("Otomatik güncelleme kontrolü");
+        auto.setTextColor(WHITE);auto.setChecked(AppUpdateWorker.enabled(this));
+        updates.addView(auto);
+        auto.setOnCheckedChangeListener((v,on)->AppUpdateWorker.enable(this,on));
+        gap(updates,8);
+        Button update=button("Güncellemeleri kontrol et",false);
+        updates.addView(update);
+        update.setOnClickListener(v->startActivity(new Intent(this,UpdateActivity.class)));
+
         LinearLayout permissions=card("İzinler");
         muted(permissions,"Gerekli izinleri bir kez ver. Hiçbir izin senin onayın olmadan etkinleştirilmez.");
         gap(permissions,10);

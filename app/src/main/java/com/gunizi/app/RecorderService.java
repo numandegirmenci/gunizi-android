@@ -32,7 +32,7 @@ public final class RecorderService extends Service {
     public static volatile int historyHeldSeconds=0;
     public static volatile String stateText="Hazır",lastEvent="Henüz kayıt oluşturulmadı";
     private static final int ID=103;
-    private static final String CHANNEL="gunizi_recording";
+    private static final String CHANNEL="gunizi_recording_quiet_v2";
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private MediaRecorder recorder;
@@ -53,7 +53,7 @@ public final class RecorderService extends Service {
             applySchedule();
             if(running){
                 getSystemService(NotificationManager.class).notify(ID,notification());
-                handler.postDelayed(this,1000);
+                handler.postDelayed(this,15000);
             }
         }
     };
@@ -128,7 +128,7 @@ public final class RecorderService extends Service {
         Notification.Builder builder=new Notification.Builder(this,CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle(title).setContentText(desc).setContentIntent(open)
-            .setOngoing(true).setOnlyAlertOnce(true)
+            .setOngoing(true).setOnlyAlertOnce(true).setSilent(true).setShowWhen(false)
             .setCategory(Notification.CATEGORY_SERVICE).setPriority(Notification.PRIORITY_LOW)
             .addAction(android.R.drawable.ic_media_pause,"Dinlemeyi durdur",stop);
         if(historyActive){

@@ -133,7 +133,8 @@ public final class AppUpdateWorker extends Worker {
                 pref.edit().putString("lastDownloadError",ex.getMessage()).apply();
             }
         }
-        showUpdateNotice(c,tag,packageFile(c).exists());
+        showUpdateNotice(c,tag,packageFile(c).isFile() &&
+            pref.getInt("downloadVersion",0)==remote);
         return "Yeni sürüm bulundu: "+tag+(packageFile(c).exists()?" • İndirildi":" • Yayınlandı");
     }
     private static int versionCode(JSONObject release){
