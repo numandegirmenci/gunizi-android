@@ -55,17 +55,45 @@ public final class SummaryActivity extends Activity {
         text(head,"Yerel Yapay Zeka",23,true);
         text(head,"9 saatlik ses kaydını cihazda beşer dakikalık bölümler halinde işler.",13,false);
         LinearLayout models=card();
-        text(models,"1. Konuşma tanıma · Whisper small",17,true);
-        whisperState=text(models,"Türkçe model: yaklaşık 488 MB",13,false);
-        Button installWhisper=button(models,"Whisper modelini indir");
+        text(models,"1. Türkçe konuşma tanıma · Kalite seçimi",17,true);
+        text(models,"Daha iyi konuşma algılama, konu tablosunun doğruluğunu da etkiler. "+
+            "Büyük model daha fazla RAM ve işlem süresi ister.",13,false);
+        AnalysisPreferences speechPrefs=new AnalysisPreferences(this);
+        RadioGroup speechChoices=new RadioGroup(this);
+        speechChoices.setOrientation(RadioGroup.VERTICAL);
+        RadioButton speechSmall=new RadioButton(this),speechTurbo=new RadioButton(this);
+        speechSmall.setText("Whisper small · Dengeli (488 MB)");
+        speechTurbo.setText("Whisper Large v3 Turbo · Yüksek kalite (574 MB)");
+        speechSmall.setTextColor(WHITE);speechTurbo.setTextColor(WHITE);
+        speechSmall.setId(View.generateViewId());speechTurbo.setId(View.generateViewId());
+        speechChoices.addView(speechSmall);speechChoices.addView(speechTurbo);
+        models.addView(speechChoices);
+        whisperState=text(models,"Dil: Türkçe. Konuşma modeli çevrimdışı çalışır.",13,false);
+        Button installWhisper=button(models,"Seçili konuşma modelini indir");
+        speechChoices.check(AiModelStore.WHISPER_TURBO.equals(speechPrefs.speechModel())?
+            speechTurbo.getId():speechSmall.getId());
+        speechChoices.setOnCheckedChangeListener((group,id)->{
+            String chosen=id==speechTurbo.getId()?AiModelStore.WHISPER_TURBO:AiModelStore.WHISPER;
+            speechPrefs.speechModel(chosen);
+            boolean ready=AiModelStore.ready(this,chosen);
+            whisperState.setText(ready?"Seçilen konuşma modeli hazır ✓":
+                AiModelStore.WHISPER_TURBO.equals(chosen)?
+                    "Large v3 Turbo: güçlü telefonlarda önerilir • yaklaşık 574 MB":
+                    "Whisper small: daha az işlem gücü • yaklaşık 488 MB");
+            installWhisper.setEnabled(!ready);
+        });
         installWhisper.setOnClickListener(v->{
+            final String model=speechPrefs.speechModel();
             new android.app.AlertDialog.Builder(this)
-                .setTitle("Whisper modelini indir")
-                .setMessage("Yaklaşık 488 MB indirilecek. Yalnızca bir kez gerekli. Ses kayıtların sunucuya gönderilmez. Wi-Fi önerilir.")
+                .setTitle("Konuşma modelini indir")
+                .setMessage("Model: "+(AiModelStore.WHISPER_TURBO.equals(model)?
+                    "Whisper Large v3 Turbo · yaklaşık 574 MB":
+                    "Whisper small · yaklaşık 488 MB")+
+                    ". İndirme için Wi-Fi önerilir. Ses kayıtları sunucuya gönderilmez.")
                 .setNegativeButton("Vazgeç",null)
                 .setPositiveButton("İndir",(d,w)->{
                     installWhisper.setEnabled(false);
-                    AiModelStore.fetch(this,AiModelStore.WHISPER,(message,done)->{
+                    AiModelStore.fetch(this,model,(message,done)->{
                         whisperState.setText(message);
                         if(done)installWhisper.setEnabled(false);
                         else if(message.startsWith("Model hatası"))installWhisper.setEnabled(true);
@@ -113,10 +141,10 @@ public final class SummaryActivity extends Activity {
                     });
                 }).show();
         });
-        installWhisper.setEnabled(!AiModelStore.ready(this,AiModelStore.WHISPER));
+        installWhisper.setEnabled(!AiModelStore.ready(this,speechPrefs.speechModel()));
         installQwen.setEnabled(!AiModelStore.ready(this,p.aiModel()));
-        if(AiModelStore.ready(this,AiModelStore.WHISPER))
-            whisperState.setText("Whisper modeli hazır ✓");
+        if(AiModelStore.ready(this,speechPrefs.speechModel()))
+            whisperState.setText("Seçilen Whisper modeli hazır ✓");
         if(AiModelStore.ready(this,p.aiModel()))
             qwenState.setText("Seçilen Qwen3 modeli hazır ✓");
         LinearLayout instructions=card();
@@ -146,7 +174,7 @@ public final class SummaryActivity extends Activity {
             +"işleme alınır. Mevcut bir ses kaydını da elle seçebilirsin.",13,false);
         Button select=button(analyze,"Kaydedilmiş sesi seç ve özetle");
         select.setOnClickListener(v->{
-            if(!AiModelStore.ready(this,AiModelStore.WHISPER)||
+            if(!AiModelStore.ready(this,new AnalysisPreferences(this).speechModel())||
                !AiModelStore.ready(this,new Prefs(this).aiModel())){
                 Toast.makeText(this,"Önce iki yerel modeli indir.",Toast.LENGTH_LONG).show();return;
             }
