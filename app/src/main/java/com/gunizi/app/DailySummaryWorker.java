@@ -233,7 +233,8 @@ public final class DailySummaryWorker extends Worker {
                     throw new IOException("Önceki dökümün kaynak kimliği bulunamadı");
             }
             String stem=fileName.replaceAll("(?i)\\.(ogg|opus|wav|m4a|mp3|aac)$","");
-            String base=safe(stem)+"_"+sourceHash.substring(0,16)+"_"+
+            String base=safe(stem).substring(0,Math.min(12,safe(stem).length()))+
+                "_"+sourceHash.substring(0,12)+"_"+
                 getId().toString().replace("-","");
             c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
                 .putString("analysisSourceDigest",sourceHash).apply();
