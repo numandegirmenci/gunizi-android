@@ -24,6 +24,8 @@
         <activity android:name=".TranscriptActivity" android:exported="false" />
         <activity android:name=".UpdateActivity" android:exported="false" />
         <activity android:name=".ReportTableActivity" android:exported="false" />
+        <activity android:name=".AudioEvidenceActivity" android:exported="false" />
+        <activity android:name=".WorkMemoryActivity" android:exported="false" />
         <activity android:name=".UserNotesActivity" android:exported="false" />
         <provider android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.updatefiles"
