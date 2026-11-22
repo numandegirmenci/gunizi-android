@@ -25,9 +25,9 @@ final class AnalysisPreferences {
         p.edit().putString("focus",s.isEmpty()?DEFAULT:s).apply();
     }
     String speechModel(){
-        String id=p.getString("speech_model",AiModelStore.WHISPER);
+        String id=p.getString("speech_model",AiModelStore.WHISPER_BASE);
         return AiModelStore.WHISPER_TURBO.equals(id)||
-            AiModelStore.WHISPER_BASE.equals(id)?id:AiModelStore.WHISPER;
+            AiModelStore.WHISPER_BASE.equals(id)?id:AiModelStore.WHISPER_BASE;
     }
     void speechModel(String id){
         if(!AiModelStore.WHISPER.equals(id)&&
