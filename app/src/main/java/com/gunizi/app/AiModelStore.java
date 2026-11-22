@@ -54,7 +54,7 @@ final class AiModelStore {
         new Spec(GEMMA,"gemma-4-E2B-it-qat-UD-Q4_K_XL.gguf",
             HF+"unsloth/gemma-4-E2B-it-qat-GGUF/resolve/main/gemma-4-E2B-it-qat-UD-Q4_K_XL.gguf",
             "e531007218dfab990486a5de7676a6932d6ea8dea233d1f698d7c21cf8a16889",
-            2620370976L,2600000000L,"Gemma 4 E2B QAT • CallVault",true,false),
+            2620370976L,2600000000L,"Gemma 4 E2B QAT • Ayrıntılı",true,false),
         new Spec(QWEN,"Qwen3-1.7B-Q4_K_M.gguf",
             HF+"ggml-org/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf",
             "d2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5",
