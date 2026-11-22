@@ -73,15 +73,15 @@ object FullDaySummarizer {
             progress.update(99,"Görüşmeler konu başlıklarına ayrılıyor")
             val tableText = try {
                 Llama.complete(model,
-                    prompt="/no_think\\nAşağıdaki günlük notları konu konu sınıflandır. "+
+                    prompt="/no_think\nAşağıdaki günlük notları konu konu sınıflandır. "+
                         "HER KONU TEK SATIR: Tam altı sütun, yalnızca sekme (TAB) ile ayrılmış "+
                         "olmalı. Sütun sırası: SAAT, KONU, KONUŞULANLAR, KARAR, YAPILACAK, SORUMLU. "+
                         "Boş veya bilinmeyen bilgi için Belirtilmedi yaz. "+
                         "Yalnızca verilen kanıta dayan, uydurma. "+
                         "Her farklı ana konuda ayrı satır oluştur; zaman damgalarını koru. "+
                         "Markdown tablo, açıklama veya sütun başlığı yazma. "+
-                        "En fazla 35 satır üret.\\n\\n"+(overall+"\\n\\n"+
-                            notes.joinToString("\\n\\n")).take(9500),
+                        "En fazla 35 satır üret.\n\n"+(overall+"\n\n"+
+                            notes.joinToString("\n\n")).take(9500),
                     systemPrompt=SYSTEM,maxTokens=2000).text.trim()
             } catch (e: Exception) {
                 ""
@@ -89,9 +89,9 @@ object FullDaySummarizer {
             val detailed=notes.mapIndexed { index, item ->
                 "KAYIT BÖLÜMÜ "+(index+1).toString()+" / "+notes.size+"\n"+item
             }.joinToString("\n\n")
-            overall+"\\n\\n=== GÜN BOYUNCA AYRINTILI PARÇA ÖZETLERİ ===\\n\\n"+
-                detailed+"\\n\\n"+TopicReportRenderer.START+"\\n"+tableText+
-                "\\n"+TopicReportRenderer.END
+            overall+"\n\n=== GÜN BOYUNCA AYRINTILI PARÇA ÖZETLERİ ===\n\n"+
+                detailed+"\n\n"+TopicReportRenderer.START+"\n"+tableText+
+                "\n"+TopicReportRenderer.END
         } finally {
             Llama.releaseModel(model)
         }
