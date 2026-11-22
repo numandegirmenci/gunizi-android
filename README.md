@@ -14,6 +14,20 @@
 Günİzi, Türkçe çevrimdışı ses kaydı ve yerel yapay zeka ile günlük rapor amaçlayan Android uygulamasıdır.
 
 
+
+## AI 2.0 Test v0.10.0 — Çalışan ilk uygulama güncellemesi
+
+Yeni AI 2.0 planının ilk **gerçek uygulama kodu** GitHub'a işlendi:
+ses ön inceleme, kayıt merkezli oynatıcı, bağımsız konuşma/rapor komutları,
+model ve işleme aşamalarının ayrı takibi ve 30 saniyelik Whisper parçaları.
+
+Test APK paketi `com.gunizi.app.ai2` olarak ana uygulamanın **yanına**
+kurulur. Diğer test sürümlerinin yerel modellerini devralmaz.
+Bu sürüm henüz yeni whisper.cpp JNI veya VAD motoru değildir.
+
+[Açık sürüm notları](release-notes/v0.10.0.md) ·
+[AI 2.0 mimari yol haritası](docs/AI_ARCHITECTURE_V010.md)
+
 ## Günİzi AI 2.0 (v0.10 hazırlığı) — Mimari tasarım
 
 CallVault'un yerel Whisper / VAD / LLM iş akışından yararlanarak Günİzi'nin
