@@ -271,7 +271,7 @@ public final class MainActivity extends Activity {
         models.addView(modelSettings);
         modelSettings.setOnClickListener(v->startActivity(new Intent(this,ModelSettingsActivity.class)));
         LinearLayout updates=card("Uygulama güncellemeleri");
-        boolean testBuild=getPackageName().endsWith(".test")||getPackageName().endsWith(".ai2")||getPackageName().endsWith(".ai3")||getPackageName().endsWith(".ai4")||getPackageName().endsWith(".ai5")||getPackageName().endsWith(".ai6");
+        boolean testBuild=getPackageName().endsWith(".test")||getPackageName().endsWith(".ai2")||getPackageName().endsWith(".ai3")||getPackageName().endsWith(".ai4")||getPackageName().endsWith(".ai5")||getPackageName().endsWith(".ai6")||getPackageName().endsWith(".ai7");
         muted(updates,testBuild?
             "Bu bağımsız Günİzi kurulumudur. Önceki uygulamanın kayıtlarına ve "+
             "modellerine dokunmaz. Otomatik güncelleme yalnızca kalıcı imzalı ana yayın içindir.":
