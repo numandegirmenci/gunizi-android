@@ -86,6 +86,7 @@ public final class DailySummaryWorker extends Worker {
             .putString("analysisWorkId",task.getId().toString())
             .putLong("analysisCompletedAt",0)
             .putString("summaryError","").apply();
+        LiveTranscriptStore.begin(c,task.getId().toString(),uri.toString());
         // Only one native AI pipeline runs at once: llama.cpp and whisper.cpp share RAM.
         WorkManager.getInstance(c).enqueueUniqueWork(
             "gunizi-single-ai-job",ExistingWorkPolicy.REPLACE,task);
@@ -125,6 +126,8 @@ public final class DailySummaryWorker extends Worker {
             .putInt("analysisPercent",0)
             .putLong("analysisStartedAt",now).putLong("analysisProgressAt",now)
             .putString("summaryError","").putString("analysisPreview","")
+            .putString("analysisTimeline","").putString("analysisLivePath","")
+            .putString("analysisLiveSourceUri","")
             .putString("analysisWorkId",request.getId().toString())
             .putLong("analysisCompletedAt",0).apply();
         WorkManager.getInstance(c).enqueueUniqueWork("gunizi-single-ai-job",
