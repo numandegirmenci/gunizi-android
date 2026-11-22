@@ -300,6 +300,11 @@ public final class DailySummaryWorker extends Worker {
                 summary+"\n\n----- KONUŞMA DÖKÜMÜ -----\n"+transcript;
             if(folder!=null)ExportManager.writeText(c,folder,report,"GunIzi_Ozet_"+base+".txt");
             List<TopicReportRenderer.Entry> topics=TopicReportRenderer.parse(summary);
+            String reportSource=useExistingText?
+                c.getSharedPreferences("gunizi",Context.MODE_PRIVATE)
+                    .getString("transcriptSourceUri",""):uriString;
+            WorkMemoryStore.save(c,getId().toString().replace("-",""),fileName,
+                reportSource,sourceHash,topics);
             String html=TopicReportRenderer.html(topics,fileName);
             TopicReportRenderer.saveInternal(c,html,base);
             c.getSharedPreferences("gunizi",Context.MODE_PRIVATE).edit()
