@@ -1,252 +1,216 @@
 package com.gunizi.app;
 
-import android.app.Activity;
-import android.content.Intent;
+import android.app.*;
+import android.content.*;
 import android.database.Cursor;
-import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
-import android.os.Bundle;
+import android.os.*;
 import android.provider.OpenableColumns;
-import android.view.View;
+import android.view.*;
 import android.widget.*;
 import androidx.work.*;
 import java.util.List;
 
-/** Model setup requires explicit clicks; inference itself runs exclusively on the phone. */
+/** Human-readable AI workspace: choose source, transcribe OR summarize, inspect results. */
 public final class SummaryActivity extends Activity {
-    private static final int PICK=321;
-    private static final int BG=0xff090e1b,PANEL=0xff172031,WHITE=0xfff0f7ff,
-        MUTED=0xffa2b4c9,CYAN=0xff38d4ca;
-    private LinearLayout root;
-    private TextView status,whisperState,qwenState;
-    private int dp(int n){return (int)(getResources().getDisplayMetrics().density*n+0.5f);}
-    @Override public void onCreate(Bundle b){
-        super.onCreate(b);build();
-    }
+    private static final int PICK=321,BG=0xff090e1b,PANEL=0xff172031,
+        WHITE=0xfff0f7ff,MUTED=0xffa2b4c9,CYAN=0xff38d4ca;
+    private String chosenMode=DailySummaryWorker.REPORT;
+    private ProgressBar progress;
+    private TextView stage,source,progressText,modelState;
+    private EditText focus;
+    private final Handler handler=new Handler(Looper.getMainLooper());
+    private final Runnable tick=new Runnable(){
+        @Override public void run(){refresh();handler.postDelayed(this,1800);}
+    };
+    private int dp(int n){return Math.round(getResources().getDisplayMetrics().density*n);}
     private GradientDrawable bg(int color){
-        GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(14));return d;
+        GradientDrawable b=new GradientDrawable();b.setColor(color);b.setCornerRadius(dp(15));return b;
     }
-    private LinearLayout card(){
+    private TextView text(LinearLayout root,String txt,int size,boolean strong){
+        TextView v=new TextView(this);v.setText(txt);v.setTextSize(size);
+        v.setTextColor(strong?WHITE:MUTED);
+        if(strong)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(10);
+        root.addView(v,p);return v;
+    }
+    private LinearLayout card(LinearLayout root){
         LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);
-        c.setPadding(dp(17),dp(15),dp(17),dp(14));c.setBackground(bg(PANEL));
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(12);
+        c.setPadding(dp(17),dp(17),dp(17),dp(17));c.setBackground(bg(PANEL));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(13);
         root.addView(c,p);return c;
     }
-    private TextView text(LinearLayout parent,String value,int size,boolean bold){
-        TextView t=new TextView(this);t.setText(value);t.setTextColor(bold?WHITE:MUTED);
-        t.setTextSize(size);if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(9);
-        parent.addView(t,p);return t;
+    private Button button(LinearLayout root,String label,boolean primary){
+        Button b=new Button(this);b.setAllCaps(false);b.setText(label);
+        b.setTextSize(15);b.setTextColor(primary?BG:WHITE);
+        b.setBackground(bg(primary?CYAN:0xff2a3b53));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(51));
+        p.bottomMargin=dp(9);root.addView(b,p);return b;
     }
-    private Button button(LinearLayout parent,String value){
-        Button b=new Button(this);b.setText(value);b.setAllCaps(false);
-        b.setTextSize(14);b.setTextColor(WHITE);b.setBackground(bg(0xff2b3a55));
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(47));p.bottomMargin=dp(8);
-        parent.addView(b,p);return b;
+    @Override public void onCreate(Bundle state){
+        super.onCreate(state);
+        if(state!=null)chosenMode=state.getString("chosenMode",DailySummaryWorker.REPORT);
+        build();
+    }
+    @Override protected void onSaveInstanceState(Bundle b){
+        super.onSaveInstanceState(b);b.putString("chosenMode",chosenMode);
     }
     private void build(){
-        ScrollView scroll=new ScrollView(this);scroll.setBackgroundColor(BG);
-        root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18),dp(18),dp(18),dp(25));scroll.addView(root);setContentView(scroll);
-        LinearLayout head=card();
-        Button back=button(head,"← Geri");back.setOnClickListener(v->finish());
-        text(head,"Yerel Yapay Zeka",23,true);
-        text(head,"9 saatlik ses kaydını cihazda beşer dakikalık bölümler halinde işler.",13,false);
-        LinearLayout models=card();
-        text(models,"1. Türkçe konuşma tanıma · Kalite seçimi",17,true);
-        text(models,"Daha iyi konuşma algılama, konu tablosunun doğruluğunu da etkiler. "+
-            "Büyük model daha fazla RAM ve işlem süresi ister.",13,false);
-        AnalysisPreferences speechPrefs=new AnalysisPreferences(this);
-        RadioGroup speechChoices=new RadioGroup(this);
-        speechChoices.setOrientation(RadioGroup.VERTICAL);
-        RadioButton speechSmall=new RadioButton(this),speechTurbo=new RadioButton(this);
-        speechSmall.setText("Whisper small · Dengeli (488 MB)");
-        speechTurbo.setText("Whisper Large v3 Turbo · Yüksek kalite (574 MB)");
-        speechSmall.setTextColor(WHITE);speechTurbo.setTextColor(WHITE);
-        speechSmall.setId(View.generateViewId());speechTurbo.setId(View.generateViewId());
-        speechChoices.addView(speechSmall);speechChoices.addView(speechTurbo);
-        models.addView(speechChoices);
-        whisperState=text(models,"Dil: Türkçe. Konuşma modeli çevrimdışı çalışır.",13,false);
-        Button installWhisper=button(models,"Seçili konuşma modelini indir");
-        speechChoices.check(AiModelStore.WHISPER_TURBO.equals(speechPrefs.speechModel())?
-            speechTurbo.getId():speechSmall.getId());
-        speechChoices.setOnCheckedChangeListener((group,id)->{
-            String chosen=id==speechTurbo.getId()?AiModelStore.WHISPER_TURBO:AiModelStore.WHISPER;
-            speechPrefs.speechModel(chosen);
-            boolean ready=AiModelStore.ready(this,chosen);
-            whisperState.setText(ready?"Seçilen konuşma modeli hazır ✓":
-                AiModelStore.WHISPER_TURBO.equals(chosen)?
-                    "Large v3 Turbo: güçlü telefonlarda önerilir • yaklaşık 574 MB":
-                    "Whisper small: daha az işlem gücü • yaklaşık 488 MB");
-            installWhisper.setEnabled(!ready);
-        });
-        installWhisper.setOnClickListener(v->{
-            final String model=speechPrefs.speechModel();
-            new android.app.AlertDialog.Builder(this)
-                .setTitle("Konuşma modelini indir")
-                .setMessage("Model: "+(AiModelStore.WHISPER_TURBO.equals(model)?
-                    "Whisper Large v3 Turbo · yaklaşık 574 MB":
-                    "Whisper small · yaklaşık 488 MB")+
-                    ". İndirme için Wi-Fi önerilir. Ses kayıtları sunucuya gönderilmez.")
-                .setNegativeButton("Vazgeç",null)
-                .setPositiveButton("İndir",(d,w)->{
-                    installWhisper.setEnabled(false);
-                    AiModelStore.fetch(this,model,(message,done)->{
-                        whisperState.setText(message);
-                        if(done)installWhisper.setEnabled(false);
-                        else if(message.startsWith("Model hatası"))installWhisper.setEnabled(true);
-                    });
-                }).show();
-        });
-        text(models,"2. Günlük özet · Model seçimi",17,true);
-        qwenState=text(models,"Önerilen: Qwen3-4B (2,5 GB, daha fazla RAM ve işlemci yükü).",13,false);
-        RadioGroup aiChoices=new RadioGroup(this);
-        aiChoices.setOrientation(RadioGroup.VERTICAL);
-        RadioButton balanced=new RadioButton(this),strong=new RadioButton(this);
-        balanced.setText("Qwen3-1.7B · Dengeli (1,28 GB)");
-        strong.setText("Qwen3-4B · Ayrıntılı (2,5 GB)");
-        balanced.setTextColor(WHITE);strong.setTextColor(WHITE);
-        balanced.setId(View.generateViewId());strong.setId(View.generateViewId());
-        aiChoices.addView(balanced);aiChoices.addView(strong);
-        models.addView(aiChoices);
-        Prefs p=new Prefs(this);
-        aiChoices.check(AiModelStore.QWEN4.equals(p.aiModel())?strong.getId():balanced.getId());
-        Button installQwen=button(models,"Seçilen Qwen3 modelini indir");
-        aiChoices.setOnCheckedChangeListener((group,checked)->{
-            String choice=checked==strong.getId()?AiModelStore.QWEN4:AiModelStore.QWEN;
-            p.aiModel(choice);
-            boolean ready=AiModelStore.ready(this,choice);
-            qwenState.setText(ready?"Seçilen model hazır ✓":
-                AiModelStore.QWEN4.equals(choice)?
-                "Qwen3-4B · 2,5 GB · daha ayrıntılı, daha yüksek pil/RAM":
-                "Qwen3-1.7B · 1,28 GB · daha düşük pil/RAM");
-            installQwen.setEnabled(!ready);
-        });
-        installQwen.setOnClickListener(v->{
-            final String selected=p.aiModel();
-            final String size=AiModelStore.QWEN4.equals(selected)?"2,5 GB":"1,28 GB";
-            new android.app.AlertDialog.Builder(this)
-                .setTitle("Yerel özet modelini indir")
-                .setMessage("Seçilen model "+size+". Wi-Fi, boş alan ve şarj önerilir. "+
-                    "Kurulumdan sonra özetleme cihazda çevrimdışı gerçekleşir.")
-                .setNegativeButton("Vazgeç",null)
-                .setPositiveButton("İndir",(d,w)->{
-                    installQwen.setEnabled(false);
-                    AiModelStore.fetch(this,selected,(message,done)->{
-                        qwenState.setText(message);
-                        if(done)installQwen.setEnabled(false);
-                        else if(message.startsWith("Model hatası"))installQwen.setEnabled(true);
-                    });
-                }).show();
-        });
-        installWhisper.setEnabled(!AiModelStore.ready(this,speechPrefs.speechModel()));
-        installQwen.setEnabled(!AiModelStore.ready(this,p.aiModel()));
-        if(AiModelStore.ready(this,speechPrefs.speechModel()))
-            whisperState.setText("Seçilen Whisper modeli hazır ✓");
-        if(AiModelStore.ready(this,p.aiModel()))
-            qwenState.setText("Seçilen Qwen3 modeli hazır ✓");
-        LinearLayout instructions=card();
-        text(instructions,"Yapay zeka neye dikkat etsin?",18,true);
-        text(instructions,"Örneğin ruhsat, abonelik, belediye görüşmeleri, kararlar, "+
-            "kişiler veya belirli bir proje. Talimatın sonraki analizlerde uygulanır.",13,false);
-        AnalysisPreferences profile=new AnalysisPreferences(this);
-        EditText focus=new EditText(this);
-        focus.setText(profile.focus());
-        focus.setTextColor(WHITE);
-        focus.setHintTextColor(MUTED);
-        focus.setTextSize(14);
-        focus.setMinLines(4);focus.setMaxLines(9);
-        focus.setHint("Örn. Alınan kararları, teslim tarihlerini ve sorumluları ayrıca çıkar.");
-        instructions.addView(focus);
-        Button saveFocus=button(instructions,"Analiz tercihimi kaydet");
-        saveFocus.setOnClickListener(v->{
-            profile.focus(focus.getText().toString());
-            Toast.makeText(this,"Yapay zeka analiz tercihi kaydedildi.",Toast.LENGTH_SHORT).show();
-        });
-        text(instructions,"Önemli: Yapay zeka kesinleşmeyen işleri karar gibi göstermemeli. "+
-            "Her maddede varsa ses kaydının kaynak saati yer alacak.",12,false);
+        ScrollView sc=new ScrollView(this);sc.setBackgroundColor(BG);
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(17),dp(20),dp(17),dp(24));sc.addView(root);
+        setContentView(sc);
+        text(root,"Günİzi • Yapay Zeka",24,true);
+        text(root,"Kaydını seç, ne yapılacağını belirle. İşlem sırasında başka "+
+            "uygulamalara geçebilirsin; ilerleme ve sonuç bildirimde gösterilir.",13,false);
 
-        LinearLayout analyze=card();
-        text(analyze,"Günlük rapor",19,true);
-        text(analyze,"İki model de kuruluysa mesai kayıtları telefon şarjdayken otomatik "
-            +"işleme alınır. Mevcut bir ses kaydını da elle seçebilirsin.",13,false);
-        Button select=button(analyze,"Kaydedilmiş sesi seç ve özetle");
-        select.setOnClickListener(v->{
-            // Selecting a report is explicit permission to use the instructions visible above.
-            profile.focus(focus.getText().toString());
-            if(!AiModelStore.ready(this,new AnalysisPreferences(this).speechModel())||
-               !AiModelStore.ready(this,new Prefs(this).aiModel())){
-                Toast.makeText(this,"Önce iki yerel modeli indir.",Toast.LENGTH_LONG).show();return;
-            }
-            if(new Prefs(this).folder()==null){
-                Toast.makeText(this,"Önce kayıt klasörü seç.",Toast.LENGTH_LONG).show();return;
-            }
-            Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("audio/*");
-            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-            startActivityForResult(i,PICK);
-        });
-        status=text(analyze,"Rapor kuyruğu kontrol ediliyor…",13,false);
-        Button topics=button(analyze,"Konu konu özet tablosunu aç");
+        LinearLayout analyze=card(root);
+        text(analyze,"1 • Ne yapmak istiyorsun?",18,true);
+        text(analyze,"Konuşmayı Yazıya Dök: yalnızca Whisper gerekir. "+
+            "Özetle + Tablo: Whisper ve Qwen3 gerekir; konu, karar ve görevleri de çıkarır.",13,false);
+        Button transcribe=button(analyze,"Konuşmayı Yazıya Dök",true);
+        transcribe.setOnClickListener(v->choose(DailySummaryWorker.TRANSCRIPT));
+        Button summarize=button(analyze,"Özetle + Ayrıntılı Konu Tablosu",false);
+        summarize.setOnClickListener(v->choose(DailySummaryWorker.REPORT));
+
+        LinearLayout tracker=card(root);
+        text(tracker,"2 • Canlı işlem durumu",18,true);
+        source=text(tracker,"Ses kaydı seçilmedi.",14,true);
+        stage=text(tracker,"Henüz işlem başlatılmadı.",13,false);
+        progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
+        progress.setMax(100);progress.setProgressTintList(
+            android.content.res.ColorStateList.valueOf(CYAN));
+        tracker.addView(progress,new LinearLayout.LayoutParams(-1,dp(12)));
+        progressText=text(tracker,"%0",13,true);
+        text(tracker,"Döküm sırasında: ses parçaları çözümlenir. "+
+            "Özet sırasında: konular, kararlar ve görevler çıkarılır. "+
+            "Otomatik mesai raporu şarj koşulunu bekleyebilir.",12,false);
+        Button refresh=button(tracker,"Durumu yenile",false);
+        refresh.setOnClickListener(v->refresh());
+        Button cancel=button(tracker,"Çalışan analizi durdur",false);
+        cancel.setOnClickListener(v->new AlertDialog.Builder(this)
+            .setTitle("Analiz durdurulsun mu?")
+            .setMessage("Ses dosyası korunur. Tamamlanan işlem parçaları, mümkün olduğunda yeniden kullanılır.")
+            .setNegativeButton("Vazgeç",null)
+            .setPositiveButton("Durdur",(d,w)->{
+                WorkManager.getInstance(this).cancelAllWorkByTag("gunizi-local-summary");
+                stage.setText("İptal istendi; ses dosyası korunuyor.");
+            }).show());
+
+        LinearLayout results=card(root);
+        text(results,"3 • Sonuçlar",18,true);
+        Button transcript=button(results,"Konuşma dökümünü görüntüle",false);
+        transcript.setOnClickListener(v->startActivity(new Intent(this,TranscriptActivity.class)));
+        Button topics=button(results,"Konular • Kararlar • Görevler",false);
         topics.setOnClickListener(v->startActivity(new Intent(this,ReportTableActivity.class)));
-        Button notes=button(analyze,"Notlarım • Raporu düzenle ve ekle");
+        Button notes=button(results,"Notlarıma ekle / Samsung Notes ile paylaş",false);
         notes.setOnClickListener(v->{
-            Intent openNotes=new Intent(this,UserNotesActivity.class);
-            openNotes.putExtra("openLatestReport",true);
-            startActivity(openNotes);
+            Intent i=new Intent(this,UserNotesActivity.class);
+            i.putExtra("openLatestReport",true);startActivity(i);
         });
-                Button refresh=button(analyze,"İşlem durumunu yenile");
-        refresh.setOnClickListener(v->refreshStatus());
-        text(analyze,"Uzun seslerin çözülmesi ve Qwen3 özetlemesi saatler sürebilir. "
-            +"Aşırı ısınma veya pil sorunu oluşursa işlemi durdurabilirsin.",12,false);
-        Button cancel=button(analyze,"Bekleyen özetlemeleri iptal et");
-        cancel.setOnClickListener(v->{
-            WorkManager.getInstance(this).cancelAllWorkByTag("gunizi-local-summary");
-            status.setText("Özetleme iptal istendi. Kayıt dosyaları korunur.");
+
+        LinearLayout instructions=card(root);
+        text(instructions,"4 • Özetlemede neye odaklanayım?",17,true);
+        text(instructions,"Yalnızca özet ve tablo oluştururken uygulanır. "+
+            "Konuşmayı yazıya dökme işlemi için değişiklik yapman gerekmez.",13,false);
+        focus=new EditText(this);
+        focus.setText(new AnalysisPreferences(this).focus());
+        focus.setTextColor(WHITE);focus.setHintTextColor(MUTED);
+        focus.setTextSize(14);focus.setMinLines(3);focus.setMaxLines(8);
+        focus.setHint("Örnek: Ruhsat görüşmeleri, son tarihler, sorumlular ve bekleyen işler…");
+        instructions.addView(focus);
+        Button save=button(instructions,"Analiz tercihini kaydet",false);
+        save.setOnClickListener(v->{
+            new AnalysisPreferences(this).focus(focus.getText().toString());
+            Toast.makeText(this,"Analiz tercihi kaydedildi.",Toast.LENGTH_SHORT).show();
         });
-        // Make user intent and daily analysis primary; optional models follow below.
-        root.removeView(instructions);
-        root.removeView(analyze);
-        root.addView(instructions,1);
-        root.addView(analyze,2);
-        refreshStatus();
+
+        LinearLayout models=card(root);
+        text(models,"Model ve indirme ayarları",17,true);
+        modelState=text(models,"Model durumları kontrol ediliyor…",13,false);
+        Button settings=button(models,"Ayarlar • Yapay Zeka Modelleri",false);
+        settings.setOnClickListener(v->startActivity(new Intent(this,ModelSettingsActivity.class)));
+        text(models,"Model indirmek ayrı bir işlemdir. İndirme, konuşma "+
+            "çözümleme veya günlük özetleme anlamına gelmez.",12,false);
+        refresh();
     }
-    private void refreshStatus(){
-        android.content.SharedPreferences prefs=getSharedPreferences("gunizi",MODE_PRIVATE);
-        String err=prefs.getString("summaryError",""),last=prefs.getString("summaryLast","");
-        if(!err.isEmpty())status.setText("Son hata: "+err);
-        else if(!last.isEmpty())status.setText(last);
-        else status.setText("Henüz tamamlanmış rapor yok.");
-        new Thread(()->{
-            try{
-                List<WorkInfo> list=WorkManager.getInstance(this)
-                    .getWorkInfosByTag("gunizi-local-summary").get();
-                if(list==null||list.isEmpty())return;
-                WorkInfo current=list.get(list.size()-1);
-                if(current.getState()==WorkInfo.State.RUNNING||
-                    current.getState()==WorkInfo.State.ENQUEUED){
-                    String stage=current.getProgress().getString("stage");
-                    runOnUiThread(()->status.setText(current.getState()==WorkInfo.State.ENQUEUED?
-                        "Rapor uygun şarj/pil koşullarını bekliyor.":
-                        stage==null?"Yerel yapay zeka çalışıyor…":stage));
-                }
-            }catch(Exception ignored){}
-        },"GunIzi-ReportStatus").start();
+    private void choose(String mode){
+        chosenMode=mode;
+        new AnalysisPreferences(this).focus(focus.getText().toString());
+        boolean whisper=AiModelStore.ready(this,new AnalysisPreferences(this).speechModel());
+        boolean qwen=AiModelStore.ready(this,new Prefs(this).aiModel());
+        if(!whisper||(DailySummaryWorker.REPORT.equals(mode)&&!qwen)){
+            new AlertDialog.Builder(this).setTitle("Model kurulumu gerekli")
+                .setMessage(!whisper?"Önce Whisper konuşma modelini kur.":
+                    "Konuşmayı yazıya dökmek için Whisper hazır. Ancak özet ve konu tablosu için Qwen3 de tam olarak indirilip doğrulanmalı.")
+                .setNegativeButton("Vazgeç",null)
+                .setPositiveButton("Model ayarlarını aç",(d,w)->
+                    startActivity(new Intent(this,ModelSettingsActivity.class))).show();
+            return;
+        }
+        Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType("audio/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|
+            Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(intent,PICK);
     }
-    @Override protected void onActivityResult(int code,int result,Intent data){
-        super.onActivityResult(code,result,data);
-        if(code!=PICK||result!=RESULT_OK||data==null||data.getData()==null)return;
+    @Override protected void onActivityResult(int request,int result,Intent data){
+        super.onActivityResult(request,result,data);
+        if(request!=PICK||result!=RESULT_OK||data==null||data.getData()==null)return;
         Uri uri=data.getData();
         try{getContentResolver().takePersistableUriPermission(uri,
             Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}
-        String name="Secilen_Kayit.ogg";
-        try(Cursor cur=getContentResolver().query(uri,new String[]{OpenableColumns.DISPLAY_NAME},
+        String name="Ses_Kaydi.ogg";
+        try(Cursor c=getContentResolver().query(uri,new String[]{OpenableColumns.DISPLAY_NAME},
             null,null,null)){
-            if(cur!=null&&cur.moveToFirst())name=cur.getString(0);
+            if(c!=null&&c.moveToFirst())name=c.getString(0);
         }catch(Exception ignored){}
-        DailySummaryWorker.queue(this,uri,name,false);
-        status.setText("Yerel yapay zeka için iş sırasına alındı.");
+        DailySummaryWorker.queue(this,uri,name,false,chosenMode);
+        refresh();
     }
+    private void refresh(){
+        if(modelState==null)return;
+        String speech=new AnalysisPreferences(this).speechModel();
+        String qwen=new Prefs(this).aiModel();
+        modelState.setText("Whisper: "+(AiModelStore.ready(this,speech)?"Hazır ✓":"Eksik")+
+            "    •    Qwen3: "+(AiModelStore.ready(this,qwen)?"Hazır ✓":"Eksik"));
+        android.content.SharedPreferences p=getSharedPreferences("gunizi",MODE_PRIVATE);
+        String filename=p.getString("analysisSource","");
+        String phase=p.getString("analysisStage","");
+        String error=p.getString("summaryError","");
+        int percent=p.getInt("analysisPercent",0);
+        source.setText(filename.isEmpty()?"Henüz ses kaydı seçilmedi.":"Kaynak: "+filename);
+        stage.setText(!error.isEmpty()?"Son hata: "+error:phase.isEmpty()?
+            "İşlem başlatmak için yukarıdan bir seçenek seç.":phase);
+        progress.setProgress(percent);
+        progressText.setText("%"+percent);
+        new Thread(()->{
+            try{
+                List<WorkInfo> jobs=WorkManager.getInstance(this)
+                    .getWorkInfosByTag("gunizi-local-summary").get();
+                WorkInfo found=null;
+                for(WorkInfo job:jobs){
+                    if(job.getState()==WorkInfo.State.RUNNING){found=job;break;}
+                    if(job.getState()==WorkInfo.State.ENQUEUED)found=job;
+                }
+                if(found==null)return;
+                final WorkInfo selected=found;
+                runOnUiThread(()->{
+                    if(isFinishing()||isDestroyed()||stage==null)return;
+                    if(selected.getState()==WorkInfo.State.ENQUEUED){
+                        stage.setText("İşlem sırada • pil veya şarj koşulu bekleniyor");
+                    }else{
+                        String txt=selected.getProgress().getString("stage");
+                        int value=selected.getProgress().getInt("percent",percent);
+                        if(txt!=null)stage.setText(txt);
+                        progress.setProgress(value);progressText.setText("%"+value);
+                    }
+                });
+            }catch(Exception ignored){}
+        },"GunIzi-AIStatus").start();
+    }
+    @Override protected void onResume(){super.onResume();handler.post(tick);}
+    @Override protected void onPause(){handler.removeCallbacks(tick);super.onPause();}
 }
