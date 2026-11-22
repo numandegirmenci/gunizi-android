@@ -10,16 +10,16 @@ android {
         minSdk 29
         targetSdk 35
         ndk { abiFilters 'arm64-v8a' }
-        versionCode 13
-        versionName '0.11.1'
+        versionCode 14
+        versionName '0.11.2'
         manifestPlaceholders = [appLabel: 'Günİzi']
     }
     buildTypes {
         debug {
             // Side-by-side test install. Never overwrite the installed production app.
-            applicationIdSuffix '.ai4'
+            applicationIdSuffix '.ai5'
             versionNameSuffix '-test'
-            manifestPlaceholders = [appLabel: 'Günİzi Stabilite Test']
+            manifestPlaceholders = [appLabel: 'Günİzi UX Test']
         }
         release {
             minifyEnabled false
