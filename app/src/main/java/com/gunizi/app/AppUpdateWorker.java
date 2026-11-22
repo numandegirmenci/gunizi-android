@@ -127,9 +127,10 @@ public final class AppUpdateWorker extends Worker {
         if(remote<=current){
             android.content.SharedPreferences p=c.getSharedPreferences(PREF,Context.MODE_PRIVATE);
             p.edit().putString("remoteTag",tag)
+                .putInt("remoteCode",remote)
                 .putString("releaseNotes",release.optString("body","").substring(0,
                     Math.min(12000,release.optString("body","").length()))).apply();
-            return "Günİzi güncel • "+tag;
+            return "Yüklü sürüm GitHub Latest ("+tag+") ile aynı veya daha yeni.";
         }
         // Checking updates is available in every installation. Installing an
         // incompatible release is not: package identity and signing must match.
