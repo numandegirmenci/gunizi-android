@@ -310,7 +310,12 @@ final class AiLiveStatusCard extends LinearLayout {
         if(!hasTimeline&&!hasPreview&&showPanel){
             changed(previewTitle,"CANLI KONUŞMALAR");
             changed(preview,queued?"İşlem sırası bekleniyor. Konuşma henüz çözümlenmedi.":
-                running?"Konuşmalar tespit edildiğinde aşağı doğru sıralanacak. İlk ses bölümü işleniyor olabilir.":
+                running?(prefs.getLong("analysisAudioProcessedMs",0)>0?
+                    "İşlenen ses: "+AiProgressStatus.audioLabel(
+                        prefs.getLong("analysisAudioProcessedMs",0),
+                        prefs.getLong("analysisAudioDuration",0))+
+                    " • Henüz anlaşılır konuşma bulunamadı. Tarama devam ediyor.":
+                    "Konuşmalar bulundukça alt alta eklenecek. İlk bölüm hazırlanıyor."):
                 "Bu analiz için görüntülenecek konuşma yok.");
             expandPreview.setVisibility(GONE);
             openContent.setVisibility(VISIBLE);
