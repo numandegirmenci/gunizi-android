@@ -72,17 +72,41 @@ public final class SummaryActivity extends Activity {
                     });
                 }).show();
         });
-        text(models,"2. Günlük özet modeli · Qwen3-1.7B",17,true);
-        qwenState=text(models,"Türkçe üretken dil modeli: yaklaşık 1,28 GB",13,false);
-        Button installQwen=button(models,"Qwen3 modelini indir");
+        text(models,"2. Günlük özet · Model seçimi",17,true);
+        qwenState=text(models,"Önerilen: Qwen3-4B (2,5 GB, daha fazla RAM ve işlemci yükü).",13,false);
+        RadioGroup aiChoices=new RadioGroup(this);
+        aiChoices.setOrientation(RadioGroup.VERTICAL);
+        RadioButton balanced=new RadioButton(this),strong=new RadioButton(this);
+        balanced.setText("Qwen3-1.7B · Dengeli (1,28 GB)");
+        strong.setText("Qwen3-4B · Ayrıntılı (2,5 GB)");
+        balanced.setTextColor(WHITE);strong.setTextColor(WHITE);
+        balanced.setId(View.generateViewId());strong.setId(View.generateViewId());
+        aiChoices.addView(balanced);aiChoices.addView(strong);
+        models.addView(aiChoices);
+        Prefs p=new Prefs(this);
+        aiChoices.check(AiModelStore.QWEN4.equals(p.aiModel())?strong.getId():balanced.getId());
+        Button installQwen=button(models,"Seçilen Qwen3 modelini indir");
+        aiChoices.setOnCheckedChangeListener((group,checked)->{
+            String choice=checked==strong.getId()?AiModelStore.QWEN4:AiModelStore.QWEN;
+            p.aiModel(choice);
+            boolean ready=AiModelStore.ready(this,choice);
+            qwenState.setText(ready?"Seçilen model hazır ✓":
+                AiModelStore.QWEN4.equals(choice)?
+                "Qwen3-4B · 2,5 GB · daha ayrıntılı, daha yüksek pil/RAM":
+                "Qwen3-1.7B · 1,28 GB · daha düşük pil/RAM");
+            installQwen.setEnabled(!ready);
+        });
         installQwen.setOnClickListener(v->{
+            final String selected=p.aiModel();
+            final String size=AiModelStore.QWEN4.equals(selected)?"2,5 GB":"1,28 GB";
             new android.app.AlertDialog.Builder(this)
-                .setTitle("Qwen3 yerel modeli")
-                .setMessage("Yaklaşık 1,28 GB model indirilecek. Kurulumdan sonra özetleme çevrimdışı çalışır. Wi-Fi ve boş alan gerekli.")
+                .setTitle("Yerel özet modelini indir")
+                .setMessage("Seçilen model "+size+". Wi-Fi, boş alan ve şarj önerilir. "+
+                    "Kurulumdan sonra özetleme cihazda çevrimdışı gerçekleşir.")
                 .setNegativeButton("Vazgeç",null)
                 .setPositiveButton("İndir",(d,w)->{
                     installQwen.setEnabled(false);
-                    AiModelStore.fetch(this,AiModelStore.QWEN,(message,done)->{
+                    AiModelStore.fetch(this,selected,(message,done)->{
                         qwenState.setText(message);
                         if(done)installQwen.setEnabled(false);
                         else if(message.startsWith("Model hatası"))installQwen.setEnabled(true);
@@ -90,11 +114,11 @@ public final class SummaryActivity extends Activity {
                 }).show();
         });
         installWhisper.setEnabled(!AiModelStore.ready(this,AiModelStore.WHISPER));
-        installQwen.setEnabled(!AiModelStore.ready(this,AiModelStore.QWEN));
+        installQwen.setEnabled(!AiModelStore.ready(this,p.aiModel()));
         if(AiModelStore.ready(this,AiModelStore.WHISPER))
             whisperState.setText("Whisper modeli hazır ✓");
-        if(AiModelStore.ready(this,AiModelStore.QWEN))
-            qwenState.setText("Qwen3 modeli hazır ✓");
+        if(AiModelStore.ready(this,p.aiModel()))
+            qwenState.setText("Seçilen Qwen3 modeli hazır ✓");
         LinearLayout analyze=card();
         text(analyze,"Günlük rapor",19,true);
         text(analyze,"İki model de kuruluysa mesai kayıtları telefon şarjdayken otomatik "
@@ -102,7 +126,7 @@ public final class SummaryActivity extends Activity {
         Button select=button(analyze,"Kaydedilmiş sesi seç ve özetle");
         select.setOnClickListener(v->{
             if(!AiModelStore.ready(this,AiModelStore.WHISPER)||
-               !AiModelStore.ready(this,AiModelStore.QWEN)){
+               !AiModelStore.ready(this,new Prefs(this).aiModel())){
                 Toast.makeText(this,"Önce iki yerel modeli indir.",Toast.LENGTH_LONG).show();return;
             }
             if(new Prefs(this).folder()==null){
