@@ -78,7 +78,15 @@ jobs:
           RELEASE_UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
           test -s "$DEBUG_APK"
           test -s "$RELEASE_UNSIGNED"
+          unzip -tq "$DEBUG_APK" >/dev/null
           unzip -l "$DEBUG_APK" | grep -F 'assets/tessdata/tur.traineddata'
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
+          SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+          test -x "$AAPT" && test -x "$SIGNER"
+          "$AAPT" dump badging "$DEBUG_APK" | head -n 1 | tee package.txt
+          grep -F "name='com.numandegirmenci.belgeizi'" package.txt
+          "$SIGNER" verify "$DEBUG_APK"
+          ! grep -Eq 'ActionTool\\([^,]+, "OCR"' app/src/main/java/com/numandegirmenci/belgeizi/ui/ScanApp.kt
           mkdir -p dist
           cp "$DEBUG_APK" "dist/BelgeIzi-v${{ steps.version.outputs.value }}-Test.apk"
           cp "$RELEASE_UNSIGNED" "dist/BelgeIzi-v${{ steps.version.outputs.value }}-unsigned.apk"
