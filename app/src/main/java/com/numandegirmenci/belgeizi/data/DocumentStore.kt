@@ -206,7 +206,7 @@ class DocumentStore(private val context: Context) {
         put("pages", JSONArray().apply { d.pages.forEach { p ->
             put(JSONObject().apply {
                 put("path", p.path); put("width", p.width); put("height", p.height)
-                put("ocrDone", p.ocrDone)
+                put("ocrDone", p.ocrDone); put("ocrVersion", p.ocrVersion)
                 put("ocr", JSONArray().apply { p.ocr.forEach { l -> put(JSONObject().apply {
                     put("id", l.id); put("original", l.original); put("text", l.text)
                     put("x", l.x.toDouble()); put("y", l.y.toDouble())
@@ -231,6 +231,7 @@ class DocumentStore(private val context: Context) {
             DocumentPage(
                 path = p.getString("path"), width = p.getInt("width"), height = p.getInt("height"),
                 ocrDone = p.optBoolean("ocrDone"),
+                ocrVersion = p.optInt("ocrVersion", 0),
                 ocr = p.optJSONArray("ocr")?.let { a -> (0 until a.length()).map { i ->
                     val l = a.getJSONObject(i)
                     OcrLine(id = l.getString("id"), original = l.getString("original"),
