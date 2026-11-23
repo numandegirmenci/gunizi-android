@@ -34,5 +34,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: BelgeIzi-debug-v0.1.3
+          name: BelgeIzi-debug-v0.1.4
           path: app/build/outputs/apk/debug/app-debug.apk
