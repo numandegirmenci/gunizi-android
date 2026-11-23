@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "description": "Sentetik, telifsiz Türkçe belge örnekleri. Gerçek OCR sonuçları ayrıca sağlanmalıdır.",
+  "cases": [
+    {
+      "id": "kitap",
+      "kind": "kitap sayfası",
+      "expected": "BİNBİR GECE MASALLARI\nŞehrazat anlatmaya devam etti.\nGüneş doğmadan öykü sona erdi."
+    },
+    {
+      "id": "fatura",
+      "kind": "fatura",
+      "expected": "FATURA\nFatura No: TR-2026-00125\nTutar: 1.250,75 TL\nÖdeme Tarihi: 23.11.2026"
+    },
+    {
+      "id": "resmi_evrak",
+      "kind": "resmi yazı",
+      "expected": "T.C. ÖRNEK BELEDİYESİ\nİş Yeri Açma ve Çalışma Ruhsatı\nBağımsız Bölüm: 9\nİlçe: Çankaya"
+    },
+    {
+      "id": "tablo",
+      "kind": "tablo",
+      "expected": "Kod | Açıklama | Tutar\n1062 | Elektrik | 1.240 TL\n2870 | Su | 780 TL"
+    },
+    {
+      "id": "turkce_karakter",
+      "kind": "karakter dayanıklılığı",
+      "expected": "Çığ, İğde, Şişli, Üsküdar, Iğdır, Karşıyaka\nMasalları, masalları, İSTANBUL, IŞIK"
+    }
+  ]
+}
