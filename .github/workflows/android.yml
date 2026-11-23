@@ -17,12 +17,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Ensure Android 36 SDK
-        shell: bash
-        run: |
-          command -v sdkmanager
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - name: Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
