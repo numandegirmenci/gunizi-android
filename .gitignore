@@ -1,34 +1,8 @@
-# Android / Gradle
 .gradle/
-build/
-**/build/
 .idea/
-*.iml
 local.properties
-captures/
-.externalNativeBuild/
-.cxx/
-
-# Signed release files / secrets
-*.jks
-*.keystore
-keystore.properties
-*.p12
-.env
-*.key
-
-# Audio and private local data (keep recordings out of Git)
-*.wav
-*.ogg
-*.opus
-*.m4a
-*.mp3
-*.pcm
-*.giz
-*.db
-*.sqlite
-*.sqlite3
-
-# OS and editor
+build/
+app/build/
+*.iml
+*.apk
 .DS_Store
-Thumbs.db
