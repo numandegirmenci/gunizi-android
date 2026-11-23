@@ -92,15 +92,16 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
         var latest = doc
         for (i in latest.pages.indices) {
             val page = latest.pages[i]
-            if (page.ocrDone && (!force || page.ocr.any { it.edited })) continue
+            if (page.ocr.any { it.edited }) continue
+            if (page.ocrDone && !force && page.ocrVersion >= 3) continue
             status = "Türkçe OCR " + (i + 1) + "/" + latest.pages.size + " • okunuyor"
             val lines = withContext(Dispatchers.Default) {
                 val bitmap = store.loadBitmap(page)
-                try { OcrEngine.recognize(bitmap) }
+                try { OcrEngine.recognize(context, bitmap) }
                 finally { bitmap.recycle() }
             }
             val pages = latest.pages.toMutableList()
-            pages[i] = page.copy(ocr = lines, ocrDone = true)
+            pages[i] = page.copy(ocr = lines, ocrDone = true, ocrVersion = 3)
             latest = latest.copy(pages = pages)
             update(latest)
         }
@@ -203,7 +204,7 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
                         onImport = { openFiles.launch(arrayOf("application/pdf", "image/*")) },
                         onOpen = { doc ->
                             current = doc; pageIndex = 0
-                            if (doc.pages.any { !it.ocrDone } && !busy) scope.launch {
+                            if (doc.pages.any { !it.ocrDone || it.ocrVersion < 3 } && !busy) scope.launch {
                                 busy = true
                                 try { processOcr(doc) } catch (e: Exception) { reportError(e) }
                                 finally { busy = false; status = "" }
