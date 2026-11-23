@@ -13,8 +13,8 @@ android {
         minSdk = 26
         targetSdk = 35
         ndk { abiFilters += listOf("arm64-v8a") }
-        versionCode = 5
-        versionName = "0.1.4"
+        versionCode = 6
+        versionName = "0.1.5"
     }
 
     buildTypes {
@@ -49,5 +49,6 @@ dependencies {
     // Bundled model: OCR does not require a first-run model download.
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")
+    testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
