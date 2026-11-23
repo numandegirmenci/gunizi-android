@@ -94,7 +94,7 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
             val page = latest.pages[i]
             if (page.ocr.any { it.edited }) continue
             if (page.ocrDone && !force && page.ocrVersion >= 3) continue
-            status = "Türkçe OCR " + (i + 1) + "/" + latest.pages.size + " • okunuyor"
+            status = "Metin tanıma " + (i + 1) + "/" + latest.pages.size + " • okunuyor"
             val lines = withContext(Dispatchers.Default) {
                 val bitmap = store.loadBitmap(page)
                 try { OcrEngine.recognize(context, bitmap) }
@@ -179,7 +179,7 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
             busy = true
             try {
                 processOcr(doc, force = true)
-                snackbar.showSnackbar("OCR yenilendi; düzenlediğin kelimeler korundu.")
+                snackbar.showSnackbar("Metin tanıma yenilendi; düzenlemelerin korundu.")
             } catch (e: Exception) { reportError(e) }
             finally { busy = false; status = "" }
         }
@@ -216,12 +216,28 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
                     EditorScreen(
                         doc = current!!, pageIndex = pageIndex, onPageIndex = { pageIndex = it },
                         onBack = { current = null; documents = store.all() },
-                        onOcr = ::recognizeAll,
-                        onPageChanged = ::changePage,
+                                                onPageChanged = ::changePage,
                         onExport = { doc -> savePdf.launch("${doc.title.take(70)}.pdf") },
                         onSignature = { signatureOpen = true },
                         onStamp = { stampOpen = true },
-                        onImageStamp = { stampImagePicker.launch(arrayOf("image/*")) }
+                        onImageStamp = { stampImagePicker.launch(arrayOf("image/*")) },
+                        onEnhance = { mode ->
+                            current?.let { doc -> if (!busy) scope.launch {
+                                busy = true; status = "Belge geliştiriliyor..."
+                                try {
+                                    val index = pageIndex.coerceIn(0, doc.pages.lastIndex)
+                                    val refreshed = withContext(Dispatchers.Default) {
+                                        store.reprocessPage(doc.pages[index], mode)
+                                    }
+                                    val pages = doc.pages.toMutableList()
+                                    pages[index] = refreshed
+                                    val updated = doc.copy(pages = pages)
+                                    update(updated)
+                                    if (!refreshed.ocrDone) processOcr(updated)
+                                } catch (e: Exception) { reportError(e) }
+                                finally { busy = false; status = "" }
+                            } }
+                        }
                     )
                 }
                 if (busy) {
@@ -295,7 +311,7 @@ private fun HomeScreen(
             Column {
                 Text("BELGE İZİ", color = TextMain, fontWeight = FontWeight.Black,
                     fontSize = 20.sp, letterSpacing = 1.4.sp)
-                Text("Akıllı tarama • Türkçe OCR", color = TextMuted, fontSize = 12.sp)
+                Text("Akıllı tarama • aranabilir PDF", color = TextMuted, fontSize = 12.sp)
             }
         }
         LazyColumn(contentPadding = PaddingValues(start = 22.dp, end = 22.dp, bottom = 40.dp),
@@ -390,10 +406,11 @@ private fun HomeScreen(
 @Composable
 private fun EditorScreen(
     doc: ScanDocument, pageIndex: Int, onPageIndex: (Int) -> Unit,
-    onBack: () -> Unit, onOcr: () -> Unit,
+    onBack: () -> Unit,
     onPageChanged: ((DocumentPage) -> DocumentPage) -> Unit,
     onExport: (ScanDocument) -> Unit,
-    onSignature: () -> Unit, onStamp: () -> Unit, onImageStamp: () -> Unit
+    onSignature: () -> Unit, onStamp: () -> Unit, onImageStamp: () -> Unit,
+    onEnhance: (String) -> Unit
 ) {
     val index = pageIndex.coerceIn(0, doc.pages.lastIndex)
     val page = doc.pages[index]
@@ -403,6 +420,7 @@ private fun EditorScreen(
     var selectedMark by remember { mutableStateOf<PageMark?>(null) }
     var stampChoices by remember { mutableStateOf(false) }
     var showText by remember { mutableStateOf(false) }
+    var filterChoices by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 14.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
@@ -421,16 +439,6 @@ private fun EditorScreen(
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Surface(shape = RoundedCornerShape(100.dp), color = PanelBright) {
-                val uncertain = page.ocr.count { it.confidence in 0.001f..0.719f }
-                Text(when {
-                    !page.ocrDone -> "●  OCR bekliyor"
-                    uncertain > 0 -> "●  ${page.ocr.size} alan • $uncertain kontrol"
-                    else -> "●  ${page.ocr.size} metin alanı"
-                }, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    color = if (uncertain > 0) Danger else if (page.ocrDone) Accent else TextMuted,
-                    fontSize = 12.sp)
-            }
             Spacer(Modifier.weight(1f))
             IconButton(enabled = index > 0, onClick = { onPageIndex(index - 1) }) {
                 Icon(Icons.Outlined.ChevronLeft, "Önceki sayfa", tint = TextMain)
@@ -457,7 +465,7 @@ private fun EditorScreen(
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceEvenly) {
-            ActionTool(Icons.Outlined.AutoFixHigh, "OCR", onOcr)
+            ActionTool(Icons.Outlined.AutoFixHigh, "Geliştir", { filterChoices = true })
             ActionTool(Icons.Outlined.TextFields, "Metin", { textEditing = !textEditing }, textEditing)
             ActionTool(Icons.Outlined.Draw, "İmza", onSignature)
             ActionTool(Icons.Outlined.Approval, "Kaşe", { stampChoices = true })
@@ -465,15 +473,27 @@ private fun EditorScreen(
         }
     }
 
+    if (filterChoices) AlertDialog(onDismissRequest = { filterChoices = false },
+        title = { Text("Belge görünümü") },
+        text = { Column {
+            listOf("Otomatik geliştir" to "AUTO", "Canlı renk" to "VIVID",
+                "Keskin siyah-beyaz" to "BW", "Orijinal" to "ORIGINAL")
+                .forEach { (name, mode) ->
+                    TextButton(onClick = { filterChoices = false; onEnhance(mode) }) {
+                        Text(name)
+                    }
+                }
+        } },
+        confirmButton = { TextButton(onClick = { filterChoices = false }) { Text("Kapat") } }
+    )
+
     selectedLine?.let { line ->
         var edited by remember(line.id) { mutableStateOf(line.text) }
         AlertDialog(onDismissRequest = { selectedLine = null },
-            title = { Text("OCR metnini düzelt") },
+            title = { Text("Metni düzenle") },
             text = {
                 Column {
                     Text("Okunan: ${line.original}", color = TextMuted, fontSize = 12.sp)
-                    if (line.confidence > 0f) Text("OCR güveni: %${(line.confidence * 100).toInt()}",
-                        color = if (line.confidence < 0.72f) Danger else Accent, fontSize = 12.sp)
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(value = edited, onValueChange = { edited = it },
                         label = { Text("Belgedeki yeni metin") }, minLines = 2)
@@ -527,11 +547,11 @@ private fun EditorScreen(
         AlertDialog(onDismissRequest = { showText = false },
             title = { Text("Belgedeki metin") },
             text = { Box(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                Text(allText.ifBlank { "Henüz OCR yapılmadı." })
+                Text(allText.ifBlank { "Belge metni hazırlanıyor." })
             } },
             confirmButton = { TextButton(onClick = {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("Belge İzi OCR", allText))
+                clipboard.setPrimaryClip(ClipData.newPlainText("Belge metni", allText))
                 showText = false
             }) { Text("Tümünü kopyala") } },
             dismissButton = { TextButton(onClick = { showText = false }) { Text("Kapat") } }
@@ -566,7 +586,7 @@ private fun DocumentCanvas(
     onMoveMark: (PageMark) -> Unit
 ) {
     val revision = page.ocr.filter { it.edited }.joinToString("|") { it.id + ":" + it.text }
-    val bitmap by produceState<Bitmap?>(initialValue = null, page.path, revision) {
+    val bitmap by produceState<Bitmap?>(initialValue = null, page.path, revision, page.enhanceMode) {
         value = withContext(Dispatchers.Default) {
             val raw = BitmapFactory.decodeFile(page.path)
             if (raw != null && page.ocr.any { it.edited }) {
