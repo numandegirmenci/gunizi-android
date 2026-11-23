@@ -1,5 +1,6 @@
 package com.numandegirmenci.belgeizi.engine
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.ColorMatrixColorFilter
@@ -19,11 +20,11 @@ object OcrEngine {
      * wins. Both passes have the same coordinates, so the OCR boxes stay aligned.
      * This is a heuristic, not a validated accuracy claim.
      */
-    fun recognize(image: Bitmap): List<OcrLine> {
+    fun recognize(context: Context, image: Bitmap): List<OcrLine> {
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         return try {
             val initial = read(recognizer, image)
-            if (initial.size >= 8 && meanConfidence(initial) >= 0.90f && initial.none { it.confidence in 0.001f..0.65f }) return initial
+            if (initial.size >= 8 && meanConfidence(initial) >= 0.90f && initial.none { it.confidence in 0.001f..0.65f }) return TurkishOcr.refine(context, image, initial)
             val enhanced = contrastGrayscale(image)
             try {
                 val alternate = read(recognizer, enhanced)
@@ -31,13 +32,14 @@ object OcrEngine {
                 val c2 = meanConfidence(alternate)
                 val len1 = initial.sumOf { it.text.length }
                 val len2 = alternate.sumOf { it.text.length }
-                when {
+                val selected = when {
                     initial.isEmpty() -> alternate
                     alternate.isEmpty() -> initial
                     c2 >= c1 + 0.06f && len2 >= len1 * 0.78f -> alternate
                     len2 >= len1 * 1.22f && c2 >= c1 - 0.03f -> alternate
                     else -> initial
                 }
+                TurkishOcr.refine(context, image, selected)
             } finally { enhanced.recycle() }
         } finally { recognizer.close() }
     }
