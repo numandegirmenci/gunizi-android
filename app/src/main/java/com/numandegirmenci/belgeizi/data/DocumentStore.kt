@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import com.numandegirmenci.belgeizi.engine.ImageEnhancer
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
@@ -99,7 +100,7 @@ class DocumentStore(private val context: Context) {
                     }
                     for (index in 0 until renderer.pageCount) {
                         renderer.openPage(index).use { page ->
-                            val scale = 2400f / max(page.width, page.height)
+                            val scale = 3000f / max(page.width, page.height)
                             val width = max(1, (page.width * scale).roundToInt())
                             val height = max(1, (page.height * scale).roundToInt())
                             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -116,13 +117,57 @@ class DocumentStore(private val context: Context) {
     }
 
     private fun persistBitmap(bitmap: Bitmap, folder: File, index: Int): DocumentPage {
-        val dst = File(folder, "page_${(index + 1).toString().padStart(3, '0')}.jpg")
-        FileOutputStream(dst).use { stream ->
-            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 96, stream)) {
-                throw IOException("Görüntü kaydedilemedi.")
+        val basename = "page_${(index + 1).toString().padStart(3, '0')}"
+        val original = File(folder, "${basename}_original.jpg")
+        val output = File(folder, "${basename}.jpg")
+        FileOutputStream(original).use { stream ->
+            check(bitmap.compress(Bitmap.CompressFormat.JPEG, 96, stream)) {
+                "Orijinal belge kaydedilemedi."
             }
         }
-        return DocumentPage(dst.absolutePath, bitmap.width, bitmap.height)
+        val enhanced = ImageEnhancer.apply(bitmap, "AUTO")
+        try {
+            FileOutputStream(output).use { stream ->
+                check(enhanced.compress(Bitmap.CompressFormat.JPEG, 92, stream)) {
+                    "Belge geliştirilmiş görüntüsü kaydedilemedi."
+                }
+            }
+        } finally { if (enhanced !== bitmap) enhanced.recycle() }
+        return DocumentPage(output.absolutePath, bitmap.width, bitmap.height,
+            sourcePath = original.absolutePath, enhanceMode = "AUTO")
+    }
+
+    /** Rebuilds the visible scan from its source rather than stacking filters. */
+    fun reprocessPage(page: DocumentPage, mode: String): DocumentPage {
+        require(mode in setOf("ORIGINAL", "AUTO", "VIVID", "BW")) { "Geçersiz görüntü modu." }
+        val sourceFile = page.sourcePath?.let(::File)?.takeIf { it.isFile } ?: run {
+            val file = File(page.path)
+            val backup = File(file.parentFile, file.nameWithoutExtension + "_original.jpg")
+            if (!backup.exists()) file.copyTo(backup)
+            backup
+        }
+        val src = BitmapFactory.decodeFile(sourceFile.absolutePath)
+            ?: throw IOException("Orijinal belge açılamadı.")
+        try {
+            val processed = ImageEnhancer.apply(src, mode)
+            try {
+                val dst = File(page.path)
+                val temporary = File(dst.parentFile, dst.nameWithoutExtension + "_new.jpg")
+                FileOutputStream(temporary).use { out ->
+                    check(processed.compress(Bitmap.CompressFormat.JPEG,
+                        if (mode == "ORIGINAL") 96 else 92, out))
+                }
+                if (!temporary.renameTo(dst)) {
+                    temporary.copyTo(dst, overwrite = true)
+                    temporary.delete()
+                }
+            } finally { if (processed !== src) processed.recycle() }
+        } finally { src.recycle() }
+        val hasEdits = page.ocr.any { it.edited }
+        return page.copy(sourcePath = sourceFile.absolutePath, enhanceMode = mode,
+            ocr = if (hasEdits) page.ocr else emptyList(),
+            ocrDone = hasEdits && page.ocrDone,
+            ocrVersion = if (hasEdits) page.ocrVersion else 0)
     }
 
     private fun decodeScaled(uri: Uri, maxSide: Int): Bitmap {
@@ -207,6 +252,7 @@ class DocumentStore(private val context: Context) {
             put(JSONObject().apply {
                 put("path", p.path); put("width", p.width); put("height", p.height)
                 put("ocrDone", p.ocrDone); put("ocrVersion", p.ocrVersion)
+                put("sourcePath", p.sourcePath); put("enhanceMode", p.enhanceMode)
                 put("ocr", JSONArray().apply { p.ocr.forEach { l -> put(JSONObject().apply {
                     put("id", l.id); put("original", l.original); put("text", l.text)
                     put("x", l.x.toDouble()); put("y", l.y.toDouble())
@@ -232,6 +278,8 @@ class DocumentStore(private val context: Context) {
                 path = p.getString("path"), width = p.getInt("width"), height = p.getInt("height"),
                 ocrDone = p.optBoolean("ocrDone"),
                 ocrVersion = p.optInt("ocrVersion", 0),
+                sourcePath = p.optString("sourcePath").takeIf { it.isNotEmpty() && it != "null" },
+                enhanceMode = p.optString("enhanceMode", "ORIGINAL"),
                 ocr = p.optJSONArray("ocr")?.let { a -> (0 until a.length()).map { i ->
                     val l = a.getJSONObject(i)
                     OcrLine(id = l.getString("id"), original = l.getString("original"),
