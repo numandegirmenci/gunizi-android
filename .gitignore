@@ -6,3 +6,16 @@ app/build/
 *.iml
 *.apk
 .DS_Store
+
+# OCR models are downloaded at build time, never committed.
+app/src/main/assets/tessdata/
+# Generated synthetic test images and real OCR result exports.
+qa/generated/
+qa/results/
+results.json
+# Never commit app signing credentials.
+*.keystore
+*.jks
+*.p12
+*.pfx
+signing.properties
