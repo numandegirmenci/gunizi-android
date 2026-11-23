@@ -72,7 +72,7 @@ object OcrEngine {
                 )
             }
         }
-        return found.sortedWith(compareBy<OcrLine> { it.y }.thenBy { it.x })
+        return found // ML Kit line/block reading order must be preserved.
     }
 
     private fun meanConfidence(lines: List<OcrLine>): Float {
