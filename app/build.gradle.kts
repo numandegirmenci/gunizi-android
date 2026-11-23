@@ -12,8 +12,9 @@ android {
         applicationId = "com.numandegirmenci.belgeizi"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.1.2"
+        ndk { abiFilters += listOf("arm64-v8a") }
+        versionCode = 4
+        versionName = "0.1.3"
     }
 
     buildTypes {
@@ -47,5 +48,6 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
     // Bundled model: OCR does not require a first-run model download.
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
