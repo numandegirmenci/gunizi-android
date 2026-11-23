@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.numandegirmenci.belgeizi.engine.ImageEnhancer
+import com.numandegirmenci.belgeizi.engine.ScanPipelinePolicy
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
@@ -139,7 +140,7 @@ class DocumentStore(private val context: Context) {
 
     /** Rebuilds the visible scan from its source rather than stacking filters. */
     fun reprocessPage(page: DocumentPage, mode: String): DocumentPage {
-        require(mode in setOf("ORIGINAL", "AUTO", "VIVID", "BW")) { "Geçersiz görüntü modu." }
+        require(ScanPipelinePolicy.validEnhancementMode(mode)) { "Geçersiz görüntü modu." }
         val sourceFile = page.sourcePath?.let(::File)?.takeIf { it.isFile } ?: run {
             val file = File(page.path)
             val backup = File(file.parentFile, file.nameWithoutExtension + "_original.jpg")
@@ -155,7 +156,7 @@ class DocumentStore(private val context: Context) {
                 val temporary = File(dst.parentFile, dst.nameWithoutExtension + "_new.jpg")
                 FileOutputStream(temporary).use { out ->
                     check(processed.compress(Bitmap.CompressFormat.JPEG,
-                        if (mode == "ORIGINAL") 96 else 92, out))
+                        ScanPipelinePolicy.jpegQuality(mode), out))
                 }
                 if (!temporary.renameTo(dst)) {
                     temporary.copyTo(dst, overwrite = true)
