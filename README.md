@@ -1,10 +1,19 @@
 > **GitHub derleme dalı:** `belgeizi-v0.1.1-build`. Bu dal, başka bir projeye ait `main` dalını etkilemeden derleme amacıyla ayrılmıştır. Ayrı bir depo oluşturulduğunda taşınmalıdır.
 
-# Belge İzi — Android v0.1.3 (Türkçe çift OCR)
+# Belge İzi — Android v0.1.4 (otomatik görüntü geliştirme)
 
 Türkçe belge tarama, OCR ve PDF işleme için **orijinal tasarımlı** Android uygulaması.
 
-> Durum: GitHub Actions üzerinde derlenen geliştirme sürümü. Gerçek cihazda doğruluk ve hız testleri ayrıca gereklidir.
+> Durum: GitHub Actions ile APK oluşturulan test sürümüdür. Fiziksel telefonda kalite ve kararlılık ayrıca doğrulanmalıdır.
+
+## v0.1.4 Görüntü geliştirme
+- Tarama sonrasında AUTO görüntü geliştirme otomatik uygulanır.
+- Geliştir: Otomatik, Canlı renk, Keskin siyah-beyaz, Orijinal seçenekleri.
+- Yeni belgelerde orijinal JPEG ayrı korunur; geliştirmeyi kapatmak mümkündür.
+- OCR otomatik çalışır. OCR düğmesi ve sayı/uyarı balonu belge ekranından kaldırılır.
+- Metin seçimi isteğe bağlı "Metin" aracıyla açılır; görünür OCR katmanı yoktur.
+- ML Kit okuma sırası korunarak parça-karışma problemi azaltılır.
+- PDF boyut optimizasyonu ve kitap kıvrımı düzeltme bu sürümde tamamlanmış değildir.
 
 ## v0.1.3: Türkçe karakterleri otomatik tanıma
 
