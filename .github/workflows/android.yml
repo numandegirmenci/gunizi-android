@@ -1,17 +1,29 @@
-name: Android debug APK
+name: Belge Izi - Tests and APK
+
 on:
   push:
-    branches: [belgeizi-v0.1.1-build]
+    branches:
+      - belgeizi-v0.1.1-build
+      - feature/belgeizi-ci-v015
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+# Do not cancel another build when new changes arrive.
+concurrency:
+  group: belgeizi-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  build:
+  verify:
+    name: Regression tests, lint, and Android APK
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    timeout-minutes: 45
+    outputs:
+      version: ${{ steps.version.outputs.value }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
       - name: Java 17
         uses: actions/setup-java@v4
         with:
@@ -21,18 +33,152 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Bundle offline Turkish OCR model
+      - name: Python for OCR benchmark fixtures
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Read Android version
+        id: version
+        shell: bash
         run: |
+          VERSION=$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' app/build.gradle.kts | head -n 1)
+          test -n "$VERSION"
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+      - name: Verify OCR benchmark tools
+        run: |
+          python -m unittest discover -s qa/tests -v
+          python -m pip install --quiet Pillow
+          python qa/generate_fixtures.py
+          test -s qa/generated/kitap.png
+          test -s qa/generated/fatura.png
+          test -s qa/generated/resmi_evrak.png
+          test -s qa/generated/tablo.png
+
+      - name: Package pinned offline Turkish OCR model
+        shell: bash
+        run: |
+          set -euo pipefail
           mkdir -p app/src/main/assets/tessdata
           curl -fL --retry 3 --connect-timeout 15 \
             "https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/e12c65a915945e4c28e237a9b52bc4a8f39a0cec/tur.traineddata" \
             -o app/src/main/assets/tessdata/tur.traineddata
           test "$(stat -c%s app/src/main/assets/tessdata/tur.traineddata)" -gt 1000000
-      - name: Build debug APK
-        run: gradle --no-daemon assembleDebug --stacktrace
-      - name: Upload APK
-        if: success()
+
+      - name: Build and run Android JVM regressions
+        run: gradle --no-daemon --stacktrace testDebugUnitTest lintDebug assembleDebug assembleRelease
+
+      - name: Verify packaged Turkish model and APKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEBUG_APK="app/build/outputs/apk/debug/app-debug.apk"
+          RELEASE_UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
+          test -s "$DEBUG_APK"
+          test -s "$RELEASE_UNSIGNED"
+          unzip -l "$DEBUG_APK" | grep -F 'assets/tessdata/tur.traineddata'
+          mkdir -p dist
+          cp "$DEBUG_APK" "dist/BelgeIzi-v${{ steps.version.outputs.value }}-Test.apk"
+          cp "$RELEASE_UNSIGNED" "dist/BelgeIzi-v${{ steps.version.outputs.value }}-unsigned.apk"
+          (cd dist && sha256sum *.apk > SHA256SUMS.txt)
+
+      - name: Upload tested APKs
         uses: actions/upload-artifact@v4
         with:
-          name: BelgeIzi-debug-v0.1.4
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: BelgeIzi-v${{ steps.version.outputs.value }}-build
+          path: dist/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BelgeIzi-qa-${{ github.run_id }}
+          path: |
+            app/build/test-results/testDebugUnitTest/
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/reports/lint-results-debug.html
+            qa/generated/
+          if-no-files-found: warn
+          retention-days: 30
+
+  publish:
+    name: Publish direct APK only after all checks pass
+    needs: verify
+    if: github.ref == 'refs/heads/belgeizi-v0.1.1-build'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: BelgeIzi-v${{ needs.verify.outputs.version }}-build
+          path: dist
+
+      - name: Check optional stable signing configuration
+        id: signing
+        shell: bash
+        env:
+          BELGEIZI_KEYSTORE_BASE64: ${{ secrets.BELGEIZI_KEYSTORE_BASE64 }}
+          BELGEIZI_KEYSTORE_PASSWORD: ${{ secrets.BELGEIZI_KEYSTORE_PASSWORD }}
+          BELGEIZI_KEY_ALIAS: ${{ secrets.BELGEIZI_KEY_ALIAS }}
+          BELGEIZI_KEY_PASSWORD: ${{ secrets.BELGEIZI_KEY_PASSWORD }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$BELGEIZI_KEYSTORE_BASE64" || -z "$BELGEIZI_KEYSTORE_PASSWORD" ||
+                -z "$BELGEIZI_KEY_ALIAS" || -z "$BELGEIZI_KEY_PASSWORD" ]]; then
+            echo "Stable keystore secrets not configured: publishing only a TEST APK."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          KEYSTORE="$RUNNER_TEMP/belgeizi-keystore.jks"
+          TEMP_APK="$RUNNER_TEMP/belgeizi-aligned.apk"
+          trap 'rm -f "$KEYSTORE" "$TEMP_APK"' EXIT
+          printf '%s' "$BELGEIZI_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+          chmod 600 "$KEYSTORE"
+          TOOL_DIR=$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -n 1)
+          "$TOOL_DIR/zipalign" -f -p 4 \
+            "dist/BelgeIzi-v$VERSION-unsigned.apk" "$TEMP_APK"
+          "$TOOL_DIR/apksigner" sign \
+            --ks "$KEYSTORE" --ks-key-alias "$BELGEIZI_KEY_ALIAS" \
+            --ks-pass env:BELGEIZI_KEYSTORE_PASSWORD \
+            --key-pass env:BELGEIZI_KEY_PASSWORD \
+            --out "dist/BelgeIzi-v$VERSION.apk" "$TEMP_APK"
+          "$TOOL_DIR/apksigner" verify --verbose "dist/BelgeIzi-v$VERSION.apk"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Publish direct-download release without changing Gun Izi Latest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          SIGNED: ${{ steps.signing.outputs.signed }}
+        run: |
+          set -euo pipefail
+          if [[ "$SIGNED" == "true" ]]; then
+            TAG="belgeizi-v$VERSION"
+            FILE="dist/BelgeIzi-v$VERSION.apk"
+            EXTRA=""
+            TITLE="Belge İzi v$VERSION - Sabit İmzalı APK"
+          else
+            TAG="belgeizi-v$VERSION-test"
+            FILE="dist/BelgeIzi-v$VERSION-Test.apk"
+            EXTRA="--prerelease"
+            TITLE="Belge İzi v$VERSION - Test APK"
+          fi
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; never replace a published APK silently."
+            exit 0
+          fi
+          sha256sum "$FILE" > "$RUNNER_TEMP/SHA256SUMS.txt"
+          gh release create "$TAG" "$FILE" "$RUNNER_TEMP/SHA256SUMS.txt" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$TITLE" --notes-file qa/RELEASE_NOTES.md \
+            --latest=false $EXTRA
+          echo "APK release: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
