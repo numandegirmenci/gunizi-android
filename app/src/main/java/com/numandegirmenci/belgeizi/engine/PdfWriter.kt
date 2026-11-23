@@ -20,7 +20,8 @@ object PdfWriter {
         val pdf = PdfDocument()
         try {
             doc.pages.forEachIndexed { index, page ->
-                val image = BitmapFactory.decodeFile(page.path) ?: throw IOException("Sayfa ${index + 1} okunamadı.")
+                val sourceImage = BitmapFactory.decodeFile(page.path) ?: throw IOException("Sayfa ${index + 1} okunamadı.")
+                val image = VisualTextRenderer.render(sourceImage, page.ocr)
                 try {
                     val portrait = image.height >= image.width
                     val width = if (portrait) 595 else 842
@@ -41,19 +42,12 @@ object PdfWriter {
                         // appearance while embedding searchable character content in the PDF.
                         // We do not insert superseded OCR originals after a user correction.
                         val hiddenText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK }
-                        page.ocr.filterNot { it.edited }.forEach { l ->
+                        page.ocr.forEach { l ->
                             val target = RectF(dx + l.x * drawnWidth, dy + l.y * drawnHeight,
                                 dx + (l.x + l.w) * drawnWidth, dy + (l.y + l.h) * drawnHeight)
                             drawFittedText(canvas, l.text, target, hiddenText)
                         }
                         canvas.drawBitmap(image, null, box, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
-                        page.ocr.filter { it.edited }.forEach { l ->
-                            val target = RectF(dx + l.x * drawnWidth, dy + l.y * drawnHeight,
-                                dx + (l.x + l.w) * drawnWidth, dy + (l.y + l.h) * drawnHeight)
-                            canvas.drawRect(target, Paint().apply { color = Color.WHITE })
-                            drawFittedText(canvas, l.text, target,
-                                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK })
-                        }
                         page.marks.forEach { mark ->
                             val target = RectF(dx + mark.x * drawnWidth, dy + mark.y * drawnHeight,
                                 dx + (mark.x + mark.w) * drawnWidth, dy + (mark.y + mark.h) * drawnHeight)
@@ -70,7 +64,7 @@ object PdfWriter {
                             }
                         }
                     } finally { pdf.finishPage(sheet) }
-                } finally { image.recycle() }
+                } finally { if (image !== sourceImage) image.recycle(); sourceImage.recycle() }
             }
             resolver.openOutputStream(outputUri, "wt")?.use { pdf.writeTo(it) }
                 ?: throw IOException("PDF kaydetme konumu açılamadı.")

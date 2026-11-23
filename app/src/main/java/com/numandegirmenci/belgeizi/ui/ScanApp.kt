@@ -43,6 +43,7 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.numandegirmenci.belgeizi.data.*
 import com.numandegirmenci.belgeizi.engine.OcrEngine
 import com.numandegirmenci.belgeizi.engine.PdfWriter
+import com.numandegirmenci.belgeizi.engine.VisualTextRenderer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -87,6 +88,24 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
         updatedPages[index] = change(updatedPages[index])
         update(doc.copy(pages = updatedPages))
     }
+    suspend fun processOcr(doc: ScanDocument, force: Boolean = false) {
+        var latest = doc
+        for (i in latest.pages.indices) {
+            val page = latest.pages[i]
+            if (page.ocrDone && (!force || page.ocr.any { it.edited })) continue
+            status = "Türkçe OCR " + (i + 1) + "/" + latest.pages.size + " • okunuyor"
+            val lines = withContext(Dispatchers.Default) {
+                val bitmap = store.loadBitmap(page)
+                try { OcrEngine.recognize(bitmap) }
+                finally { bitmap.recycle() }
+            }
+            val pages = latest.pages.toMutableList()
+            pages[i] = page.copy(ocr = lines, ocrDone = true)
+            latest = latest.copy(pages = pages)
+            update(latest)
+        }
+    }
+
     fun importFiles(uris: List<Uri>) {
         if (uris.isEmpty() || busy) return
         scope.launch {
@@ -94,6 +113,7 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
             try {
                 val doc = withContext(Dispatchers.IO) { store.import(uris) }
                 documents = store.all(); current = doc; pageIndex = 0
+                processOcr(doc)
                 status = "Belge hazır"
             } catch (e: Exception) { reportError(e) }
             finally { busy = false }
@@ -157,22 +177,8 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
         scope.launch {
             busy = true
             try {
-                var latest = doc
-                for (i in latest.pages.indices) {
-                    if (latest.pages[i].ocrDone) continue
-                    status = "OCR ${i + 1}/${latest.pages.size} • metin algılanıyor"
-                    val page = latest.pages[i]
-                    val lines = withContext(Dispatchers.Default) {
-                        val bitmap = store.loadBitmap(page)
-                        try { OcrEngine.recognize(bitmap) }
-                        finally { bitmap.recycle() }
-                    }
-                    val pages = latest.pages.toMutableList()
-                    pages[i] = page.copy(ocr = lines, ocrDone = true)
-                    latest = latest.copy(pages = pages)
-                    update(latest)
-                }
-                snackbar.showSnackbar("OCR tamamlandı. Metin aracından düzeltme yapabilirsin.")
+                processOcr(doc, force = true)
+                snackbar.showSnackbar("OCR yenilendi; düzenlediğin kelimeler korundu.")
             } catch (e: Exception) { reportError(e) }
             finally { busy = false; status = "" }
         }
@@ -195,7 +201,14 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
                     HomeScreen(
                         docs = documents, onScan = ::scan,
                         onImport = { openFiles.launch(arrayOf("application/pdf", "image/*")) },
-                        onOpen = { doc -> current = doc; pageIndex = 0 },
+                        onOpen = { doc ->
+                            current = doc; pageIndex = 0
+                            if (doc.pages.any { !it.ocrDone } && !busy) scope.launch {
+                                busy = true
+                                try { processOcr(doc) } catch (e: Exception) { reportError(e) }
+                                finally { busy = false; status = "" }
+                            }
+                        },
                         onDelete = { deleteCandidate = it }
                     )
                 } else {
@@ -411,8 +424,8 @@ private fun EditorScreen(
                 val uncertain = page.ocr.count { it.confidence in 0.001f..0.719f }
                 Text(when {
                     !page.ocrDone -> "●  OCR bekliyor"
-                    uncertain > 0 -> "●  ${page.ocr.size} satır • $uncertain kontrol"
-                    else -> "●  ${page.ocr.size} metin satırı"
+                    uncertain > 0 -> "●  ${page.ocr.size} alan • $uncertain kontrol"
+                    else -> "●  ${page.ocr.size} metin alanı"
                 }, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     color = if (uncertain > 0) Danger else if (page.ocrDone) Accent else TextMuted,
                     fontSize = 12.sp)
@@ -437,7 +450,7 @@ private fun EditorScreen(
         }
         Spacer(Modifier.height(11.dp))
         if (textEditing) {
-            Text("Vurgulanan satıra dokunarak metni düzelt.", color = Accent,
+            Text("Düzenlemek istediğin kelimeye dokun.", color = Accent,
                 fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
             Spacer(Modifier.height(6.dp))
         }
@@ -464,7 +477,7 @@ private fun EditorScreen(
                     OutlinedTextField(value = edited, onValueChange = { edited = it },
                         label = { Text("Belgedeki yeni metin") }, minLines = 2)
                     Spacer(Modifier.height(8.dp))
-                    Text("Değişiklik belge görünümüne yansıtılır. Karmaşık arka planlarda iz kalabilir.",
+                    Text("Yazı rengi ve arka plan tahmini eşleştirilir; karmaşık zeminlerde iz kalabilir.",
                         color = TextMuted, fontSize = 11.sp)
                 }
             },
@@ -551,8 +564,16 @@ private fun DocumentCanvas(
     onMarkSelected: (PageMark) -> Unit,
     onMoveMark: (PageMark) -> Unit
 ) {
-    val bitmap by produceState<Bitmap?>(initialValue = null, page.path) {
-        value = withContext(Dispatchers.IO) { BitmapFactory.decodeFile(page.path) }
+    val revision = page.ocr.filter { it.edited }.joinToString("|") { it.id + ":" + it.text }
+    val bitmap by produceState<Bitmap?>(initialValue = null, page.path, revision) {
+        value = withContext(Dispatchers.Default) {
+            val raw = BitmapFactory.decodeFile(page.path)
+            if (raw != null && page.ocr.any { it.edited }) {
+                val rendered = VisualTextRenderer.render(raw, page.ocr)
+                if (rendered !== raw) raw.recycle()
+                rendered
+            } else raw
+        }
     }
     val image = bitmap
     if (image == null) {
@@ -570,27 +591,15 @@ private fun DocumentCanvas(
         val top = (maxHeight.value - displayH) / 2f
         Image(image.asImageBitmap(), contentDescription = "Taranmış belge", contentScale = ContentScale.FillBounds,
             modifier = Modifier.offset(left.dp, top.dp).size(displayW.dp, displayH.dp))
-        page.ocr.filter { it.edited || showOcr }.forEach { line ->
+        if (showOcr) page.ocr.forEach { line ->
             val x = left + line.x * displayW
             val y = top + line.y * displayH
             val width = (line.w * displayW).coerceAtLeast(14f)
             val height = (line.h * displayH).coerceAtLeast(13f)
             Box(Modifier.offset(x.dp, y.dp).size(width.dp, height.dp)
-                .then(if (line.edited) Modifier.background(Color.White)
-                else Modifier.background(
-                    (if (line.confidence in 0.001f..0.719f) Danger else Accent).copy(alpha = 0.24f)
-                ))
-                .then(if (showOcr) Modifier.border(1.dp,
-                    if (line.confidence in 0.001f..0.719f) Danger else Accent)
-                    .clickable { onLineSelected(line) }
-                else Modifier)) {
-                if (line.edited) Text(line.text, color = Color.Black,
-                    fontSize = min(height * 0.56f,
-                        (width / line.text.length.coerceAtLeast(1)) * 1.7f)
-                        .coerceIn(5f, 17f).sp,
-                    maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
-                    modifier = Modifier.align(Alignment.CenterStart))
-            }
+                .background((if (line.confidence in 0.001f..0.719f) Danger else Accent).copy(alpha = 0.12f))
+                .border(1.dp, if (line.confidence in 0.001f..0.719f) Danger else Accent)
+                .clickable { onLineSelected(line) })
         }
         page.marks.forEach { mark ->
             var dragX by remember(mark.id, mark.x) { mutableFloatStateOf(mark.x) }

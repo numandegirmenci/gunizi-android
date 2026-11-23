@@ -23,7 +23,7 @@ object OcrEngine {
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         return try {
             val initial = read(recognizer, image)
-            if (initial.size >= 5 && meanConfidence(initial) >= 0.80f) return initial
+            if (initial.size >= 8 && meanConfidence(initial) >= 0.90f && initial.none { it.confidence in 0.001f..0.65f }) return initial
             val enhanced = contrastGrayscale(image)
             try {
                 val alternate = read(recognizer, enhanced)
@@ -44,9 +44,23 @@ object OcrEngine {
 
     private fun read(recognizer: TextRecognizer, image: Bitmap): List<OcrLine> {
         val result = Tasks.await(recognizer.process(InputImage.fromBitmap(image, 0)))
-        return result.textBlocks.flatMap { it.lines }.mapNotNull { line ->
-            line.boundingBox?.let { box ->
-                OcrLine(
+        val found = mutableListOf<OcrLine>()
+        for (block in result.textBlocks) for (line in block.lines) {
+            val elements = line.elements.filter { it.boundingBox != null }
+            if (elements.isNotEmpty()) {
+                elements.forEach { element ->
+                    val box = element.boundingBox ?: return@forEach
+                    found += OcrLine(
+                        original = element.text,
+                        x = (box.left.toFloat() / image.width).coerceIn(0f, 1f),
+                        y = (box.top.toFloat() / image.height).coerceIn(0f, 1f),
+                        w = (box.width().toFloat() / image.width).coerceIn(0f, 1f),
+                        h = (box.height().toFloat() / image.height).coerceIn(0f, 1f),
+                        confidence = element.confidence.coerceIn(0f, 1f)
+                    )
+                }
+            } else line.boundingBox?.let { box ->
+                found += OcrLine(
                     original = line.text,
                     x = (box.left.toFloat() / image.width).coerceIn(0f, 1f),
                     y = (box.top.toFloat() / image.height).coerceIn(0f, 1f),
@@ -55,7 +69,8 @@ object OcrEngine {
                     confidence = line.confidence.coerceIn(0f, 1f)
                 )
             }
-        }.sortedWith(compareBy<OcrLine> { it.y }.thenBy { it.x })
+        }
+        return found.sortedWith(compareBy<OcrLine> { it.y }.thenBy { it.x })
     }
 
     private fun meanConfidence(lines: List<OcrLine>): Float {

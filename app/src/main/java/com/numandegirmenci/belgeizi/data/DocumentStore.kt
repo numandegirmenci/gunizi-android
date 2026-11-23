@@ -73,7 +73,7 @@ class DocumentStore(private val context: Context) {
                 if (mime == "application/pdf" || name.endsWith(".pdf")) {
                     importPdf(uri, folder, pages)
                 } else {
-                    val bitmap = decodeScaled(uri, 2500)
+                    val bitmap = decodeScaled(uri, 3400)
                     try { pages += persistBitmap(bitmap, folder, pages.size) }
                     finally { bitmap.recycle() }
                 }
@@ -118,7 +118,7 @@ class DocumentStore(private val context: Context) {
     private fun persistBitmap(bitmap: Bitmap, folder: File, index: Int): DocumentPage {
         val dst = File(folder, "page_${(index + 1).toString().padStart(3, '0')}.jpg")
         FileOutputStream(dst).use { stream ->
-            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 94, stream)) {
+            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 96, stream)) {
                 throw IOException("Görüntü kaydedilemedi.")
             }
         }
