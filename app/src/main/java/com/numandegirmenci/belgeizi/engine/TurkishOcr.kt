@@ -27,8 +27,7 @@ object TurkishOcr {
         }
         var api: TessBaseAPI? = null
         return try {
-            api = TessBaseAPI()
-            val tess = api
+            val tess = TessBaseAPI().also { api = it }
             if (!tess.init(home.absolutePath, "tur")) {
                 detected.map(::recoverSuffix)
             } else {
