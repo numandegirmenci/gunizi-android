@@ -43,6 +43,7 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.numandegirmenci.belgeizi.data.*
 import com.numandegirmenci.belgeizi.engine.OcrEngine
 import com.numandegirmenci.belgeizi.engine.PdfWriter
+import com.numandegirmenci.belgeizi.engine.ScanPipelinePolicy
 import com.numandegirmenci.belgeizi.engine.VisualTextRenderer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -92,8 +93,8 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
         var latest = doc
         for (i in latest.pages.indices) {
             val page = latest.pages[i]
-            if (page.ocr.any { it.edited }) continue
-            if (page.ocrDone && !force && page.ocrVersion >= 3) continue
+            if (!ScanPipelinePolicy.shouldRecognize(page.ocrDone, page.ocrVersion,
+                    page.ocr.any { it.edited }, force)) continue
             status = "Metin tanıma " + (i + 1) + "/" + latest.pages.size + " • okunuyor"
             val lines = withContext(Dispatchers.Default) {
                 val bitmap = store.loadBitmap(page)
@@ -101,7 +102,7 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
                 finally { bitmap.recycle() }
             }
             val pages = latest.pages.toMutableList()
-            pages[i] = page.copy(ocr = lines, ocrDone = true, ocrVersion = 3)
+            pages[i] = page.copy(ocr = lines, ocrDone = true, ocrVersion = ScanPipelinePolicy.OCR_SCHEMA_VERSION)
             latest = latest.copy(pages = pages)
             update(latest)
         }
@@ -204,7 +205,8 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
                         onImport = { openFiles.launch(arrayOf("application/pdf", "image/*")) },
                         onOpen = { doc ->
                             current = doc; pageIndex = 0
-                            if (doc.pages.any { !it.ocrDone || it.ocrVersion < 3 } && !busy) scope.launch {
+                            if (doc.pages.any { ScanPipelinePolicy.shouldRecognize(it.ocrDone, it.ocrVersion,
+                                    it.ocr.any { word -> word.edited }) } && !busy) scope.launch {
                                 busy = true
                                 try { processOcr(doc) } catch (e: Exception) { reportError(e) }
                                 finally { busy = false; status = "" }
