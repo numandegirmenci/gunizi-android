@@ -31,12 +31,11 @@ object PdfWriter {
                     try {
                         val canvas = sheet.canvas
                         canvas.drawColor(Color.WHITE)
-                        val margin = 18f
-                        val scale = min((width - 2 * margin) / image.width, (height - 2 * margin) / image.height)
-                        val drawnWidth = image.width * scale
-                        val drawnHeight = image.height * scale
-                        val dx = (width - drawnWidth) / 2f
-                        val dy = (height - drawnHeight) / 2f
+                        val fit = PdfLayoutMath.fit(width, height, image.width, image.height)
+                        val drawnWidth = fit.width
+                        val drawnHeight = fit.height
+                        val dx = fit.left
+                        val dy = fit.top
                         val box = RectF(dx, dy, dx + drawnWidth, dy + drawnHeight)
                         // OCR text is painted BEFORE the opaque image. This keeps scanned
                         // appearance while embedding searchable character content in the PDF.
