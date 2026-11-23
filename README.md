@@ -1,10 +1,20 @@
 > **GitHub derleme dalı:** `belgeizi-v0.1.1-build`. Bu dal, başka bir projeye ait `main` dalını etkilemeden derleme amacıyla ayrılmıştır. Ayrı bir depo oluşturulduğunda taşınmalıdır.
 
-# Belge İzi — Android v0.1.4 (otomatik görüntü geliştirme)
+# Belge İzi — Android v0.1.5 (Otomatik Test ve APK Dağıtımı)
 
 Türkçe belge tarama, OCR ve PDF işleme için **orijinal tasarımlı** Android uygulaması.
 
 > Durum: GitHub Actions ile APK oluşturulan test sürümüdür. Fiziksel telefonda kalite ve kararlılık ayrıca doğrulanmalıdır.
+
+## v0.1.5 — Otomatik kalite kapısı
+
+- `.github/workflows/android.yml`: Her kod değişikliğinde Python kalite aracı testleri, sentetik Türkçe belge görüntüleri, Android JVM regresyonları, lint ve APK derlemesi çalışır.
+- Testlerden biri başarısız olursa yayımlama durdurulur.
+- Başarılı derlemede APK, GitHub Actions'ta arşivlenir; derleme dalında GitHub Releases üzerinden ZIP açmadan doğrudan indirilebilen bir APK yayımlanır.
+- Gün İzi'nin `main` dalına ve `Latest` sürümüne dokunulmaz (`--latest=false`).
+- Sabit imza için `BELGEIZI_*` GitHub sırları gerekir. Sırlar yoksa yalnız **test APK** yayımlanır; farklı debug imzasıyla kurulmuş APK'lar veriler silinmeden güncellenemeyebilir.
+- Doğrulama kodu ve örnekler: [qa/README.md](qa/README.md); anahtar güvenliği: [docs/SIGNING.md](docs/SIGNING.md).
+- Bu otomatik denetimler gerçek cihazdaki OCR başarısını kanıtlamaz. Kaynak/görüntü testleri için aynı belgeyi gerçek cihazda ayrıca ölçmek gerekir.
 
 ## v0.1.4 Görüntü geliştirme
 - Tarama sonrasında AUTO görüntü geliştirme otomatik uygulanır.
@@ -51,15 +61,20 @@ Türkçe belge tarama, OCR ve PDF işleme için **orijinal tasarımlı** Android
 
 **Not:** Resmi Gradle wrapper JAR bu arşivde bulunmuyor. Bu nedenle Android Studio'da Gradle konumunu kurulu Gradle 8.13 olarak göstermek veya yukarıdaki `build-apk.ps1` yolunu kullanmak gerekir. `gradlew.bat` betiği aynı Windows derleme akışını başlatır.
 
-### GitHub Actions ile APK
+### GitHub Actions ile otomatik derleme ve tek tık APK
 
-`.github/workflows/android.yml` tanımlıdır. Projeyi **kendi özel depona** yüklediğinde `main` dalına gönderilen commit'lerde Actions, debug APK üretmeye çalışır. Actions sayfasındaki **Artifacts > BelgeIzi-debug-v0.1.1** bölümünden indirilebilir. Derlemenin başarıyla geçtiği henüz doğrulanmadı.
+Kaynak dalı: `belgeizi-v0.1.1-build` (isim geçmişten kalmıştır, Android uygulama sürümü `0.1.5`).
+Geliştirme dalı: `feature/belgeizi-ci-v015`.
+
+Geliştirme dalında otomatik testler yapılır. Kontrollerden geçen sürüm derleme dalına aktarıldığında Actions testi tekrar gerçekleştirir ve başarılıysa **GitHub Releases > Belge İzi** altında doğrudan .apk indirilebilir.
+
+Sabit imza sırları henüz eklenmemişse yalnızca test APK'sı çıkar. Test APK'sı üretim sürümü değildir. [İmzalama kurulumu](docs/SIGNING.md).
 
 ## Kullanım
 
 1. **Yeni belge tara** ile çok sayfalı çekim yap; veya **Dosyadan aç** ile PDF/fotoğraf seç.
-2. Belge ekranındaki **OCR** butonuna bas; tüm sayfalarda OCR oluşturulur.
-3. **Metin** butonuyla kutucukları görünür yap; herhangi bir satıra dokunup yanlış metni düzelt.
+2. Belge açıldığında Türkçe metin tanıma otomatik yapılır; ayrı OCR düğmesi yoktur.
+3. Gerekirse **Metin** aracıyla kelimelere dokunarak metin düzenle; görüntüyü **Geliştir** menüsünden ayarla.
 4. **İmza** ile parmakla çiz; **Kaşe** ile metin veya görsel ekle. İşaretler sürüklenebilir, dokunarak boyutlandırılabilir.
 5. Üstteki **PDF** butonuna bas; telefona veya bir bulut sağlayıcısına kaydet.
 6. **Kopyala** ile tanınan tüm metni al.
