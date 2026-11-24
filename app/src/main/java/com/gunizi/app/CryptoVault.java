@@ -29,18 +29,25 @@ final class CryptoVault {
         return kg.generateKey();
     }
     static File encrypt(Context context,File source)throws Exception{
-        return encryptIn(context,source,"encrypted_pending");
+        return encryptNamed(context,source,source.getName());
+    }
+    static File encryptNamed(Context context,File source,String name)throws Exception{
+        return encryptIn(context,source,"encrypted_pending",name);
     }
     static File encryptEphemeral(Context context,File source)throws Exception{
-        return encryptIn(context,source,"encrypted_rolling_history");
+        return encryptIn(context,source,"encrypted_rolling_history",source.getName());
     }
-    private static File encryptIn(Context context,File source,String folder)throws Exception{
+    private static File encryptIn(Context context,File source,String folder,String name)throws Exception{
         File dir=new File(context.getNoBackupFilesDir(),folder);
         if(!dir.exists()&&!dir.mkdirs())throw new IOException("Yedek klasörü oluşturulamadı");
-        File target=new File(dir,source.getName()+".giz");
         Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE,key());
         byte[] iv=cipher.getIV();
+        String ext=RecordingOptions.extensionForName(name);
+        File target=new File(dir,name+".giz");
+        for(int i=2;!target.createNewFile();i++){
+            target=new File(dir,name.substring(0,name.length()-ext.length())+"_"+i+ext+".giz");
+        }
         try(InputStream input=new FileInputStream(source);
             FileOutputStream raw=new FileOutputStream(target)){
             raw.write(MAGIC);raw.write(iv.length);raw.write(iv);
@@ -52,7 +59,8 @@ final class CryptoVault {
         return target;
     }
     static File decryptToTemp(Context context,File encrypted)throws Exception{
-        File tmp=File.createTempFile("gunizi_restore_",".ogg",context.getCacheDir());
+        String name=encrypted.getName().replaceFirst("\\.giz$","");
+        File tmp=File.createTempFile("gunizi_restore_",RecordingOptions.extensionForName(name),context.getCacheDir());
         try(InputStream raw=new FileInputStream(encrypted)){
             byte[] header=new byte[4];
             new DataInputStream(raw).readFully(header);

@@ -14,7 +14,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Temporary rolling Ogg/Opus segments. Not a RAM-only buffer.
+ * Temporary rolling compressed audio segments. Not a RAM-only buffer.
  * Six hours of 16 kbps compressed audio is about 43 MB, vs ~659 MB raw PCM.
  * All segments live in private cache and are removed when listening stops.
  */
@@ -30,9 +30,11 @@ final class HistoryAudioStore {
     }
     private final File dir;
     private final Context app;
+    private final RecordingOptions options;
     private final ArrayList<Segment> segments=new ArrayList<>();
     private boolean disposed=false;
-    HistoryAudioStore(Context context){
+    HistoryAudioStore(Context context,RecordingOptions options){
+        this.options=options;
         app=context.getApplicationContext();
         File oldEncrypted=new File(context.getNoBackupFilesDir(),"encrypted_rolling_history");
         if(oldEncrypted.isDirectory()){
@@ -72,7 +74,7 @@ final class HistoryAudioStore {
     }
     synchronized File nextFile(){
         if(!dir.exists()&&!dir.mkdirs())throw new IllegalStateException("Geçici ses alanı açılamadı");
-        return new File(dir,"rolling_"+SystemClock.elapsedRealtime()+"_"+System.nanoTime()+".ogg");
+        return new File(dir,"rolling_"+SystemClock.elapsedRealtime()+"_"+System.nanoTime()+options.extension());
     }
     synchronized List<Segment> pinSince(long cutoff){
         ArrayList<Segment> chosen=new ArrayList<>();
@@ -102,14 +104,14 @@ final class HistoryAudioStore {
         disposed=true;
         deleteUnpinned();
     }
-    /** Re-mux selected Opus samples into a single playable OGG file, no recompression. */
-    static File merge(Context context,List<Segment> source,long cutoff,long endTime)throws IOException{
+    /** Re-mux selected samples into a playable file in the session's format, no recompression. */
+    static File merge(Context context,List<Segment> source,long cutoff,long endTime,RecordingOptions options)throws IOException{
         if(source==null||source.isEmpty())throw new IOException("Geçmiş ses birikmedi");
-        File result=File.createTempFile("gunizi_history_export_",".ogg",context.getCacheDir());
+        File result=File.createTempFile("gunizi_history_export_",options.extension(),context.getCacheDir());
         MediaMuxer muxer=null;boolean started=false;boolean success=false;
         long lastPts=-1;int samples=0,trackOut=-1;
         try{
-            muxer=new MediaMuxer(result.getAbsolutePath(),MediaMuxer.OutputFormat.MUXER_OUTPUT_OGG);
+            muxer=new MediaMuxer(result.getAbsolutePath(),options.muxer());
             ByteBuffer buffer=ByteBuffer.allocateDirect(512*1024);
             MediaCodec.BufferInfo info=new MediaCodec.BufferInfo();
             for(Segment s:source){

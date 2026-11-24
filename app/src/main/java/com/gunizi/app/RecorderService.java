@@ -12,7 +12,6 @@ import android.os.*;
 import android.util.Log;
 import java.io.File;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -54,6 +53,7 @@ public final class RecorderService extends Service {
     private String activeDay="";
     private Prefs prefs;
     private HistoryAudioStore historyStore;
+    private RecordingOptions historyOptions;
     private MediaRecorder historyRecorder;
     private File historyCurrentFile;
     private long historyCurrentStart=0;
@@ -289,22 +289,23 @@ public final class RecorderService extends Service {
         if(should&&recorder==null)startWorkRecording(day);
         if(!should&&recorder==null)stateText="Mesai kaydı beklemede";
     }
-    private MediaRecorder prepareRecorder(File output)throws Exception{
+    private MediaRecorder prepareRecorder(File output,RecordingOptions options)throws Exception{
         MediaRecorder r=Build.VERSION.SDK_INT>=31?new MediaRecorder(this):new MediaRecorder();
         try{
             r.setAudioSource(MediaRecorder.AudioSource.MIC);
-            r.setOutputFormat(MediaRecorder.OutputFormat.OGG);
-            r.setAudioEncoder(MediaRecorder.AudioEncoder.OPUS);
+            r.setOutputFormat(options.container());
+            r.setAudioEncoder(options.encoder());
             r.setAudioChannels(1);
-            r.setAudioSamplingRate(16000);
-            r.setAudioEncodingBitRate(16000);
+            r.setAudioSamplingRate(options.sampleRate());
+            r.setAudioEncodingBitRate(options.bitrate());
             r.setOutputFile(output.getAbsolutePath());
             r.prepare();r.start();
             return r;
         }catch(Exception e){try{r.release();}catch(Exception ignored){}throw e;}
     }
     private void startHistory(){
-        historyStore=new HistoryAudioStore(this);
+        historyOptions=prefs.recordingOptions();
+        historyStore=new HistoryAudioStore(this,historyOptions);
         historyStart=SystemClock.elapsedRealtime();
         historyStartedElapsedMs=historyStart;
         historyHeldSeconds=0;
@@ -327,7 +328,7 @@ public final class RecorderService extends Service {
         File output=historyStore.nextFile();
         try{
             historyCurrentStart=SystemClock.elapsedRealtime();
-            historyRecorder=prepareRecorder(output);
+            historyRecorder=prepareRecorder(output,historyOptions);
             historyCurrentFile=output;
             return true;
         }catch(Exception e){
@@ -391,6 +392,8 @@ public final class RecorderService extends Service {
         long cutoff=end-take;
         List<HistoryAudioStore.Segment> selected=historyStore.pinSince(cutoff);
         final HistoryAudioStore store=historyStore;
+        final RecordingOptions options=historyOptions;
+        final String name=prefs.recordingName("Gecmis",LocalDateTime.now(Prefs.ZONE),options);
         final int savedSeconds=(int)(take/1000);
         if(selected.isEmpty()){lastEvent="Kaydedilebilir ses bulunamadı";return;}
         if(prefs.folder()==null){
@@ -400,12 +403,10 @@ public final class RecorderService extends Service {
         io.execute(()->{
             File merged=null,backup=null;
             try{
-                merged=HistoryAudioStore.merge(getApplicationContext(),selected,cutoff,end);
-                backup=CryptoVault.encrypt(getApplicationContext(),merged);
-                String name="GunIzi_Gecmis_"+savedSeconds+"sn_"+
-                    LocalDateTime.now(Prefs.ZONE).format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HHmmss"))+".ogg";
+                merged=HistoryAudioStore.merge(getApplicationContext(),selected,cutoff,end,options);
+                backup=CryptoVault.encryptNamed(getApplicationContext(),merged,name);
                 android.net.Uri exported=ExportManager.writeFile(
-                    getApplicationContext(),prefs.folder(),merged,name,"audio/ogg");
+                    getApplicationContext(),prefs.folder(),merged,name,options.mime());
                 lastEvent="Son "+savedSeconds+" saniyelik geçmiş kaydedildi";
                 if(AiModelStore.ready(this,new AnalysisPreferences(this).speechModel())&&
                    AiModelStore.ready(this,new Prefs(this).aiModel()))
@@ -425,10 +426,17 @@ public final class RecorderService extends Service {
     private void startWorkRecording(String day){
         File dir=new File(getFilesDir(),"pending_audio");
         if(!dir.exists()&&!dir.mkdirs()){stateText="Geçici klasör açılamadı";return;}
-        File output=new File(dir,"GunIzi_Mesai_"+day+"_"+
-            LocalDateTime.now(Prefs.ZONE).format(DateTimeFormatter.ofPattern("HHmmss"))+".ogg");
+        RecordingOptions options=prefs.recordingOptions();
+        String name=prefs.recordingName("Mesai",LocalDateTime.now(Prefs.ZONE),options);
+        File output=new File(dir,name);
         try{
-            recorder=prepareRecorder(output);
+            for(int i=2;!output.createNewFile();i++){
+                output=new File(dir,name.substring(0,name.length()-options.extension().length())+
+                    "_"+i+options.extension());
+            }
+        }catch(java.io.IOException e){stateText="Geçici kayıt dosyası oluşturulamadı";return;}
+        try{
+            recorder=prepareRecorder(output,options);
             activeFile=output;activeDay=day;recording=true;stateText="Mesai kaydı sürüyor";
         }catch(Exception e){
             Log.e("GunIzi","Work recorder start",e);
@@ -451,7 +459,7 @@ public final class RecorderService extends Service {
             try{
                 backup=CryptoVault.encrypt(getApplicationContext(),audio);
                 android.net.Uri saved=ExportManager.writeFile(getApplicationContext(),prefs.folder(),
-                    audio,audio.getName(),"audio/ogg");
+                    audio,audio.getName(),RecordingOptions.mimeForName(audio.getName()));
                 if(AiModelStore.ready(this,new AnalysisPreferences(this).speechModel())&&
                     AiModelStore.ready(this,new Prefs(this).aiModel()))
                     DailySummaryWorker.queue(this,saved,audio.getName(),true);
@@ -478,8 +486,8 @@ public final class RecorderService extends Service {
                 File raw=null;
                 try{
                     raw=CryptoVault.decryptToTemp(this,file);
-                    ExportManager.writeFile(this,prefs.folder(),raw,
-                        file.getName().replaceFirst("\\.giz$",""),"audio/ogg");
+                    String name=file.getName().substring(0,file.getName().length()-4);
+                    ExportManager.writeFile(this,prefs.folder(),raw,name,RecordingOptions.mimeForName(name));
                     if(file.delete())count++;
                 }catch(Exception e){lastEvent="Kurtarma hatası: "+e.getMessage();}
                 finally{if(raw!=null)raw.delete();}
