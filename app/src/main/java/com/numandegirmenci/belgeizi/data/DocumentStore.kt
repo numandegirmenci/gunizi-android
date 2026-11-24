@@ -76,7 +76,7 @@ class DocumentStore(private val context: Context) {
                     importPdf(uri, folder, pages)
                 } else {
                     val bitmap = decodeScaled(uri, 3400)
-                    try { pages += persistBitmap(bitmap, folder, pages.size) }
+                    try { pages += persistBitmap(bitmap, folder, pages.size, originalUri = uri) }
                     finally { bitmap.recycle() }
                 }
             }
@@ -117,13 +117,33 @@ class DocumentStore(private val context: Context) {
         } finally { temp.delete() }
     }
 
-    private fun persistBitmap(bitmap: Bitmap, folder: File, index: Int): DocumentPage {
+    private fun persistBitmap(
+        bitmap: Bitmap, folder: File, index: Int, originalUri: Uri? = null
+    ): DocumentPage {
         val basename = "page_${(index + 1).toString().padStart(3, '0')}"
-        val original = File(folder, "${basename}_original.jpg")
+        val original = File(folder, "${basename}_original.source")
         val output = File(folder, "${basename}.jpg")
-        FileOutputStream(original).use { stream ->
-            check(bitmap.compress(Bitmap.CompressFormat.JPEG, 96, stream)) {
-                "Orijinal belge kaydedilemedi."
+        val fullSize = if (originalUri == null) {
+            bitmap.width to bitmap.height
+        } else {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            context.contentResolver.openInputStream(originalUri)?.use { input ->
+                BitmapFactory.decodeStream(input, null, bounds)
+            }
+            if (bounds.outWidth > 0 && bounds.outHeight > 0) {
+                bounds.outWidth to bounds.outHeight
+            } else bitmap.width to bitmap.height
+        }
+        if (originalUri != null) {
+            context.contentResolver.openInputStream(originalUri)?.use { input ->
+                FileOutputStream(original).use { dest -> input.copyTo(dest) }
+            } ?: throw IOException("Orijinal fotoğraf kopyalanamadı.")
+            require(original.length() > 0L) { "Orijinal fotoğraf boş." }
+        } else {
+            FileOutputStream(original).use { stream ->
+                check(bitmap.compress(Bitmap.CompressFormat.JPEG, 96, stream)) {
+                    "Orijinal belge kaydedilemedi."
+                }
             }
         }
         val enhanced = ImageEnhancer.apply(bitmap, "AUTO")
@@ -135,7 +155,9 @@ class DocumentStore(private val context: Context) {
             }
         } finally { if (enhanced !== bitmap) enhanced.recycle() }
         return DocumentPage(output.absolutePath, bitmap.width, bitmap.height,
-            sourcePath = original.absolutePath, enhanceMode = "AUTO")
+            sourcePath = original.absolutePath,
+            originalWidth = fullSize.first, originalHeight = fullSize.second,
+            enhanceMode = "AUTO")
     }
 
     /** Rebuilds the visible scan from its source rather than stacking filters. */
@@ -147,8 +169,8 @@ class DocumentStore(private val context: Context) {
             if (!backup.exists()) file.copyTo(backup)
             backup
         }
-        val src = BitmapFactory.decodeFile(sourceFile.absolutePath)
-            ?: throw IOException("Orijinal belge açılamadı.")
+        // A full 200 MP Bitmap would exhaust the heap; only decode the work preview.
+        val src = decodeScaled(Uri.fromFile(sourceFile), 3400)
         try {
             val processed = ImageEnhancer.apply(src, mode)
             try {
@@ -254,6 +276,7 @@ class DocumentStore(private val context: Context) {
                 put("path", p.path); put("width", p.width); put("height", p.height)
                 put("ocrDone", p.ocrDone); put("ocrVersion", p.ocrVersion)
                 put("sourcePath", p.sourcePath); put("enhanceMode", p.enhanceMode)
+                put("originalWidth", p.originalWidth); put("originalHeight", p.originalHeight)
                 put("ocr", JSONArray().apply { p.ocr.forEach { l -> put(JSONObject().apply {
                     put("id", l.id); put("original", l.original); put("text", l.text)
                     put("x", l.x.toDouble()); put("y", l.y.toDouble())
@@ -280,6 +303,8 @@ class DocumentStore(private val context: Context) {
                 ocrDone = p.optBoolean("ocrDone"),
                 ocrVersion = p.optInt("ocrVersion", 0),
                 sourcePath = p.optString("sourcePath").takeIf { it.isNotEmpty() && it != "null" },
+                originalWidth = p.optInt("originalWidth", 0),
+                originalHeight = p.optInt("originalHeight", 0),
                 enhanceMode = p.optString("enhanceMode", "ORIGINAL"),
                 ocr = p.optJSONArray("ocr")?.let { a -> (0 until a.length()).map { i ->
                     val l = a.getJSONObject(i)
