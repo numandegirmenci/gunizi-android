@@ -13,8 +13,8 @@ android {
         minSdk = 26
         targetSdk = 35
         ndk { abiFilters += listOf("arm64-v8a") }
-        versionCode = 6
-        versionName = "0.1.5"
+        versionCode = 7
+        versionName = "0.1.6"
     }
 
     buildTypes {
@@ -45,6 +45,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("androidx.exifinterface:exifinterface:1.4.1")
+    implementation("androidx.core:core-ktx:1.17.0")
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
     // Bundled model: OCR does not require a first-run model download.
     implementation("com.google.mlkit:text-recognition:16.0.1")
