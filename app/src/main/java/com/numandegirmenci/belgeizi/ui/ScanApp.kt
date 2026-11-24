@@ -13,6 +13,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -48,13 +49,15 @@ import com.numandegirmenci.belgeizi.engine.VisualTextRenderer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.min
 
 @Composable
-fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () -> Unit) {
+fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: Boolean = false,
+    onConsumed: () -> Unit) {
     val context = LocalContext.current
     val store = remember { DocumentStore(context) }
     val scope = rememberCoroutineScope()
@@ -95,7 +98,7 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
             val page = latest.pages[i]
             if (!ScanPipelinePolicy.shouldRecognize(page.ocrDone, page.ocrVersion,
                     page.ocr.any { it.edited }, force)) continue
-            status = "Metin tanıma " + (i + 1) + "/" + latest.pages.size + " • okunuyor"
+            status = "Belge hazırlanıyor • " + (i + 1) + "/" + latest.pages.size
             val lines = withContext(Dispatchers.Default) {
                 val bitmap = store.loadBitmap(page)
                 try { OcrEngine.recognize(context, bitmap) }
@@ -140,12 +143,54 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
                 busy = true; status = "PDF oluşturuluyor..."
                 try {
                     withContext(Dispatchers.IO) { PdfWriter.export(doc, context.contentResolver, uri) }
-                    snackbar.showSnackbar("PDF kaydedildi.")
+                    if (externalEdit) {
+                        activity.setResult(Activity.RESULT_OK, Intent().apply {
+                            setDataAndType(uri, "application/pdf")
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        })
+                    }
+                    snackbar.showSnackbar("PDF kaydedildi. Orijinal dosya korundu.")
                 } catch (e: Exception) { reportError(e) }
                 finally { busy = false }
             }
         }
     }
+    fun sharePdf(doc: ScanDocument) {
+        if (busy) return
+        scope.launch {
+            busy = true; status = "Paylaşılacak PDF hazırlanıyor..."
+            try {
+                val uri = withContext(Dispatchers.IO) {
+                    val folder = File(context.cacheDir, "shared_documents").apply { mkdirs() }
+                    // Some target apps may import the shared file asynchronously.
+                    folder.listFiles()?.filter {
+                        it.isFile && System.currentTimeMillis() - it.lastModified() > 7L * 24 * 60 * 60 * 1000
+                    }?.forEach { it.delete() }
+                    val file = File(folder, "BelgeIzi_${System.currentTimeMillis()}.pdf")
+                    file.createNewFile()
+                    try {
+                        val result = FileProvider.getUriForFile(
+                            context, "${context.packageName}.files", file
+                        )
+                        PdfWriter.export(doc, context.contentResolver, result)
+                        result
+                    } catch (error: Exception) {
+                        file.delete()
+                        throw error
+                    }
+                }
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/pdf"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    clipData = ClipData.newUri(context.contentResolver, "Belge İzi PDF", uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(send, "Düzenlenmiş PDF'yi paylaş"))
+            } catch (error: Exception) { reportError(error) }
+            finally { busy = false; status = "" }
+        }
+    }
+
     val stampImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             scope.launch {
@@ -186,8 +231,8 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
         }
     }
 
-    LaunchedEffect(pendingUris) {
-        if (pendingUris.isNotEmpty()) {
+    LaunchedEffect(pendingUris, busy) {
+        if (pendingUris.isNotEmpty() && !busy) {
             importFiles(pendingUris)
             onConsumed()
         }
@@ -216,10 +261,12 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, onConsumed: () 
                     )
                 } else {
                     EditorScreen(
-                        doc = current!!, pageIndex = pageIndex, onPageIndex = { pageIndex = it },
+                        doc = current!!, pageIndex = pageIndex, externalEdit = externalEdit,
+                        onPageIndex = { pageIndex = it },
                         onBack = { current = null; documents = store.all() },
                                                 onPageChanged = ::changePage,
                         onExport = { doc -> savePdf.launch("${doc.title.take(70)}.pdf") },
+                        onShare = ::sharePdf,
                         onSignature = { signatureOpen = true },
                         onStamp = { stampOpen = true },
                         onImageStamp = { stampImagePicker.launch(arrayOf("image/*")) },
