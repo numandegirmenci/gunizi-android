@@ -38,6 +38,8 @@ data class DocumentPage(
     val ocr: List<OcrLine> = emptyList(),
     val ocrDone: Boolean = false,
     val sourcePath: String? = null,
+    val originalWidth: Int = 0,
+    val originalHeight: Int = 0,
     val enhanceMode: String = "AUTO",
     val ocrVersion: Int = 0,
     val marks: List<PageMark> = emptyList()
