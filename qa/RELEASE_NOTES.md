@@ -1,19 +1,23 @@
-Belge İzi v0.1.6 — Modern düzenleme ekranı ve diğer uygulamalardan düzenleme (TEST)
+Belge İzi v0.1.7 — Ultra HD kamera ve tam çözünürlüklü orijinal (TEST)
 
-- Yenilenmiş ana ekran: belirgin belge tarama, dosyadan açma, belge arama ve belge kartları.
-- Yenilenmiş belge düzenleyici: geniş belge alanı, sayfa gezintisi ve yatay araç çubuğu.
-- Geliştir seçenekleri yeniden tasarlandı: Otomatik, Canlı Renk, Keskin Siyah-Beyaz, Orijinal.
-- Üstte Kaydet ve Paylaş işlemleri. Paylaş için özel bir FileProvider kullanılır.
-- Android'in dosya düzenleme, birlikte aç ve paylaş menülerinde Belge İzi ile düzelt seçeneği desteklenir.
-- Bu seçenek, dış uygulamanın desteklediği Android intent türüne ve dosya izinlerine göre görünür.
-- Harici dosyalar önce uygulamaya kopyalanır; orijinal dosya üzerine otomatik yazılmaz.
-- Kaydedilen PDF, kullanıcı seçtiği konuma aktarılır. Diğer uygulamaya doğrudan dönüş onun entegrasyonuna bağlıdır.
-- Otomatik Türkçe OCR, imza, kaşe ve mevcut görüntü iyileştirme altyapısı korunur.
-- GitHub Actions üzerinden Android testleri, lint, APK imza/paket kontrolü ve Release yayımlanır.
+- Yenilenmiş kamera ekraninde Standart ve Ultra HD çekim modu.
+- CameraX en yüksek Android tarafından erişilebilir fotoğraf çözünürlüğünü ister.
+- Camera2 ile gerçek kamera JPEG çıkış boyutları okunur; 200 MP garantisi verilmez.
+- Çekimden sonra dosyadan gerçek piksel ölçüleri alınır ve belgede megapiksel gösterilir.
+- Fotoğrafın orijinal tam çözünürlüklü baytları, yeniden kodlamadan saklanır.
+- Uygulama OCR ve belge geliştirme için en çok 3400 piksel çalışma kopyası üretir.
+- Belge düzenleyicideki Orijinal aracı, kaynak görüntüyü yeniden kodlamadan telefona kaydeder.
+- Otomatik kenar ve perspektif düzeltmeli belge tarayıcı ayrı seçenek olarak korunur.
+- Kamera izni yalnızca Ultra HD kamera kullanıldığında istenir.
+- Android otomatik test, lint, APK paket ve imza kontrolü uygulanır.
 
-Bu bir TEST APK'sıdır. Gerçek cihazda düzenleme menüleri, uygulama paylaşımı ve
-OCR kalitesi ayrıca denenmelidir. Kalıcı imzalama anahtarı yoksa mevcut APK'nin
-üzerine sorunsuz yükleme garanti edilemez. Belgelerinizi yedeklemeden kurulu
-uygulamayı silmeyin.
+ÖNEMLİ: Samsung'un 200 MP sensörünün varlığı üçüncü taraf uygulamalara 200 MP
+çıkış verildiğini garanti etmez. Çekim boyutu gerçek kaydedilen JPEG üzerinde
+doğrulanır. Bu ilk Ultra HD sürümünde OCR ve PDF, 3400 piksel çalışma kopyası
+üzerindedir; orijinal çekim ayrı olarak saklanır. Doğrudan Ultra HD yolunda
+otomatik perspektif/kırpma yoktur; bu işlev için Otomatik belge tarama kullanılmalıdır.
 
-Gün İzi uygulaması bu çalışmadan etkilenmez.
+Gerçek cihazda kamera kararlılığı ve 200 MP erişimi henüz doğrulanmamıştır.
+Test APK imzası önceki kurulumla eşleşmeyebilir; belgeleri yedeklemeden silmeyin.
+
+Gün İzi ses kayıt uygulaması etkilenmez.
