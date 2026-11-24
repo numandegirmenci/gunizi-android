@@ -38,9 +38,9 @@ object CameraCapabilities {
                     ?.maxByOrNull(::pixels)
                 val capabilities = c.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)
                     ?.toSet().orEmpty()
-                val maximumMode = Build.VERSION.SDK_INT >= 31 &&
-                    CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_ULTRA_HIGH_RESOLUTION_SENSOR
-                    in capabilities
+                val maximumMode = Build.VERSION.SDK_INT >= 31 && (
+                    CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_ULTRA_HIGH_RESOLUTION_SENSOR in capabilities
+                )
                 val ultra = if (Build.VERSION.SDK_INT >= 31 && maximumMode) {
                     c.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP_MAXIMUM_RESOLUTION)
                         ?.getOutputSizes(ImageFormat.JPEG)
