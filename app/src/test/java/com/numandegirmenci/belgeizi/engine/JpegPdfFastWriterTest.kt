@@ -5,27 +5,21 @@ import com.numandegirmenci.belgeizi.data.MarkType
 import com.numandegirmenci.belgeizi.data.OcrLine
 import com.numandegirmenci.belgeizi.data.PageMark
 import com.numandegirmenci.belgeizi.data.ScanDocument
-import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
-import javax.imageio.ImageIO
+import java.util.Base64
 import org.junit.Assert.*
 import org.junit.Test
 
 class JpegPdfFastWriterTest {
+    /** Stable miniature image fixtures; Android unit tests have no java.awt/ImageIO API. */
     private fun fixture(format: String = "jpg"): Pair<File, DocumentPage> {
-        val bitmap = BufferedImage(80, 120, BufferedImage.TYPE_INT_RGB)
-        val graphics = bitmap.createGraphics()
-        try {
-            graphics.color = java.awt.Color.WHITE
-            graphics.fillRect(0, 0, 80, 120)
-            graphics.color = java.awt.Color.BLACK
-            graphics.drawString("Islem", 10, 30)
-        } finally { graphics.dispose() }
+        val jpeg = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBAUEBAYFBQUGBgYHCQ4JCQgICRINDQoOFRIWFhUSFBQXGiEcFxgfGRQUHScdHyIjJSUlFhwpLCgkKyEkJST/2wBDAQYGBgkICREJCREkGBQYJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCT/wAARCAB4AFADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//9k="
+        val png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jKToAAAAASUVORK5CYII="
         val file = File.createTempFile("belgeizi_pdf_fixture", ".$format")
         file.deleteOnExit()
-        check(ImageIO.write(bitmap, format, file))
+        file.writeBytes(Base64.getDecoder().decode(if (format == "png") png else jpeg))
         return file to DocumentPage(file.absolutePath, 80, 120)
     }
 
