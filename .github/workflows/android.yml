@@ -5,6 +5,7 @@ on:
     branches:
       - belgeizi-v0.1.1-build
       - feature/belgeizi-ci-v015
+      - feature/belgeizi-ultra-hd-v017
       - feature/belgeizi-ui-external-edit-v016
   workflow_dispatch:
 
