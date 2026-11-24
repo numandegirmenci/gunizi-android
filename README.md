@@ -1,10 +1,22 @@
 > **GitHub derleme dalı:** `belgeizi-v0.1.1-build`. Bu dal, başka bir projeye ait `main` dalını etkilemeden derleme amacıyla ayrılmıştır. Ayrı bir depo oluşturulduğunda taşınmalıdır.
 
-# Belge İzi — Android v0.1.5 (Otomatik Test ve APK Dağıtımı)
+# Belge İzi — Android v0.1.6 (Modern Arayüz ve Dış Uygulama Düzenleme)
 
 Türkçe belge tarama, OCR ve PDF işleme için **orijinal tasarımlı** Android uygulaması.
 
 > Durum: GitHub Actions ile APK oluşturulan test sürümüdür. Fiziksel telefonda kalite ve kararlılık ayrıca doğrulanmalıdır.
+
+## v0.1.6 — Modern görünüm ve "Belge İzi ile düzelt"
+
+- Ana sayfada tarama alanı, dosya içe aktarımı, belge araması ve modern belge kartları.
+- Düzenleyicide öne çıkan **Kaydet** ve **Paylaş**, geniş belge görüntüsü, sayfa gezintisi ve alt araç şeridi.
+- Dört geliştirme modu artık açıklamalı ve seçili görünür.
+- Android **ACTION_EDIT**, **ACTION_VIEW**, **ACTION_SEND** ve **ACTION_SEND_MULTIPLE** desteklenir.
+- Android dosya/galeri paylaşma veya düzenleme menülerinde **Belge İzi ile düzelt** adıyla görünebilir.
+- Harici dosya belge kasasına kopyalanır, orijinal dosyaya otomatik yazılmaz.
+- Düzenlenen PDF `FileProvider` üzerinden başka uygulamalarla güvenli biçimde paylaşılabilir.
+- Görünür OCR düğmesi kaldırılmıştır; OCR otomatik çalışır.
+- Tam görünürlük Android'in kaynak uygulamasının menüsüne ve dosya URI iznine bağlıdır.
 
 ## v0.1.5 — Otomatik kalite kapısı
 
