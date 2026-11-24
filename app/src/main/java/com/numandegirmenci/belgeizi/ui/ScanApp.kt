@@ -76,7 +76,8 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
     var stampOpen by remember { mutableStateOf(false) }
     var deleteCandidate by remember { mutableStateOf<ScanDocument?>(null) }
 
-    BackHandler(enabled = current != null) {
+    BackHandler(enabled = cameraOpen) { cameraOpen = false }
+    BackHandler(enabled = current != null && !cameraOpen) {
         current = null
         documents = store.all()
     }
@@ -225,6 +226,38 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
         }
     }
 
+    var originalToSave by remember { mutableStateOf<DocumentPage?>(null) }
+    val saveOriginalResult = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val page = originalToSave
+        originalToSave = null
+        val uri = result.data?.data
+        if (result.resultCode == Activity.RESULT_OK && uri != null && page != null) {
+            scope.launch {
+                busy = true; status = "Orijinal fotoğraf kaydediliyor..."
+                try {
+                    withContext(Dispatchers.IO) { store.exportOriginal(page, uri) }
+                    snackbar.showSnackbar("Orijinal yüksek çözünürlüklü dosya kaydedildi.")
+                } catch (error: Exception) { reportError(error) }
+                finally { busy = false; status = "" }
+            }
+        }
+    }
+
+    fun saveOriginalPhoto() {
+        val doc = current ?: return
+        val page = doc.pages.getOrNull(pageIndex) ?: return
+        val (mime, extension) = store.originalFormat(page)
+        originalToSave = page
+        val title = doc.title.replace(Regex("[^a-zA-Z0-9._ -]"), "_").take(48)
+        saveOriginalResult.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = mime
+            putExtra(Intent.EXTRA_TITLE, "BelgeIzi_" + title + "_Orijinal." + extension)
+        })
+    }
+
     val stampImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             scope.launch {
@@ -316,6 +349,7 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
                                                 onPageChanged = ::changePage,
                         onExport = { doc -> savePdf.launch("${doc.title.take(70)}.pdf") },
                         onShare = ::sharePdf,
+                        onExportOriginal = ::saveOriginalPhoto,
                         onSignature = { signatureOpen = true },
                         onStamp = { stampOpen = true },
                         onImageStamp = { stampImagePicker.launch(arrayOf("image/*")) },
@@ -600,6 +634,7 @@ private fun EditorScreen(
     onPageChanged: ((DocumentPage) -> DocumentPage) -> Unit,
     onExport: (ScanDocument) -> Unit,
     onShare: (ScanDocument) -> Unit,
+    onExportOriginal: () -> Unit,
     onSignature: () -> Unit, onStamp: () -> Unit, onImageStamp: () -> Unit,
     onEnhance: (String) -> Unit
 ) {
@@ -735,6 +770,7 @@ private fun EditorScreen(
                     ActionTool(Icons.Outlined.Draw, "İmza", onSignature)
                     ActionTool(Icons.Outlined.Approval, "Kaşe", { stampChoices = true })
                     ActionTool(Icons.Outlined.ContentCopy, "Kopyala", { showText = true })
+                    ActionTool(Icons.Outlined.HighQuality, "Orijinal", onExportOriginal)
                 }
             }
         }
