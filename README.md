@@ -1,10 +1,20 @@
 > **GitHub derleme dalı:** `belgeizi-v0.1.1-build`. Bu dal, başka bir projeye ait `main` dalını etkilemeden derleme amacıyla ayrılmıştır. Ayrı bir depo oluşturulduğunda taşınmalıdır.
 
-# Belge İzi — Android v0.1.6 (Modern Arayüz ve Dış Uygulama Düzenleme)
+# Belge İzi — Android v0.1.7 (Ultra HD Kamera ve Orijinal Koruma)
 
 Türkçe belge tarama, OCR ve PDF işleme için **orijinal tasarımlı** Android uygulaması.
 
 > Durum: GitHub Actions ile APK oluşturulan test sürümüdür. Fiziksel telefonda kalite ve kararlılık ayrıca doğrulanmalıdır.
+
+## v0.1.7 — Ultra HD ve tam çözünürlüklü orijinal
+
+- Android CameraX üzerinden Standart ve Ultra HD fotoğraf çekimi.
+- Android Camera2 ile erişilebilen JPEG çözünürlükleri dinamik sorgulanır; **200 MP garanti edilmez**.
+- Çekilen dosyanın gerçek piksel ölçüleri kayıttan sonra gösterilir.
+- Orijinal fotoğrafın baytları aynen korunur; 3400 piksel sınırlaması **yalnızca çalışma kopyasına** uygulanır.
+- PDF/OCR hâlen 3400 piksel çalışma kopyası üzerinden yapılır; büyük orijinal **Orijinal** aracıyla ayrı dışa aktarılabilir.
+- Otomatik kesme ve perspektif düzeltme isteyen kullanıcılar için eski ML Kit **Otomatik belge tarama** seçeneği korunur.
+- Ultra HD kipinde otomatik perspektif düzeltme ilk sürümde yoktur; gerçek cihaz testi gereklidir.
 
 ## v0.1.6 — Modern görünüm ve "Belge İzi ile düzelt"
 
