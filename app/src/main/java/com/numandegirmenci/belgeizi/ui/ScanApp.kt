@@ -10,6 +10,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
 import androidx.activity.compose.BackHandler
@@ -215,6 +216,7 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
         if (uri != null && doc != null) {
             scope.launch {
                 busy = true; status = "PDF oluşturuluyor..."
+                val startMs = SystemClock.elapsedRealtime()
                 try {
                     withContext(Dispatchers.IO) { PdfWriter.export(doc, context.contentResolver, uri) }
                     if (externalEdit) {
@@ -223,7 +225,10 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         })
                     }
-                    snackbar.showSnackbar("PDF kaydedildi. Orijinal dosya korundu.")
+                    val seconds = (SystemClock.elapsedRealtime() - startMs) / 1000.0
+                    snackbar.showSnackbar("PDF kaydedildi (" +
+                        String.format(Locale.US, "%.1f", seconds) +
+                        " sn). Orijinal dosya korundu.")
                 } catch (e: Exception) { reportError(e) }
                 finally { busy = false }
             }

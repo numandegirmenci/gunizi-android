@@ -17,6 +17,20 @@ import kotlin.math.min
 /** Raster appearance + OCR text layer, editable field corrections, visual stamps/signatures. */
 object PdfWriter {
     fun export(doc: ScanDocument, resolver: ContentResolver, outputUri: Uri) {
+        // Fast, text-safe path: write the source JPEG bit-for-bit instead of
+        // decoding and recompressing every scanned page. Existing Turkish OCR
+        // remains searchable through the fast writer's ToUnicode mapping.
+        // Use Android's original renderer for stamps, visual text changes,
+        // PNG deskew pages, or unsupported JPEG formats.
+        if (JpegPdfFastWriter.canExport(doc)) {
+            resolver.openOutputStream(outputUri, "wt")?.use { stream ->
+                check(JpegPdfFastWriter.writeIfSupported(doc, stream)) {
+                    "PDF hızlı kaydetme koşulları değişti; yeniden deneyin."
+                }
+            } ?: throw IOException("PDF kaydetme konumu açılamadı.")
+            return
+        }
+
         val pdf = PdfDocument()
         try {
             doc.pages.forEachIndexed { index, page ->
