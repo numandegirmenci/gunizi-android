@@ -349,102 +349,170 @@ private fun HomeScreen(
     docs: List<ScanDocument>, onScan: () -> Unit, onImport: () -> Unit,
     onOpen: (ScanDocument) -> Unit, onDelete: (ScanDocument) -> Unit
 ) {
-    Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 25.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(Accent),
-                contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.Description, null, tint = Background, modifier = Modifier.size(27.dp))
-            }
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("BELGE İZİ", color = TextMain, fontWeight = FontWeight.Black,
-                    fontSize = 20.sp, letterSpacing = 1.4.sp)
-                Text("Akıllı tarama • aranabilir PDF", color = TextMuted, fontSize = 12.sp)
+    var query by remember { mutableStateOf("") }
+    val results = remember(docs, query) {
+        docs.filter { it.title.contains(query, ignoreCase = true) }
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 21.dp, bottom = 42.dp),
+        verticalArrangement = Arrangement.spacedBy(15.dp)
+    ) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Box(
+                    Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(Accent),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.AutoStories, "Belge İzi", tint = Background,
+                        modifier = Modifier.size(26.dp))
+                }
+                Spacer(Modifier.width(13.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Belge İzi", color = TextMain, fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
+                    Text("Dijital belge atölyen", color = TextMuted, fontSize = 12.sp)
+                }
+                Surface(color = Panel, shape = RoundedCornerShape(50.dp),
+                    border = BorderStroke(1.dp, PanelBright)) {
+                    Text("YEREL", color = Accent, fontWeight = FontWeight.SemiBold,
+                        fontSize = 10.sp, letterSpacing = 1.sp,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                }
             }
         }
-        LazyColumn(contentPadding = PaddingValues(start = 22.dp, end = 22.dp, bottom = 40.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            item {
-                Spacer(Modifier.height(14.dp))
-                Text("Belgen hazır mı?", style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold, color = TextMain)
-                Spacer(Modifier.height(8.dp))
-                Text("Tara, metinleri düzenle, imzala ve PDF olarak kaydet.",
-                    color = TextMuted, style = MaterialTheme.typography.bodyLarge)
-                Spacer(Modifier.height(28.dp))
-                Surface(onClick = onScan, shape = RoundedCornerShape(25.dp), color = Accent,
-                    modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(21.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.PhotoCamera, null, modifier = Modifier.size(32.dp),
-                            tint = Background)
-                        Spacer(Modifier.width(17.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Yeni belge tara", color = Background,
-                                fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
-                            Text("Otomatik kırpma • çoklu sayfa", color = Background.copy(alpha = 0.78f),
-                                fontSize = 12.sp)
-                        }
-                        Icon(Icons.Outlined.ArrowForward, null, tint = Background)
-                    }
-                }
-                Spacer(Modifier.height(11.dp))
-                Surface(onClick = onImport, shape = RoundedCornerShape(22.dp), color = Panel,
-                    modifier = Modifier.fillMaxWidth(), border = BorderStroke(1.dp, PanelBright)) {
-                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.FolderOpen, null, modifier = Modifier.size(28.dp),
-                            tint = TextMain)
-                        Spacer(Modifier.width(16.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Dosyadan aç", color = TextMain,
-                                fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-                            Text("PDF • Fotoğraf • OneDrive", color = TextMuted, fontSize = 12.sp)
-                        }
-                        Icon(Icons.Outlined.ArrowForward, null, tint = TextMuted)
-                    }
-                }
-                Spacer(Modifier.height(25.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Belgelerim", color = TextMain, style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.weight(1f))
-                    Text("${docs.size} belge", color = TextMuted, fontSize = 12.sp)
-                }
-                Spacer(Modifier.height(8.dp))
+        item { Spacer(Modifier.height(10.dp)) }
+        item {
+            Column {
+                Text("Belgelerin. Daha net.", color = TextMain,
+                    fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.7).sp)
+                Spacer(Modifier.height(7.dp))
+                Text("Tara, otomatik iyileştir, düzenle ve paylaş.",
+                    color = TextMuted, fontSize = 14.sp)
             }
-            if (docs.isEmpty()) item {
-                Surface(color = Panel, shape = RoundedCornerShape(21.dp),
-                    modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Outlined.InsertDriveFile, null, tint = TextMuted,
-                            modifier = Modifier.size(38.dp))
-                        Spacer(Modifier.height(10.dp))
-                        Text("Henüz belge yok", color = TextMain, fontWeight = FontWeight.Bold)
-                        Text("İlk taraman burada görünecek.", color = TextMuted)
+        }
+        item {
+            Surface(onClick = onScan, modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(27.dp), color = Accent) {
+                Box(Modifier.fillMaxWidth().background(
+                    androidx.compose.ui.graphics.Brush.linearGradient(
+                        listOf(Color(0xFF6AE8C6), Color(0xFF31B7B4))
+                    )
+                )) {
+                    Column(Modifier.padding(23.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(56.dp).clip(RoundedCornerShape(18.dp))
+                                .background(Background.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center) {
+                                Icon(Icons.Outlined.PhotoCamera, null, tint = Background,
+                                    modifier = Modifier.size(31.dp))
+                            }
+                            Spacer(Modifier.weight(1f))
+                            Icon(Icons.Outlined.ArrowForward, null, tint = Background,
+                                modifier = Modifier.size(25.dp))
+                        }
+                        Spacer(Modifier.height(24.dp))
+                        Text("Belge tara", color = Background,
+                            fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.height(5.dp))
+                        Text("Otomatik kesme  •  Netleştirme  •  Metin algılama",
+                            color = Background.copy(alpha = 0.82f), fontSize = 12.sp)
                     }
                 }
             }
-            items(docs, key = { it.id }) { doc ->
-                Surface(onClick = { onOpen(doc) }, shape = RoundedCornerShape(18.dp),
-                    color = Panel, border = BorderStroke(1.dp, PanelBright)) {
-                    Row(Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(53.dp).background(PanelBright, RoundedCornerShape(14.dp)),
-                            contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.PictureAsPdf, null, tint = Accent,
-                                modifier = Modifier.size(28.dp))
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(doc.title, color = TextMain, fontWeight = FontWeight.SemiBold,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.height(4.dp))
-                            Text("${doc.pages.size} sayfa  •  ${SimpleDateFormat("dd.MM.yyyy", Locale("tr", "TR")).format(Date(doc.createdAt))}",
-                                color = TextMuted, fontSize = 12.sp)
-                        }
-                        IconButton(onClick = { onDelete(doc) }) {
-                            Icon(Icons.Outlined.DeleteOutline, "Belgeyi sil", tint = TextMuted)
-                        }
+        }
+        item {
+            Surface(onClick = onImport, shape = RoundedCornerShape(22.dp),
+                color = Panel, border = BorderStroke(1.dp, PanelBright),
+                modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(45.dp).clip(RoundedCornerShape(15.dp))
+                        .background(PanelBright), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.FolderOpen, null, tint = Accent,
+                            modifier = Modifier.size(25.dp))
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Dosyadan belge aç", color = TextMain,
+                            fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                        Text("PDF, fotoğraf veya bulut dosyası",
+                            color = TextMuted, fontSize = 12.sp)
+                    }
+                    Icon(Icons.Outlined.ChevronRight, null, tint = TextMuted)
+                }
+            }
+        }
+        item { Spacer(Modifier.height(4.dp)) }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Belgelerim", color = TextMain,
+                        fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("Cihazında güvenle saklanır", color = TextMuted, fontSize = 12.sp)
+                }
+                Surface(color = PanelBright, shape = RoundedCornerShape(50.dp)) {
+                    Text("${docs.size} belge", color = TextMain, fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                }
+            }
+        }
+        if (docs.isNotEmpty()) item {
+            OutlinedTextField(
+                value = query, onValueChange = { query = it.take(100) },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Belge adına göre ara", color = TextMuted) },
+                leadingIcon = { Icon(Icons.Outlined.Search, null, tint = TextMuted) },
+                trailingIcon = {
+                    if (query.isNotBlank()) IconButton(onClick = { query = "" }) {
+                        Icon(Icons.Outlined.Close, "Aramayı temizle")
+                    }
+                },
+                shape = RoundedCornerShape(18.dp), singleLine = true
+            )
+        }
+        if (results.isEmpty()) item {
+            Surface(shape = RoundedCornerShape(24.dp), color = Panel,
+                border = BorderStroke(1.dp, PanelBright),
+                modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(if (docs.isEmpty()) Icons.Outlined.InsertDriveFile else Icons.Outlined.SearchOff,
+                        null, tint = Accent, modifier = Modifier.size(36.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Text(if (docs.isEmpty()) "İlk belgeni tara" else "Eşleşen belge bulunamadı",
+                        color = TextMain, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Spacer(Modifier.height(5.dp))
+                    Text(if (docs.isEmpty()) "Belgelerin burada listelenecek."
+                        else "Başka bir belge adı deneyebilirsin.",
+                        color = TextMuted, fontSize = 12.sp)
+                }
+            }
+        }
+        items(results, key = { it.id }) { doc ->
+            Surface(onClick = { onOpen(doc) }, shape = RoundedCornerShape(21.dp),
+                color = Panel, border = BorderStroke(1.dp, PanelBright)) {
+                Row(Modifier.fillMaxWidth().padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(width = 59.dp, height = 65.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(PanelBright),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Outlined.Description, null, tint = Accent,
+                            modifier = Modifier.size(30.dp))
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(doc.title, color = TextMain,
+                            fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(8.dp))
+                        Text("${doc.pages.size} sayfa  ·  ${SimpleDateFormat("dd MMM yyyy", Locale("tr", "TR")).format(Date(doc.createdAt))}",
+                            color = TextMuted, fontSize = 11.sp)
+                    }
+                    IconButton(onClick = { onDelete(doc) }) {
+                        Icon(Icons.Outlined.DeleteOutline, "Belgeyi sil", tint = TextMuted)
                     }
                 }
             }
