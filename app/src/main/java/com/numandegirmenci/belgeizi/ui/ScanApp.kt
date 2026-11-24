@@ -1,5 +1,7 @@
 package com.numandegirmenci.belgeizi.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -9,6 +11,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.ComponentActivity
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -46,6 +49,7 @@ import com.numandegirmenci.belgeizi.engine.OcrEngine
 import com.numandegirmenci.belgeizi.engine.PdfWriter
 import com.numandegirmenci.belgeizi.engine.ScanPipelinePolicy
 import com.numandegirmenci.belgeizi.engine.VisualTextRenderer
+import com.numandegirmenci.belgeizi.camera.UltraCameraScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,6 +70,7 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
     var current by remember { mutableStateOf<ScanDocument?>(null) }
     var pageIndex by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf(false) }
+    var cameraOpen by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var signatureOpen by remember { mutableStateOf(false) }
     var stampOpen by remember { mutableStateOf(false) }
@@ -111,7 +116,7 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
         }
     }
 
-    fun importFiles(uris: List<Uri>) {
+    fun importFiles(uris: List<Uri>, deleteCapturedFile: Boolean = false) {
         if (uris.isEmpty() || busy) return
         scope.launch {
             busy = true; status = "Belgeler aktarılıyor..."
@@ -121,7 +126,19 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
                 processOcr(doc)
                 status = "Belge hazır"
             } catch (e: Exception) { reportError(e) }
-            finally { busy = false }
+            finally {
+                busy = false
+                if (deleteCapturedFile) {
+                    uris.forEach { uri ->
+                        uri.path?.let { path ->
+                            val file = File(path)
+                            if (uri.scheme == "file" &&
+                                file.parentFile?.canonicalPath == context.cacheDir.canonicalPath &&
+                                file.name.startsWith("belgeizi_capture_")) file.delete()
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -133,6 +150,23 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
             else reportError(IllegalStateException("Tarama sonucunda sayfa bulunamadı."))
         }
     }
+    val cameraPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) cameraOpen = true
+        else reportError(IllegalStateException("Kamera izni olmadan Ultra HD çekim yapılamaz."))
+    }
+
+    fun openUltraCamera() {
+        if (busy) return
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED) {
+            cameraOpen = true
+        } else {
+            cameraPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
+
     val openFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         importFiles(uris)
     }
@@ -244,9 +278,24 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
             snackbarHost = { SnackbarHost(snackbar) }
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
-                if (current == null) {
+                if (cameraOpen) {
+                    UltraCameraScreen(activity = activity, onBack = { cameraOpen = false }) {
+                        uri, width, height ->
+                        cameraOpen = false
+                        val megapixels = width.toLong() * height.toLong() / 1_000_000.0
+                        scope.launch {
+                            snackbar.showSnackbar(
+                                "Fotoğraf " + String.format(Locale.US, "%.1f", megapixels) +
+                                    " MP (" + width + "×" + height +
+                                    "). Orijinal korunuyor."
+                            )
+                        }
+                        importFiles(listOf(uri), deleteCapturedFile = true)
+                    }
+                } else if (current == null) {
                     HomeScreen(
-                        docs = documents, onScan = ::scan,
+                        docs = documents, onScan = ::openUltraCamera,
+                        onAutoScan = ::scan,
                         onImport = { openFiles.launch(arrayOf("application/pdf", "image/*")) },
                         onOpen = { doc ->
                             current = doc; pageIndex = 0
@@ -346,7 +395,8 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
 
 @Composable
 private fun HomeScreen(
-    docs: List<ScanDocument>, onScan: () -> Unit, onImport: () -> Unit,
+    docs: List<ScanDocument>, onScan: () -> Unit, onAutoScan: () -> Unit,
+    onImport: () -> Unit,
     onOpen: (ScanDocument) -> Unit, onDelete: (ScanDocument) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
@@ -412,12 +462,34 @@ private fun HomeScreen(
                                 modifier = Modifier.size(25.dp))
                         }
                         Spacer(Modifier.height(24.dp))
-                        Text("Belge tara", color = Background,
+                        Text("Ultra HD kamera", color = Background,
                             fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
                         Spacer(Modifier.height(5.dp))
-                        Text("Otomatik kesme  •  Netleştirme  •  Metin algılama",
+                        Text("En yüksek erişilebilir çözünürlük  •  Orijinali koru",
                             color = Background.copy(alpha = 0.82f), fontSize = 12.sp)
                     }
+                }
+            }
+        }
+        item {
+            Surface(
+                onClick = onAutoScan,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(21.dp),
+                color = Panel,
+                border = BorderStroke(1.dp, PanelBright)
+            ) {
+                Row(Modifier.padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.DocumentScanner, null, tint = Accent,
+                        modifier = Modifier.size(27.dp))
+                    Spacer(Modifier.width(13.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Otomatik belge tarama", color = TextMain,
+                            fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Kenar ve perspektif düzeltmeli hızlı tarama",
+                            color = TextMuted, fontSize = 11.sp)
+                    }
+                    Icon(Icons.Outlined.ChevronRight, null, tint = TextMuted)
                 }
             }
         }
@@ -589,6 +661,13 @@ private fun EditorScreen(
                             Spacer(Modifier.width(6.dp))
                             Text(displayMode, color = TextMain, fontSize = 11.sp)
                         }
+                    }
+                    if (page.originalWidth > 0 && page.originalHeight > 0) {
+                        val sourceMp = page.originalWidth.toLong() *
+                            page.originalHeight.toLong() / 1_000_000.0
+                        Text(String.format(Locale.US, "%.1f MP", sourceMp),
+                            color = Accent, fontSize = 11.sp,
+                            modifier = Modifier.padding(start = 9.dp))
                     }
                     Spacer(Modifier.weight(1f))
                     IconButton(enabled = index > 0, onClick = { onPageIndex(index - 1) },
