@@ -250,6 +250,29 @@ class DocumentStore(private val context: Context) {
         }.getOrNull().orEmpty().ifBlank { "Yeni belge" }
     }
 
+    /** Export full-resolution source without decoding a 200 MP Bitmap in RAM. */
+    fun originalFormat(page: DocumentPage): Pair<String, String> {
+        val source = page.sourcePath?.let(::File)?.takeIf { it.isFile }
+            ?: File(page.path)
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(source.absolutePath, options)
+        return when (options.outMimeType?.lowercase(Locale.ROOT)) {
+            "image/jpeg" -> "image/jpeg" to "jpg"
+            "image/png" -> "image/png" to "png"
+            "image/webp" -> "image/webp" to "webp"
+            "image/heif", "image/heic" -> "image/heic" to "heic"
+            else -> "application/octet-stream" to "img"
+        }
+    }
+
+    fun exportOriginal(page: DocumentPage, destination: Uri) {
+        val source = page.sourcePath?.let(::File)?.takeIf { it.isFile }
+            ?: File(page.path)
+        context.contentResolver.openOutputStream(destination)?.use { out ->
+            source.inputStream().use { input -> input.copyTo(out) }
+        } ?: throw IOException("Orijinal görüntü kaydedilemedi.")
+    }
+
     fun copyMarkImage(uri: Uri): String {
         val dest = File(assets, "stamp_${newId()}.png")
         val bitmap = decodeScaled(uri, 1600)
