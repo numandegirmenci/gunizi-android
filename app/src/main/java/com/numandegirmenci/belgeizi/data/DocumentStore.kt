@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import com.numandegirmenci.belgeizi.engine.DocumentDeskew
 import com.numandegirmenci.belgeizi.engine.ImageEnhancer
 import com.numandegirmenci.belgeizi.engine.ScanPipelinePolicy
 import android.graphics.Color
@@ -61,7 +62,8 @@ class DocumentStore(private val context: Context) {
         ?: throw IOException("Belgenin görüntüsü açılamadı.")
 
     /** Imports content:// documents, including content streamed from cloud providers. */
-    fun import(uris: List<Uri>, onProgress: (String) -> Unit = {}): ScanDocument {
+    fun import(uris: List<Uri>, onProgress: (String) -> Unit = {},
+        fastCapture: Boolean = false): ScanDocument {
         require(uris.isNotEmpty()) { "İçe aktarılacak dosya seçilmedi." }
         val title = displayName(uris.first()).substringBeforeLast('.').ifBlank { "Yeni belge" }
         val doc = ScanDocument(title = title)
@@ -74,6 +76,9 @@ class DocumentStore(private val context: Context) {
                 val name = displayName(uri).lowercase(Locale.ROOT)
                 if (mime == "application/pdf" || name.endsWith(".pdf")) {
                     importPdf(uri, folder, pages)
+                } else if (fastCapture && (mime == "image/jpeg" ||
+                    name.endsWith(".jpg") || name.endsWith(".jpeg"))) {
+                    pages += persistCapturedJpeg(uri, folder, pages.size)
                 } else {
                     val bitmap = decodeScaled(uri, 3400)
                     try { pages += persistBitmap(bitmap, folder, pages.size, originalUri = uri) }
@@ -86,6 +91,51 @@ class DocumentStore(private val context: Context) {
             folder.deleteRecursively()
             throw e
         }
+    }
+
+
+    /**
+     * Camera JPEGs already contain their correct pixels. First save the stream
+     * unchanged, then make a lightweight editable working image. Avoid the
+     * heavyweight illumination filter during the capture-to-editor transition.
+     */
+    private fun persistCapturedJpeg(uri: Uri, folder: File, index: Int): DocumentPage {
+        val name = "page_${(index + 1).toString().padStart(3, '0')}"
+        val original = File(folder, "${name}_original.source")
+        val working = File(folder, "$name.jpg")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            original.outputStream().buffered().use { out -> input.copyTo(out, 128 * 1024) }
+        } ?: throw IOException("Çekilen fotoğraf okunamadı.")
+        if (original.length() == 0L) throw IOException("Boş fotoğraf dosyası.")
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(original.absolutePath, bounds)
+        require(bounds.outWidth > 0 && bounds.outHeight > 0) { "JPEG çözünürlüğü okunamadı." }
+        val orientation = ExifInterface(original.absolutePath).getAttributeInt(
+            ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        val sideways = orientation != ExifInterface.ORIENTATION_NORMAL &&
+            orientation != ExifInterface.ORIENTATION_UNDEFINED
+        val width: Int
+        val height: Int
+        if (max(bounds.outWidth, bounds.outHeight) <= 3400 && !sideways) {
+            original.copyTo(working, overwrite = true)
+            width = bounds.outWidth
+            height = bounds.outHeight
+        } else {
+            val work = decodeScaled(Uri.fromFile(original), 3000)
+            try {
+                working.outputStream().use { out ->
+                    if (!work.compress(Bitmap.CompressFormat.JPEG, 96, out)) {
+                        throw IOException("Hızlı önizleme kaydedilemedi.")
+                    }
+                }
+                width = work.width
+                height = work.height
+            } finally { work.recycle() }
+        }
+        return DocumentPage(working.absolutePath, width, height,
+            sourcePath = original.absolutePath,
+            originalWidth = bounds.outWidth, originalHeight = bounds.outHeight,
+            enhanceMode = "ORIGINAL")
     }
 
     private fun importPdf(uri: Uri, folder: File, target: MutableList<DocumentPage>) {
@@ -160,34 +210,92 @@ class DocumentStore(private val context: Context) {
             enhanceMode = "AUTO")
     }
 
+    /**
+     * Gentle skew correction works on a copy of the current image and never
+     * touches the original camera source. No correction is applied when the
+     * baselines disagree or when annotations already exist.
+     */
+    data class StraightenResult(val page: DocumentPage, val angle: Float)
+
+    fun straightenPage(page: DocumentPage): StraightenResult? {
+        require(page.marks.isEmpty() && page.ocr.none { it.edited }) {
+            "İmza, kaşe veya metin düzenlemesi bulunan sayfada önce düzeltme yapılamaz."
+        }
+        if (page.preDeskewPath != null) return null
+        val input = loadBitmap(page)
+        try {
+            val angle = DocumentDeskew.measureAngle(input) ?: return null
+            val rotated = DocumentDeskew.rotate(input, -angle)
+            try {
+                val old = File(page.path)
+                val dst = File(old.parentFile,
+                    "${old.nameWithoutExtension}_deskew_${System.currentTimeMillis()}.png")
+                dst.outputStream().use { output ->
+                    check(rotated.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                        "Düzeltilen görüntü yazılamadı."
+                    }
+                }
+                return StraightenResult(page.copy(
+                    path = dst.absolutePath, width = rotated.width, height = rotated.height,
+                    preDeskewPath = page.path, deskewAngle = angle,
+                    imageRevision = page.imageRevision + 1, ocr = emptyList(),
+                    ocrDone = false, ocrVersion = 0
+                ), angle)
+            } finally { rotated.recycle() }
+        } finally { input.recycle() }
+    }
+
+    fun restoreBeforeStraightening(page: DocumentPage): DocumentPage {
+        val previous = page.preDeskewPath ?: return page
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(previous, bounds)
+        require(bounds.outWidth > 0 && bounds.outHeight > 0) {
+            "Düzeltme öncesi görüntü bulunamadı."
+        }
+        return page.copy(path = previous, width = bounds.outWidth, height = bounds.outHeight,
+            deskewAngle = 0f, preDeskewPath = null,
+            imageRevision = page.imageRevision + 1,
+            ocr = emptyList(), ocrDone = false, ocrVersion = 0)
+    }
+
     /** Rebuilds the visible scan from its source rather than stacking filters. */
     fun reprocessPage(page: DocumentPage, mode: String): DocumentPage {
         require(ScanPipelinePolicy.validEnhancementMode(mode)) { "Geçersiz görüntü modu." }
         val sourceFile = page.sourcePath?.let(::File)?.takeIf { it.isFile } ?: run {
-            val file = File(page.path)
+            val file = File(page.preDeskewPath ?: page.path)
             val backup = File(file.parentFile, file.nameWithoutExtension + "_original.jpg")
             if (!backup.exists()) file.copyTo(backup)
             backup
         }
-        // A full 200 MP Bitmap would exhaust the heap; only decode the work preview.
         val src = decodeScaled(Uri.fromFile(sourceFile), 3400)
+        var sizeWidth = src.width
+        var sizeHeight = src.height
         try {
-            val processed = ImageEnhancer.apply(src, mode)
+            val filtered = ImageEnhancer.apply(src, mode)
             try {
-                val dst = File(page.path)
-                val temporary = File(dst.parentFile, dst.nameWithoutExtension + "_new.jpg")
-                FileOutputStream(temporary).use { out ->
-                    check(processed.compress(Bitmap.CompressFormat.JPEG,
-                        ScanPipelinePolicy.jpegQuality(mode), out))
-                }
-                if (!temporary.renameTo(dst)) {
-                    temporary.copyTo(dst, overwrite = true)
-                    temporary.delete()
-                }
-            } finally { if (processed !== src) processed.recycle() }
+                val result = if (page.preDeskewPath != null) {
+                    DocumentDeskew.rotate(filtered, -page.deskewAngle)
+                } else filtered
+                try {
+                    sizeWidth = result.width
+                    sizeHeight = result.height
+                    val dst = File(page.path)
+                    val temporary = File(dst.parentFile, dst.nameWithoutExtension + "_new")
+                    val format = if (page.preDeskewPath != null)
+                        Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
+                    FileOutputStream(temporary).use { out ->
+                        check(result.compress(format, ScanPipelinePolicy.jpegQuality(mode), out))
+                    }
+                    if (!temporary.renameTo(dst)) {
+                        temporary.copyTo(dst, overwrite = true)
+                        temporary.delete()
+                    }
+                } finally { if (result !== filtered) result.recycle() }
+            } finally { if (filtered !== src) filtered.recycle() }
         } finally { src.recycle() }
         val hasEdits = page.ocr.any { it.edited }
         return page.copy(sourcePath = sourceFile.absolutePath, enhanceMode = mode,
+            width = sizeWidth, height = sizeHeight, imageRevision = page.imageRevision + 1,
             ocr = if (hasEdits) page.ocr else emptyList(),
             ocrDone = hasEdits && page.ocrDone,
             ocrVersion = if (hasEdits) page.ocrVersion else 0)
@@ -298,6 +406,8 @@ class DocumentStore(private val context: Context) {
             put(JSONObject().apply {
                 put("path", p.path); put("width", p.width); put("height", p.height)
                 put("ocrDone", p.ocrDone); put("ocrVersion", p.ocrVersion)
+                put("imageRevision", p.imageRevision); put("deskewAngle", p.deskewAngle.toDouble())
+                put("preDeskewPath", p.preDeskewPath)
                 put("sourcePath", p.sourcePath); put("enhanceMode", p.enhanceMode)
                 put("originalWidth", p.originalWidth); put("originalHeight", p.originalHeight)
                 put("ocr", JSONArray().apply { p.ocr.forEach { l -> put(JSONObject().apply {
@@ -325,6 +435,10 @@ class DocumentStore(private val context: Context) {
                 path = p.getString("path"), width = p.getInt("width"), height = p.getInt("height"),
                 ocrDone = p.optBoolean("ocrDone"),
                 ocrVersion = p.optInt("ocrVersion", 0),
+                imageRevision = p.optLong("imageRevision", 0L),
+                deskewAngle = p.optDouble("deskewAngle", 0.0).toFloat(),
+                preDeskewPath = p.optString("preDeskewPath").takeIf {
+                    it.isNotEmpty() && it != "null" },
                 sourcePath = p.optString("sourcePath").takeIf { it.isNotEmpty() && it != "null" },
                 originalWidth = p.optInt("originalWidth", 0),
                 originalHeight = p.optInt("originalHeight", 0),

@@ -70,6 +70,11 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
     var current by remember { mutableStateOf<ScanDocument?>(null) }
     var pageIndex by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf(false) }
+    var ocrRunning by remember { mutableStateOf(false) }
+    var autoStraighten by remember {
+        mutableStateOf(context.getSharedPreferences("scan_options", Context.MODE_PRIVATE)
+            .getBoolean("auto_straighten", true))
+    }
     var cameraOpen by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var signatureOpen by remember { mutableStateOf(false) }
@@ -99,44 +104,78 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
         update(doc.copy(pages = updatedPages))
     }
     suspend fun processOcr(doc: ScanDocument, force: Boolean = false) {
-        var latest = doc
-        for (i in latest.pages.indices) {
-            val page = latest.pages[i]
+        for (i in doc.pages.indices) {
+            val live = current?.takeIf { it.id == doc.id } ?: return
+            val page = live.pages.getOrNull(i) ?: return
             if (!ScanPipelinePolicy.shouldRecognize(page.ocrDone, page.ocrVersion,
                     page.ocr.any { it.edited }, force)) continue
-            status = "Belge hazırlanıyor • " + (i + 1) + "/" + latest.pages.size
             val lines = withContext(Dispatchers.Default) {
                 val bitmap = store.loadBitmap(page)
                 try { OcrEngine.recognize(context, bitmap) }
                 finally { bitmap.recycle() }
             }
-            val pages = latest.pages.toMutableList()
-            pages[i] = page.copy(ocr = lines, ocrDone = true, ocrVersion = ScanPipelinePolicy.OCR_SCHEMA_VERSION)
-            latest = latest.copy(pages = pages)
-            update(latest)
+            // Recognition now runs without blocking the editor. Do not overwrite
+            // text changes or page geometry that changed while OCR was running.
+            val newest = current?.takeIf { it.id == doc.id } ?: return
+            val fresh = newest.pages.getOrNull(i) ?: return
+            if (fresh.path != page.path ||
+                fresh.imageRevision != page.imageRevision || fresh.ocr.any { it.edited }) continue
+            val pages = newest.pages.toMutableList()
+            pages[i] = fresh.copy(ocr = lines, ocrDone = true,
+                ocrVersion = ScanPipelinePolicy.OCR_SCHEMA_VERSION)
+            update(newest.copy(pages = pages))
         }
     }
 
-    fun importFiles(uris: List<Uri>, deleteCapturedFile: Boolean = false) {
+    fun importFiles(uris: List<Uri>, deleteCapturedFile: Boolean = false,
+                    fastCapture: Boolean = false) {
         if (uris.isEmpty() || busy) return
         scope.launch {
-            busy = true; status = "Belgeler aktarılıyor..."
+            busy = true; status = "Fotoğraf açılıyor..."
             try {
-                val doc = withContext(Dispatchers.IO) { store.import(uris) }
+                val doc = withContext(Dispatchers.IO) {
+                    store.import(uris, fastCapture = fastCapture || deleteCapturedFile)
+                }
                 documents = store.all(); current = doc; pageIndex = 0
-                processOcr(doc)
-                status = "Belge hazır"
+                // Enter the editor immediately. Alignment and OCR continue in
+                // a separate coroutine with a small non-blocking status badge.
+                busy = false; status = ""
+                scope.launch {
+                    ocrRunning = true
+                    try {
+                        if (autoStraighten && (fastCapture || deleteCapturedFile)) {
+                            for (i in doc.pages.indices) {
+                                val active = current?.takeIf { it.id == doc.id } ?: break
+                                val page = active.pages.getOrNull(i) ?: break
+                                if (page.marks.isNotEmpty() || page.ocr.any { it.edited } ||
+                                    page.preDeskewPath != null) continue
+                                val corrected = runCatching {
+                                    withContext(Dispatchers.Default) {
+                                        store.straightenPage(page)
+                                    }
+                                }.getOrNull() ?: continue
+                                val newest = current?.takeIf { it.id == doc.id } ?: break
+                                val fresh = newest.pages.getOrNull(i) ?: break
+                                if (fresh.path != page.path || fresh.marks.isNotEmpty() ||
+                                    fresh.ocr.any { it.edited }) continue
+                                val pages = newest.pages.toMutableList()
+                                pages[i] = corrected.page
+                                update(newest.copy(pages = pages))
+                            }
+                        }
+                        current?.takeIf { it.id == doc.id }?.let { processOcr(it) }
+                    } catch (error: Exception) { reportError(error) }
+                    finally { ocrRunning = false }
+                }
             } catch (e: Exception) { reportError(e) }
             finally {
                 busy = false
-                if (deleteCapturedFile) {
-                    uris.forEach { uri ->
-                        uri.path?.let { path ->
-                            val file = File(path)
-                            if (uri.scheme == "file" &&
-                                file.parentFile?.canonicalPath == context.cacheDir.canonicalPath &&
-                                file.name.startsWith("belgeizi_capture_")) file.delete()
-                        }
+                if (deleteCapturedFile) uris.forEach { uri ->
+                    uri.path?.let { path ->
+                        val file = File(path)
+                        if (uri.scheme == "file" &&
+                            file.parentFile?.canonicalPath == context.cacheDir.canonicalPath &&
+                            file.name.startsWith("belgeizi_capture_")) file.delete()
                     }
                 }
             }
@@ -147,7 +186,7 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
         if (result.resultCode == Activity.RESULT_OK) {
             val scanned = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
             val uris = scanned?.pages?.map { it.imageUri }.orEmpty()
-            if (uris.isNotEmpty()) importFiles(uris)
+            if (uris.isNotEmpty()) importFiles(uris, fastCapture = true)
             else reportError(IllegalStateException("Tarama sonucunda sayfa bulunamadı."))
         }
     }
@@ -323,12 +362,18 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
                                     "). Orijinal korunuyor."
                             )
                         }
-                        importFiles(listOf(uri), deleteCapturedFile = true)
+                        importFiles(listOf(uri), deleteCapturedFile = true, fastCapture = true)
                     }
                 } else if (current == null) {
                     HomeScreen(
                         docs = documents, onScan = ::openUltraCamera,
                         onAutoScan = ::scan,
+                        autoStraighten = autoStraighten,
+                        onAutoStraightenChange = { value ->
+                            autoStraighten = value
+                            context.getSharedPreferences("scan_options", Context.MODE_PRIVATE)
+                                .edit().putBoolean("auto_straighten", value).apply()
+                        },
                         onImport = { openFiles.launch(arrayOf("application/pdf", "image/*")) },
                         onOpen = { doc ->
                             current = doc; pageIndex = 0
@@ -353,6 +398,7 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
                         onSignature = { signatureOpen = true },
                         onStamp = { stampOpen = true },
                         onImageStamp = { stampImagePicker.launch(arrayOf("image/*")) },
+                        ocrRunning = ocrRunning,
                         onEnhance = { mode ->
                             current?.let { doc -> if (!busy) scope.launch {
                                 busy = true; status = "Belge geliştiriliyor..."
@@ -369,6 +415,49 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
                                 } catch (e: Exception) { reportError(e) }
                                 finally { busy = false; status = "" }
                             } }
+                        },
+                        onDeskew = {
+                            val doc = current
+                            if (doc != null && !busy) scope.launch {
+                                val index = pageIndex.coerceIn(0, doc.pages.lastIndex)
+                                val page = doc.pages[index]
+                                if (page.marks.isNotEmpty() || page.ocr.any { it.edited }) {
+                                    snackbar.showSnackbar("Düzeltme öncesi imza, kaşe ve metin düzenlemelerini kaldırman gerekir.")
+                                } else {
+                                    busy = true; status = "Sayfa hizalanıyor..."
+                                    try {
+                                        val revised = withContext(Dispatchers.Default) {
+                                            if (page.preDeskewPath != null) {
+                                                store.restoreBeforeStraightening(page)
+                                            } else store.straightenPage(page)?.page
+                                        }
+                                        if (revised == null) {
+                                            snackbar.showSnackbar(
+                                                "Güvenilir eğim bulunamadı. Metni korumak için sayfa değiştirilmedi.")
+                                        } else {
+                                            val newest = current
+                                            if (newest?.id == doc.id &&
+                                                newest.pages[index].path == page.path) {
+                                                val pages = newest.pages.toMutableList()
+                                                pages[index] = revised
+                                                val updated = newest.copy(pages = pages)
+                                                update(updated)
+                                                snackbar.showSnackbar(
+                                                    if (page.preDeskewPath != null)
+                                                        "Düzeltme geri alındı."
+                                                    else "Sayfa hizalandı. Orijinal görüntü korundu.")
+                                                scope.launch {
+                                                    ocrRunning = true
+                                                    try { processOcr(updated) }
+                                                    catch (error: Exception) { reportError(error) }
+                                                    finally { ocrRunning = false }
+                                                }
+                                            }
+                                        }
+                                    } catch (error: Exception) { reportError(error) }
+                                    finally { busy = false; status = "" }
+                                }
+                            }
                         }
                     )
                 }
@@ -430,6 +519,7 @@ fun ScanApp(activity: ComponentActivity, pendingUris: List<Uri>, externalEdit: B
 @Composable
 private fun HomeScreen(
     docs: List<ScanDocument>, onScan: () -> Unit, onAutoScan: () -> Unit,
+    autoStraighten: Boolean, onAutoStraightenChange: (Boolean) -> Unit,
     onImport: () -> Unit,
     onOpen: (ScanDocument) -> Unit, onDelete: (ScanDocument) -> Unit
 ) {
@@ -548,6 +638,21 @@ private fun HomeScreen(
                 }
             }
         }
+        item {
+            Surface(color = Panel, shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, PanelBright)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Otomatik düzelt", color = TextMain,
+                            fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text("Eğik sayfaları açıldıktan sonra arka planda hizala",
+                            color = TextMuted, fontSize = 11.sp)
+                    }
+                    Switch(checked = autoStraighten, onCheckedChange = onAutoStraightenChange)
+                }
+            }
+        }
         item { Spacer(Modifier.height(4.dp)) }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -636,7 +741,8 @@ private fun EditorScreen(
     onShare: (ScanDocument) -> Unit,
     onExportOriginal: () -> Unit,
     onSignature: () -> Unit, onStamp: () -> Unit, onImageStamp: () -> Unit,
-    onEnhance: (String) -> Unit
+    onEnhance: (String) -> Unit, onDeskew: () -> Unit,
+    ocrRunning: Boolean
 ) {
     val index = pageIndex.coerceIn(0, doc.pages.lastIndex)
     val page = doc.pages[index]
@@ -734,6 +840,19 @@ private fun EditorScreen(
                 onMoveMark = { changed -> onPageChanged { p ->
                     p.copy(marks = p.marks.map { if (it.id == changed.id) changed else it })
                 } })
+            if (ocrRunning) Surface(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+                shape = RoundedCornerShape(50.dp), color = Panel
+            ) {
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(color = Accent,
+                        modifier = Modifier.size(13.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(7.dp))
+                    Text("Metinler arka planda hazırlanıyor",
+                        color = TextMain, fontSize = 10.sp)
+                }
+            }
             if (textEditing) Surface(
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp),
                 shape = RoundedCornerShape(50.dp), color = Panel
@@ -763,6 +882,8 @@ private fun EditorScreen(
                         .padding(horizontal = 14.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    ActionTool(Icons.Outlined.CropRotate,
+                        if (page.preDeskewPath == null) "Düzelt" else "Geri al", onDeskew)
                     ActionTool(Icons.Outlined.AutoFixHigh, "Geliştir",
                         { filterChoices = true })
                     ActionTool(Icons.Outlined.TextFields, "Metin",
@@ -934,9 +1055,15 @@ private fun DocumentCanvas(
     onMoveMark: (PageMark) -> Unit
 ) {
     val revision = page.ocr.filter { it.edited }.joinToString("|") { it.id + ":" + it.text }
-    val bitmap by produceState<Bitmap?>(initialValue = null, page.path, revision, page.enhanceMode) {
-        value = withContext(Dispatchers.Default) {
-            val raw = BitmapFactory.decodeFile(page.path)
+    val bitmap by produceState<Bitmap?>(initialValue = null,
+        page.path, page.imageRevision, revision, page.enhanceMode) {
+        value = withContext(Dispatchers.IO) {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(page.path, bounds)
+            var sample = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 2100) sample *= 2
+            val raw = BitmapFactory.decodeFile(page.path,
+                BitmapFactory.Options().apply { inSampleSize = sample })
             if (raw != null && page.ocr.any { it.edited }) {
                 val rendered = VisualTextRenderer.render(raw, page.ocr)
                 if (rendered !== raw) raw.recycle()

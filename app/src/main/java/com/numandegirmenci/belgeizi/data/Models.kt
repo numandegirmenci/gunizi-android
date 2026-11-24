@@ -42,6 +42,9 @@ data class DocumentPage(
     val originalHeight: Int = 0,
     val enhanceMode: String = "AUTO",
     val ocrVersion: Int = 0,
+    val imageRevision: Long = 0L,
+    val deskewAngle: Float = 0f,
+    val preDeskewPath: String? = null,
     val marks: List<PageMark> = emptyList()
 )
 
