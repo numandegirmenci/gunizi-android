@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
@@ -39,6 +40,7 @@ import java.util.Locale
  * CameraX photo capture with a higher-resolution request if the phone exposes
  * it to third-party applications. The JPEG is first written unchanged to disk.
  */
+@OptIn(ExperimentalCamera2Interop::class)
 @Composable
 fun UltraCameraScreen(
     activity: ComponentActivity,
