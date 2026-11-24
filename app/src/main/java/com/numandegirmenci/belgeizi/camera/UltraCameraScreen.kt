@@ -40,7 +40,7 @@ import java.util.Locale
  * CameraX photo capture with a higher-resolution request if the phone exposes
  * it to third-party applications. The JPEG is first written unchanged to disk.
  */
-@OptIn(ExperimentalCamera2Interop::class)
+@androidx.annotation.OptIn(markerClass = [ExperimentalCamera2Interop::class])
 @Composable
 fun UltraCameraScreen(
     activity: ComponentActivity,
