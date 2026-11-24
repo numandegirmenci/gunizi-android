@@ -18,10 +18,10 @@ object CameraCapabilities {
         val ultra: Size?,
         val hasMaximumResolutionMode: Boolean
     ) {
-        val maximum: Size? get() = listOfNotNull(normal, ultra).maxByOrNull(::pixels)
-        val megapixels: Double get() = (maximum?.let(::pixels) ?: 0L) / 1_000_000.0
+        val maximum: Size? get() = listOfNotNull(normal, ultra).maxByOrNull { CameraCapabilities.pixels(it) }
+        val megapixels: Double get() = (maximum?.let { CameraCapabilities.pixels(it) } ?: 0L) / 1_000_000.0
         val canRequest200Mp: Boolean get() =
-            hasMaximumResolutionMode && ultra != null && pixels(ultra) >= 195_000_000L
+            hasMaximumResolutionMode && ultra != null && CameraCapabilities.pixels(ultra) >= 195_000_000L
     }
 
     fun pixels(size: Size): Long = size.width.toLong() * size.height.toLong()
