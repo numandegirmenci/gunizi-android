@@ -370,7 +370,7 @@ private fun HomeScreen(
                 Spacer(Modifier.width(13.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Belge İzi", color = TextMain, fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
+                        fontWeight = FontWeight.Bold, letterSpacing = (-0.4f).sp)
                     Text("Dijital belge atölyen", color = TextMuted, fontSize = 12.sp)
                 }
                 Surface(color = Panel, shape = RoundedCornerShape(50.dp),
@@ -385,7 +385,7 @@ private fun HomeScreen(
         item {
             Column {
                 Text("Belgelerin. Daha net.", color = TextMain,
-                    fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.7).sp)
+                    fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.7f).sp)
                 Spacer(Modifier.height(7.dp))
                 Text("Tara, otomatik iyileştir, düzenle ve paylaş.",
                     color = TextMuted, fontSize = 14.sp)
@@ -661,18 +661,57 @@ private fun EditorScreen(
         }
     }
 
-    if (filterChoices) AlertDialog(onDismissRequest = { filterChoices = false },
-        title = { Text("Belge görünümü") },
-        text = { Column {
-            listOf("Otomatik geliştir" to "AUTO", "Canlı renk" to "VIVID",
-                "Keskin siyah-beyaz" to "BW", "Orijinal" to "ORIGINAL")
-                .forEach { (name, mode) ->
-                    TextButton(onClick = { filterChoices = false; onEnhance(mode) }) {
-                        Text(name)
+    if (filterChoices) AlertDialog(
+        onDismissRequest = { filterChoices = false },
+        shape = RoundedCornerShape(24.dp),
+        title = { Text("Belgeyi geliştir", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("Metinleri netleştir, kağıt gölgelerini azalt veya orijinal belgeye dön.",
+                    color = TextMuted, fontSize = 12.sp,
+                    modifier = Modifier.padding(bottom = 5.dp))
+                listOf(
+                    Triple("Otomatik geliştir", "AUTO", "Dengeli renk ve keskinlik"),
+                    Triple("Canlı renk", "VIVID", "Daha parlak ve canlı görüntü"),
+                    Triple("Keskin siyah-beyaz", "BW", "Yazı ve yüksek kontrast"),
+                    Triple("Orijinal", "ORIGINAL", "Görüntüye müdahale etme")
+                ).forEach { (name, mode, description) ->
+                    val active = page.enhanceMode == mode
+                    Surface(
+                        onClick = { filterChoices = false; onEnhance(mode) },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = if (active) Accent.copy(alpha = .13f) else PanelBright,
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp,
+                            if (active) Accent.copy(alpha = .65f) else PanelBright)
+                    ) {
+                        Row(Modifier.padding(horizontal = 13.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                when (mode) {
+                                    "VIVID" -> Icons.Outlined.Palette
+                                    "BW" -> Icons.Outlined.Contrast
+                                    "ORIGINAL" -> Icons.Outlined.Image
+                                    else -> Icons.Outlined.AutoFixHigh
+                                }, null,
+                                tint = if (active) Accent else TextMain,
+                                modifier = Modifier.size(23.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(name, color = TextMain,
+                                    fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text(description, color = TextMuted, fontSize = 11.sp)
+                            }
+                            if (active) Icon(Icons.Outlined.CheckCircle, "Seçili",
+                                tint = Accent, modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
-        } },
-        confirmButton = { TextButton(onClick = { filterChoices = false }) { Text("Kapat") } }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { filterChoices = false }) { Text("Kapat") }
+        }
     )
 
     selectedLine?.let { line ->
@@ -752,15 +791,21 @@ private fun ActionTool(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     text: String, action: () -> Unit, selected: Boolean = false
 ) {
-    Surface(onClick = action, color = if (selected) Accent else Panel,
-        shape = RoundedCornerShape(16.dp), modifier = Modifier.widthIn(min = 58.dp)) {
-        Column(Modifier.padding(horizontal = 9.dp, vertical = 12.dp),
+    Surface(
+        onClick = action,
+        color = if (selected) Accent.copy(alpha = .16f) else PanelBright,
+        shape = RoundedCornerShape(17.dp),
+        border = BorderStroke(1.dp,
+            if (selected) Accent.copy(alpha = .7f) else TextMuted.copy(alpha = .09f)),
+        modifier = Modifier.width(72.dp)
+    ) {
+        Column(Modifier.padding(horizontal = 7.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, null, modifier = Modifier.size(22.dp),
-                tint = if (selected) Background else TextMain)
-            Spacer(Modifier.height(5.dp))
-            Text(text, color = if (selected) Background else TextMuted,
-                fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            Icon(icon, null, modifier = Modifier.size(23.dp),
+                tint = if (selected) Accent else TextMain)
+            Spacer(Modifier.height(7.dp))
+            Text(text, color = if (selected) Accent else TextMuted,
+                fontSize = 11.sp, maxLines = 1, fontWeight = FontWeight.Medium)
         }
     }
 }
