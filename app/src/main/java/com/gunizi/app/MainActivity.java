@@ -282,7 +282,72 @@ public final class MainActivity extends Activity {
         gap(overview,8);
         muted(overview,"Analiz cihazında yapılır. Uzun kayıtlar daha fazla işlem süresi ve pil kullanabilir.");
     }
+    private void recordingSettings(){
+        LinearLayout card=card("Ses kaydı ve dosya adı");
+        RecordingOptions options=prefs.recordingOptions();
+        muted(card,options.description());
+        muted(card,"Önerilen: uzun konuşmalar için OGG Dengeli; paylaşım ve uyumluluk için M4A Dengeli. Yüksek kalite daha fazla yer kaplar.");
+        muted(card,"Format ve kalite bir sonraki kayıt / geçmiş dinleme oturumunda geçerli olur. Aktif ses kesilmez.");
+        gap(card,8);
+        Button format=button("Format: "+RecordingOptions.FORMATS[options.format],false);
+        format.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Kayıt formatı")
+            .setSingleChoiceItems(RecordingOptions.FORMATS,options.format,(d,i)->{
+                prefs.recordingOptions(i,options.quality);d.dismiss();show(3);
+            }).setNegativeButton("Vazgeç",null).show());
+        Button quality=button("Kalite: "+RecordingOptions.QUALITIES[options.quality],false);
+        quality.setOnClickListener(v->{
+            String[] choices=new String[3];
+            for(int i=0;i<3;i++)choices[i]=RecordingOptions.QUALITIES[i]+" · "+
+                new RecordingOptions(options.format,i).description()+(i==1?" (Önerilen)":"");
+            new AlertDialog.Builder(this).setTitle("Kayıt kalitesi")
+                .setSingleChoiceItems(choices,options.quality,(d,i)->{
+                    prefs.recordingOptions(options.format,i);d.dismiss();show(3);
+                }).setNegativeButton("Vazgeç",null).show();
+        });
+        pair(card,format,quality);
+        gap(card,8);
+        muted(card,"Örnek: "+prefs.recordingName("Mesai",java.time.LocalDateTime.now(Prefs.ZONE),options));
+        Button naming=button("Dosya adını özelleştir",false);
+        card.addView(naming);
+        naming.setOnClickListener(v->showRecordingNameDialog(options));
+    }
+    private void showRecordingNameDialog(RecordingOptions options){
+        LinearLayout body=column();
+        body.setPadding(dp(22),dp(8),dp(22),dp(8));
+        EditText prefix=new EditText(this);
+        prefix.setSingleLine(true);prefix.setHint("Dosya adı ön eki");
+        prefix.setText(prefs.recordingPrefix());
+        body.addView(prefix);
+        String[] labels={"Tarih (yıl-ay-gün)","Gün adı (Pazartesi vb.)","Saat ve dakika","Saniye","Kayıt türü (Mesai / Gecmis)"};
+        int[] bits={RecordingOptions.DATE,RecordingOptions.DAY,RecordingOptions.TIME,RecordingOptions.SECONDS,RecordingOptions.MODE};
+        CheckBox[] checks=new CheckBox[bits.length];
+        TextView preview=new TextView(this);
+        Runnable update=()->{
+            int flags=0;
+            for(int i=0;i<bits.length;i++)if(checks[i]!=null&&checks[i].isChecked())flags|=bits[i];
+            preview.setText("Örnek: "+RecordingOptions.name(prefix.getText().toString(),flags,"Mesai",
+                java.time.LocalDateTime.now(Prefs.ZONE),options.extension()));
+        };
+        for(int i=0;i<bits.length;i++){
+            CheckBox box=new CheckBox(this);box.setText(labels[i]);
+            box.setChecked((prefs.recordingNameFields()&bits[i])!=0);
+            checks[i]=box;body.addView(box);box.setOnCheckedChangeListener((b,on)->update.run());
+        }
+        body.addView(preview);
+        prefix.addTextChangedListener(new android.text.TextWatcher(){
+            public void beforeTextChanged(CharSequence s,int start,int count,int after){}
+            public void onTextChanged(CharSequence s,int start,int before,int count){update.run();}
+            public void afterTextChanged(android.text.Editable s){}
+        });
+        update.run();
+        new AlertDialog.Builder(this).setTitle("Dosya adı").setView(body)
+            .setNegativeButton("Vazgeç",null).setPositiveButton("Kaydet",(d,w)->{
+                int flags=0;for(int i=0;i<bits.length;i++)if(checks[i].isChecked())flags|=bits[i];
+                prefs.recordingName(prefix.getText().toString(),flags);show(3);
+            }).show();
+    }
     private void settingsTab(){
+        recordingSettings();
         LinearLayout updates=card("Uygulama güncellemeleri");
         boolean independent=AppUpdateWorker.independent(this);
         muted(updates,independent?

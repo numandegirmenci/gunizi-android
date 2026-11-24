@@ -93,6 +93,22 @@ final class Prefs {
             historyStartHour()*60+historyStartMinute(),
             historyEndHour()*60+historyEndMinute(),historyDays());
     }
+    RecordingOptions recordingOptions(){
+        return new RecordingOptions(p.getInt("record_format",0),p.getInt("record_quality",0));
+    }
+    void recordingOptions(int format,int quality){
+        RecordingOptions o=new RecordingOptions(format,quality);
+        p.edit().putInt("record_format",o.format).putInt("record_quality",o.quality).apply();
+    }
+    String recordingPrefix(){return p.getString("record_prefix","GunIzi");}
+    int recordingNameFields(){return p.getInt("record_name_fields",RecordingOptions.DEFAULT_FIELDS);}
+    void recordingName(String prefix,int fields){
+        p.edit().putString("record_prefix",RecordingOptions.safePrefix(prefix))
+            .putInt("record_name_fields",fields&31).apply();
+    }
+    String recordingName(String mode,LocalDateTime time,RecordingOptions options){
+        return RecordingOptions.name(recordingPrefix(),recordingNameFields(),mode,time,options.extension());
+    }
     Uri folder() {
         String s=p.getString("folder",null);
         return s==null?null:Uri.parse(s);
