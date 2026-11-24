@@ -15,12 +15,19 @@ import org.junit.Test
 class JpegPdfFastWriterTest {
     /** Stable miniature image fixtures; Android unit tests have no java.awt/ImageIO API. */
     private fun fixture(format: String = "jpg"): Pair<File, DocumentPage> {
-        val jpeg = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBAUEBAYFBQUGBgYHCQ4JCQgICRINDQoOFRIWFhUSFBQXGiEcFxgfGRQUHScdHyIjJSUlFhwpLCgkKyEkJST/2wBDAQYGBgkICREJCREkGBQYJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCT/wAARCAB4AFADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//9k="
+        val jpeg = listOf(
+            "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHR",
+            "ofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgy",
+            "IRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjMjIy",
+            "L/wAARCAAYABADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAA",
+            "AAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAA",
+            "AAAAD/2gAMAwEAAhEDEQA/AL+AAAD/2Q=="
+        ).joinToString("")
         val png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jKToAAAAASUVORK5CYII="
         val file = File.createTempFile("belgeizi_pdf_fixture", ".$format")
         file.deleteOnExit()
         file.writeBytes(Base64.getDecoder().decode(if (format == "png") png else jpeg))
-        return file to DocumentPage(file.absolutePath, 80, 120)
+        return file to DocumentPage(file.absolutePath, 16, 24)
     }
 
     @Test fun jpegIsEmbeddedWithoutTouchingPixelsAndTurkishOcrRemainsSearchable() {
