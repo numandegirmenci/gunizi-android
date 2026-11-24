@@ -1,13 +1,6 @@
 name: Günİzi v0.15.0 Stable Release
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/build-publish-v0150.yml'
-      - 'app/src/main/java/com/gunizi/app/**'
-      - 'app/src/test/java/com/gunizi/app/**'
-      - 'app/build.gradle'
   workflow_dispatch:
 
 permissions:
