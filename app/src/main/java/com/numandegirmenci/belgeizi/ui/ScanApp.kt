@@ -522,10 +522,12 @@ private fun HomeScreen(
 
 @Composable
 private fun EditorScreen(
-    doc: ScanDocument, pageIndex: Int, onPageIndex: (Int) -> Unit,
+    doc: ScanDocument, pageIndex: Int, externalEdit: Boolean,
+    onPageIndex: (Int) -> Unit,
     onBack: () -> Unit,
     onPageChanged: ((DocumentPage) -> DocumentPage) -> Unit,
     onExport: (ScanDocument) -> Unit,
+    onShare: (ScanDocument) -> Unit,
     onSignature: () -> Unit, onStamp: () -> Unit, onImageStamp: () -> Unit,
     onEnhance: (String) -> Unit
 ) {
@@ -538,55 +540,124 @@ private fun EditorScreen(
     var stampChoices by remember { mutableStateOf(false) }
     var showText by remember { mutableStateOf(false) }
     var filterChoices by remember { mutableStateOf(false) }
+    val displayMode = when (page.enhanceMode) {
+        "AUTO" -> "Otomatik"
+        "VIVID" -> "Canlı renk"
+        "BW" -> "Siyah-beyaz"
+        else -> "Orijinal"
+    }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 14.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowBack, "Geri", tint = TextMain) }
-            Column(Modifier.weight(1f)) {
-                Text(doc.title, color = TextMain, fontWeight = FontWeight.SemiBold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 17.sp)
-                Text("${index + 1} / ${doc.pages.size} sayfa", color = TextMuted, fontSize = 12.sp)
-            }
-            Button(onClick = { onExport(doc) },
-                contentPadding = PaddingValues(horizontal = 15.dp), shape = RoundedCornerShape(13.dp)) {
-                Icon(Icons.Outlined.FileDownload, null, modifier = Modifier.size(19.dp))
-                Spacer(Modifier.width(5.dp))
-                Text("PDF")
+        Surface(color = Panel, shape = RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp),
+            modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 7.dp, end = 13.dp, top = 9.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Outlined.ArrowBack, "Belgelerime dön", tint = TextMain)
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(doc.title, color = TextMain, fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (externalEdit) "Dışarıdan açıldı · Orijinal korunur"
+                            else "Düzenleme alanı", color = TextMuted, fontSize = 11.sp)
+                    }
+                    IconButton(onClick = { onShare(doc) }) {
+                        Icon(Icons.Outlined.IosShare, "PDF'yi paylaş", tint = Accent,
+                            modifier = Modifier.size(23.dp))
+                    }
+                    Button(
+                        onClick = { onExport(doc) },
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                        shape = RoundedCornerShape(13.dp)
+                    ) {
+                        Icon(Icons.Outlined.FileDownload, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("Kaydet", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 19.dp, end = 12.dp, bottom = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(color = PanelBright, shape = RoundedCornerShape(50.dp)) {
+                        Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.AutoFixHigh, null, tint = Accent,
+                                modifier = Modifier.size(13.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(displayMode, color = TextMain, fontSize = 11.sp)
+                        }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(enabled = index > 0, onClick = { onPageIndex(index - 1) },
+                        modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Outlined.ChevronLeft, "Önceki sayfa",
+                            tint = if (index > 0) TextMain else TextMuted.copy(alpha = .4f))
+                    }
+                    Text("${index + 1} / ${doc.pages.size}", color = TextMain,
+                        fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 5.dp))
+                    IconButton(enabled = index < doc.pages.lastIndex,
+                        onClick = { onPageIndex(index + 1) }, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Outlined.ChevronRight, "Sonraki sayfa",
+                            tint = if (index < doc.pages.lastIndex) TextMain else TextMuted.copy(alpha = .4f))
+                    }
+                }
             }
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Spacer(Modifier.weight(1f))
-            IconButton(enabled = index > 0, onClick = { onPageIndex(index - 1) }) {
-                Icon(Icons.Outlined.ChevronLeft, "Önceki sayfa", tint = TextMain)
-            }
-            IconButton(enabled = index < doc.pages.lastIndex, onClick = { onPageIndex(index + 1) }) {
-                Icon(Icons.Outlined.ChevronRight, "Sonraki sayfa", tint = TextMain)
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 15.dp)
-            .background(Color(0xFF253549), RoundedCornerShape(19.dp)).clip(RoundedCornerShape(19.dp))) {
+        Box(
+            Modifier.weight(1f).fillMaxWidth()
+                .padding(horizontal = 13.dp, vertical = 12.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color(0xFF26313C))
+                .border(1.dp, PanelBright, RoundedCornerShape(22.dp))
+        ) {
             DocumentCanvas(page = page, showOcr = textEditing,
                 onLineSelected = { selectedLine = it },
                 onMarkSelected = { selectedMark = it },
                 onMoveMark = { changed -> onPageChanged { p ->
                     p.copy(marks = p.marks.map { if (it.id == changed.id) changed else it })
                 } })
+            if (textEditing) Surface(
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp),
+                shape = RoundedCornerShape(50.dp), color = Panel
+            ) {
+                Text("Değiştirmek istediğin kelimeye dokun",
+                    color = Accent, fontSize = 11.sp,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp))
+            }
         }
-        Spacer(Modifier.height(11.dp))
-        if (textEditing) {
-            Text("Düzenlemek istediğin kelimeye dokun.", color = Accent,
-                fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
-            Spacer(Modifier.height(6.dp))
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly) {
-            ActionTool(Icons.Outlined.AutoFixHigh, "Geliştir", { filterChoices = true })
-            ActionTool(Icons.Outlined.TextFields, "Metin", { textEditing = !textEditing }, textEditing)
-            ActionTool(Icons.Outlined.Draw, "İmza", onSignature)
-            ActionTool(Icons.Outlined.Approval, "Kaşe", { stampChoices = true })
-            ActionTool(Icons.Outlined.ContentCopy, "Kopyala", { showText = true })
+        Surface(
+            color = Panel, shape = RoundedCornerShape(topStart = 23.dp, topEnd = 23.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.fillMaxWidth().padding(top = 13.dp, bottom = 16.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 19.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Düzenleme araçları", color = TextMain,
+                        fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.weight(1f))
+                    Text("Tüm değişiklikler kaydedilir", color = TextMuted, fontSize = 10.sp)
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ActionTool(Icons.Outlined.AutoFixHigh, "Geliştir",
+                        { filterChoices = true })
+                    ActionTool(Icons.Outlined.TextFields, "Metin",
+                        { textEditing = !textEditing }, textEditing)
+                    ActionTool(Icons.Outlined.Draw, "İmza", onSignature)
+                    ActionTool(Icons.Outlined.Approval, "Kaşe", { stampChoices = true })
+                    ActionTool(Icons.Outlined.ContentCopy, "Kopyala", { showText = true })
+                }
+            }
         }
     }
 
