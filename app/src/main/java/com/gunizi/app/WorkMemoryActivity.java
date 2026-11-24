@@ -38,6 +38,9 @@ public final class WorkMemoryActivity extends Activity {
         Button history=button("Kayıtlar",false);
         header.addView(history,new LinearLayout.LayoutParams(dp(98),dp(43)));
         history.setOnClickListener(v->chooseReport());
+        Button search=button("Tüm kayıtlarda ara",true);
+        root.addView(search,new LinearLayout.LayoutParams(-1,dp(44)));
+        search.setOnClickListener(v->searchLibrary());
         sourceTitle=text(root,"Rapor seçiliyor…",12,false);
         summary=text(root,"Konular ve görevler kaynağıyla birlikte gösterilir.",12,false);
         filters=new LinearLayout(this);filters.setOrientation(LinearLayout.HORIZONTAL);
@@ -104,6 +107,56 @@ public final class WorkMemoryActivity extends Activity {
                 });
             }
         },"GunIzi-MemoryLoad").start();
+    }
+    private void searchLibrary(){
+        EditText query=new EditText(this);
+        query.setSingleLine(true);query.setHint("Konu, kişi, mağaza veya görev");
+        new AlertDialog.Builder(this).setTitle("İş hafızasında ara")
+            .setView(query).setNegativeButton("Vazgeç",null)
+            .setPositiveButton("Ara",(d,w)->runLibrarySearch(query.getText().toString())).show();
+    }
+    private void runLibrarySearch(String query){
+        if(MemorySearch.words(query).isEmpty()){
+            Toast.makeText(this,"En az iki harfli bir arama sözcüğü gir.",Toast.LENGTH_SHORT).show();return;
+        }
+        final ProgressDialog busy=new ProgressDialog(this);
+        busy.setMessage("Yerel kayıtlar aranıyor…");busy.setCancelable(true);busy.show();
+        final java.util.concurrent.atomic.AtomicBoolean cancelled=new java.util.concurrent.atomic.AtomicBoolean();
+        busy.setOnCancelListener(d->cancelled.set(true));
+        new Thread(()->{
+            try{
+                MemoryLibrarySearch.Result result=MemoryLibrarySearch.search(this,query,cancelled);
+                runOnUiThread(()->{
+                    if(cancelled.get()||isFinishing()||isDestroyed())return;
+                    busy.dismiss();
+                    if(result.hits.isEmpty()){
+                        new AlertDialog.Builder(this).setTitle("Sonuç bulunamadı")
+                            .setMessage("İş hafızasında eşleşen satır yok. Okunamayan rapor: "+result.unreadable)
+                            .setPositiveButton("Tamam",null).show();return;
+                    }
+                    String[] labels=new String[result.hits.size()];
+                    for(int i=0;i<labels.length;i++){
+                        MemoryLibrarySearch.Hit h=result.hits.get(i);
+                        labels[i]=(h.related?"İlişkili konu • ":"Eşleşme • ")+h.name+"\n"+h.item.topic+" · "+h.item.content;
+                    }
+                    new AlertDialog.Builder(this).setTitle("Kayıt araması · "+labels.length+" sonuç")
+                        .setItems(labels,(d,which)->{
+                            MemoryLibrarySearch.Hit h=result.hits.get(which);
+                            if(h.item.timeMs>=0&&!h.uri.isEmpty()){
+                                startActivity(new Intent(this,AudioEvidenceActivity.class)
+                                    .putExtra(AudioEvidenceActivity.EXTRA_SOURCE,h.uri)
+                                    .putExtra(AudioEvidenceActivity.EXTRA_START,h.item.timeMs));
+                            }else load(h.reportId);
+                        }).setNegativeButton("Kapat",null).show();
+                    if(result.unreadable>0)Toast.makeText(this,result.unreadable+" rapor okunamadı.",Toast.LENGTH_LONG).show();
+                });
+            }catch(Exception error){
+                runOnUiThread(()->{
+                    if(cancelled.get()||isFinishing()||isDestroyed())return;
+                    busy.dismiss();Toast.makeText(this,"Arama tamamlanamadı.",Toast.LENGTH_LONG).show();
+                });
+            }
+        },"GunIzi-LibrarySearch").start();
     }
     private void chooseReport(){
         List<String> ids=WorkMemoryStore.recent(this);

@@ -29,20 +29,25 @@ object FullDaySummarizer {
         val digest=hash(transcript+"|"+boundedFocus+"|"+languageModel+"|cv-llama-v1")
         val checkpointFolder=File(context.noBackupFilesDir,"cv_llm_checkpoints/"+digest)
         check(checkpointFolder.exists()||checkpointFolder.mkdirs()){"Özet kontrol noktası oluşturulamadı"}
-        AiStageMetrics.enter(context,AiStageMetrics.LLM_LOADING)
-        progress.update(71,"CallVault llama.cpp • "+AiModelStore.label(languageModel)+" belleğe alınıyor")
         val llmStarted=SystemClock.elapsedRealtime()
-        val started=SystemClock.elapsedRealtime()
-        val ptr=LlamaNative.initContext(modelFile.absolutePath,
-            context.applicationInfo.nativeLibraryDir)
-        if(ptr==0L)throw IllegalStateException("llama.cpp modeli açamadı. RAM veya GGUF uyumsuzluğu olabilir.")
         val preferences=context.getSharedPreferences("gunizi",Context.MODE_PRIVATE)
-        preferences.edit()
-            .putLong("lastLlamaLoadMs",SystemClock.elapsedRealtime()-started)
-            .putString("analysisSummaryRuntime","Yerel dil modeli").apply()
-        try{
+        var ptr=0L
+        preferences.edit().putLong("lastLlamaLoadMs",0L)
+            .putString("analysisSummaryRuntime","Yerel kontrol noktaları").apply()
+        // Load exactly once, and only when a checkpoint cannot answer the request.
+        // Keep the existing serialized lifetime and free native memory in finally.
+        fun model():Long {
+            if(ptr!=0L)return ptr
+            val started=SystemClock.elapsedRealtime()
+            ptr=LlamaNative.initContext(modelFile.absolutePath,context.applicationInfo.nativeLibraryDir)
+            if(ptr==0L)throw IllegalStateException("llama.cpp modeli açamadı. RAM veya GGUF uyumsuzluğu olabilir.")
             if(!LlamaNative.grammarAccepted(ptr,SummaryGrammar.JSON))
                 throw IllegalStateException("CallVault JSON grameri yerel model tarafından kabul edilmedi")
+            preferences.edit().putLong("lastLlamaLoadMs",SystemClock.elapsedRealtime()-started)
+                .putString("analysisSummaryRuntime","Yerel dil modeli").apply()
+            return ptr
+        }
+        try{
             val parts=split(transcript,CHUNK_LIMIT)
             // For short recordings, preserve every part and evidence row without
             // spending another native generation pass to restate the same content.
@@ -71,9 +76,10 @@ object FullDaySummarizer {
                     CallSummary.parse(checkpoint.readText(Charsets.UTF_8))
                         ?:throw IllegalStateException("Önceki JSON özeti okunamadı: bölüm ${index+1}")
                 }else{
+                    if(ptr==0L)progress.update(73+(index*17/parts.size),"Yerel model belleğe alınıyor")
                     val prompt=buildPrompt(part,boundedFocus,fast)
                     // Preserve the full original generation budget for the selected model.
-                    val output=LlamaNative.generate(ptr,prompt,1650,4,SummaryGrammar.JSON)
+                    val output=LlamaNative.generate(model(),prompt,1650,4,SummaryGrammar.JSON)
                     val parsed=CallSummary.parse(output)
                         ?:throw IllegalStateException("Gemma/Qwen geçerli JSON üretemedi: bölüm ${index+1}")
                     val partial=File(checkpointFolder,checkpoint.name+".partial")
@@ -103,7 +109,7 @@ object FullDaySummarizer {
                     .joinToString("\n")
             }else{
                 progress.update(91,"İkinci aşama: Bölüm özetleri birleştiriliyor")
-                hierarchicalMerge(context,ptr,summaries,checkpointFolder,progress).summary
+                hierarchicalMerge(context,::model,summaries,checkpointFolder,progress).summary
             }
             preferences.edit()
                 .putLong("analysisLlmMergeMs",SystemClock.elapsedRealtime()-mergeStarted)
@@ -137,7 +143,7 @@ object FullDaySummarizer {
             progress.update(99,"Konuşma tablosu ve notlar tamamlanıyor")
             return report.toString()
         }finally{
-            LlamaNative.freeContext(ptr)
+            if(ptr!=0L)LlamaNative.freeContext(ptr)
         }
     }
     private fun totalSteps(first:Int):Int {
@@ -151,7 +157,7 @@ object FullDaySummarizer {
     }
 
     /** Second pass: hierarchical summaries with resume checkpoints. Raw evidence rows are never dropped. */
-    private fun hierarchicalMerge(context:Context,ptr:Long,first:List<CallSummary>,
+    private fun hierarchicalMerge(context:Context,model:()->Long,first:List<CallSummary>,
                                   dir:File,progress:AiProgress):CallSummary {
         if(first.size==1)return first.first()
         var current:List<CallSummary> = first
@@ -170,7 +176,7 @@ object FullDaySummarizer {
                     CallSummary.parse(checkpoint.readText(Charsets.UTF_8))
                         ?:throw IllegalStateException("Birleştirme kontrol noktası okunamadı")
                 }else{
-                    val output=LlamaNative.generate(ptr,mergePrompt(part),1150,4,
+                    val output=LlamaNative.generate(model(),mergePrompt(part),1150,4,
                         SummaryGrammar.JSON)
                     val parsed=CallSummary.parse(output)
                         ?:throw IllegalStateException("İkinci aşama geçerli JSON oluşturamadı")
